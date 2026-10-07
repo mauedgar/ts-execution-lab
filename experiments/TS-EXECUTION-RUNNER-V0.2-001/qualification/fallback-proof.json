@@ -3,7 +3,7 @@
   "fixture_kind": "fallback_semantics",
   "logical_operation": "product://synthetic/alpha/operation/digest",
   "profile": "profile://ts-execution-lab/canonical-sha256/v0",
-  "request_identity_input": {"n": 1, "hello": "world"},
+  "request_identity_input": {"payload_json": {"hello": "world", "n": 1}},
   "attempt_A": {
     "ExecutionAttempt_ref": "attempt://synthetic/alpha/digest/A",
     "binding": "local-commander",
@@ -17,7 +17,7 @@
     "binding": "github-actions",
     "required_invariants": ["same Product_operation_ref", "same profile", "same request identity", "new ExecutionAttempt_ref"],
     "expected_result_status": "PASS",
-    "expected_effect_state": "CONFIRMED",
+    "expected_effect_state": "NONE",
     "expected_semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
   },
   "blocking_rule": "EFFECT_UNKNOWN blocks fallback until independently reconciled",

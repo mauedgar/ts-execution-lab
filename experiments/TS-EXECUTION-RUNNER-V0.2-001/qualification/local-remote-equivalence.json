@@ -10,7 +10,7 @@
     "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
     "subject_ref": "subject://payload/sample-payload.json",
     "context_id": "context://synthetic/alpha/qualification-001",
-    "input": {"n": 1, "hello": "world"}
+    "input": {"payload_json": {"hello": "world", "n": 1}}
   },
   "expected": {
     "canonical_input_bytes": 23,
@@ -18,12 +18,12 @@
     "local": {
       "binding": "local-commander",
       "result_status": "PASS",
-      "effect_state": "CONFIRMED"
+      "effect_state": "NONE"
     },
     "remote": {
       "binding": "github-actions",
       "result_status": "PASS",
-      "effect_state": "CONFIRMED"
+      "effect_state": "NONE"
     },
     "correspondence": ["request identity", "profile identity", "subject identity", "semantic digest"],
     "provider_specific": ["receipt binding", "provider native references", "timings"]
