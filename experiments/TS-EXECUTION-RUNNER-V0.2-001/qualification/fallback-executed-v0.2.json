@@ -1,0 +1,28 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "qualified_execution_subject": "8c62e4110683091a9d4ee2beacc984adc11239d1",
+  "stable_request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+  "Product_operation_ref": "op://synthetic/product-alpha/digest-payload",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "attempt_A": {
+    "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/local-preflight-fail",
+    "binding": "local-unavailable-fixture",
+    "request_validation": "PASS",
+    "preflight_result_status": "BLOCKED",
+    "effect_state": "NONE",
+    "profile_executed": false,
+    "observed_marker": "BINDING_PREFLIGHT_BLOCKED_EFFECT_NONE_PROFILE_NOT_EXECUTED"
+  },
+  "attempt_B": {
+    "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/remote-1",
+    "binding": "github-actions",
+    "run_id": 37698737837,
+    "result_status": "PASS",
+    "effect_state": "NONE",
+    "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+    "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
+  },
+  "blocking_rule": "EFFECT_UNKNOWN blocks fallback until competently reconciled",
+  "automatic_retry_authority_created": false,
+  "status": "PASS"
+}
