@@ -1,0 +1,14 @@
+{
+  "schema": "ts-execution-context-manifest/v0",
+  "context_id": "ctx-alpha-0001",
+  "Product_ref": "synthetic/product-alpha",
+  "cutoff": "2026-10-07T00:00:00Z",
+  "baseline_refs": ["sha://synthetic/product-alpha@main"],
+  "delta_refs": ["refs/heads/feature/x"],
+  "unknowns": ["uncommitted-worktree-state"],
+  "materializations": [
+    { "class": "REF_ONLY", "ref": "sha://synthetic/product-alpha@main", "required": false, "reason": "executor resolves directly" },
+    { "class": "INLINE_SMALL", "ref": "inline://delta-metadata", "bytes": 256, "required": true },
+    { "class": "FROZEN_BUNDLE", "ref": "artifact://unavailable-source.tar.gz", "bytes": 2048, "required": true, "reason": "source unavailable to executor" }
+  ]
+}

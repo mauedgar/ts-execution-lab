@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "transport-slot-v0.schema.json",
+  "title": "ts-transport-slot/v0",
+  "type": "object",
+  "required": ["schema", "Product_ref", "Product_operation_ref", "ExecutionAttempt_ref", "slot_path", "request_ref", "context_ref", "result_ref", "receipt_ref", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "ts-transport-slot/v0" },
+    "Product_ref": { "type": "string", "minLength": 1 },
+    "Product_operation_ref": { "type": "string", "minLength": 1 },
+    "ExecutionAttempt_ref": { "type": "string", "minLength": 1 },
+    "slot_path": { "type": "string", "pattern": "^.+/.+/.+/$" },
+    "request_ref": { "type": "string", "minLength": 1 },
+    "context_ref": { "type": "string", "minLength": 1 },
+    "result_ref": { "type": "string", "minLength": 1 },
+    "receipt_ref": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["REQUESTED", "IN_PROGRESS", "COMPLETE", "FAILED"] }
+  }
+}

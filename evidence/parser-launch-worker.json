@@ -1,0 +1,9 @@
+{
+    "errors":  [
+
+               ],
+    "script":  "scripts/launch-worker.ps1",
+    "parsed_at":  "2026-10-07T16:52:25.9984996Z",
+    "error_count":  0,
+    "parse_ok":  true
+}

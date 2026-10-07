@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-context-manifest-v0.schema.json",
+  "title": "ts-execution-context-manifest/v0",
+  "type": "object",
+  "required": ["schema", "context_id", "Product_ref", "cutoff", "baseline_refs", "delta_refs", "unknowns", "materializations"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "ts-execution-context-manifest/v0" },
+    "context_id": { "type": "string", "minLength": 1 },
+    "Product_ref": { "type": "string", "minLength": 1 },
+    "cutoff": { "type": "string", "minLength": 1 },
+    "baseline_refs": { "type": "array", "items": { "type": "string" } },
+    "delta_refs": { "type": "array", "items": { "type": "string" } },
+    "unknowns": { "type": "array", "items": { "type": "string" } },
+    "materializations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["class", "ref"],
+        "additionalProperties": false,
+        "properties": {
+          "class": { "enum": ["REF_ONLY", "INLINE_SMALL", "FROZEN_BUNDLE"] },
+          "ref": { "type": "string", "minLength": 1 },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "required": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

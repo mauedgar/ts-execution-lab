@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-profile-v0.schema.json",
+  "title": "ts-execution-profile/v0",
+  "type": "object",
+  "required": ["schema", "profile_ref", "profile_id", "status", "input", "output", "bindings"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "ts-execution-profile/v0" },
+    "profile_ref": { "type": "string", "minLength": 1 },
+    "profile_id": { "type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$" },
+    "status": { "enum": ["QUALIFIED", "CANDIDATE", "RETIRED"] },
+    "input": { "type": "object", "required": ["kind", "max_bytes"] },
+    "output": { "type": "object", "required": ["semantic_digest_alg", "receipt"] },
+    "bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["provider", "entrypoint"],
+        "properties": {
+          "provider": { "enum": ["local-commander", "github-actions"] },
+          "entrypoint": { "type": "string", "minLength": 1 },
+          "runtime": { "type": "string" }
+        }
+      }
+    }
+  }
+}

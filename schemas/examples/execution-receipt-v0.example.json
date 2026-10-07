@@ -1,0 +1,16 @@
+{
+  "schema": "ts-execution-receipt/v0",
+  "operation_id": "CANON-SHA256-LOCAL-001",
+  "provider": "local-commander",
+  "repository": "mauedgar/ts-execution-lab",
+  "head_sha": "0ad95a9891030efb3a73ff7194f3c499b1b45f4c",
+  "run_id": "local-001",
+  "run_attempt": "1",
+  "runner_os": "Windows",
+  "status": "COMPLETE",
+  "authority_created": false,
+  "Product_effect_created": false,
+  "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/1",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "semantic_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

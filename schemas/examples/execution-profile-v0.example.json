@@ -1,0 +1,12 @@
+{
+  "schema": "ts-execution-profile/v0",
+  "profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "profile_id": "canonical-sha256/v0",
+  "status": "QUALIFIED",
+  "input": { "kind": "utf8-json", "max_bytes": 65536 },
+  "output": { "semantic_digest_alg": "sha256", "receipt": "ts-execution-receipt/v0" },
+  "bindings": [
+    { "provider": "local-commander", "entrypoint": "node scripts/canonical-sha256.mjs", "runtime": "node>=22" },
+    { "provider": "github-actions", "entrypoint": ".github/workflows/canonical-sha256.yml", "runtime": "ubuntu-latest/node22" }
+  ]
+}

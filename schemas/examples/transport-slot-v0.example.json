@@ -1,0 +1,12 @@
+{
+  "schema": "ts-transport-slot/v0",
+  "Product_ref": "synthetic/product-alpha",
+  "Product_operation_ref": "op://synthetic/product-alpha/digest-payload",
+  "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/1",
+  "slot_path": "synthetic/product-alpha/digest-payload/attempt-1/",
+  "request_ref": "request.json",
+  "context_ref": "context.json",
+  "result_ref": "result.json",
+  "receipt_ref": "receipt.json",
+  "status": "COMPLETE"
+}

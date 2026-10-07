@@ -1,0 +1,44 @@
+name: canonical-sha256
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Operation identifier
+        required: true
+        type: string
+      payload_json:
+        description: Bounded UTF-8 JSON payload (max 65536 bytes)
+        required: true
+        type: string
+      execution_attempt_ref:
+        description: ExecutionAttempt identity
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Materialize payload
+        run: node -e "require('fs').writeFileSync('payload.json', process.env.PAYLOAD)"
+        env:
+          PAYLOAD: ${{ inputs.payload_json }}
+      - name: Execute canonical-sha256/v0
+        run: node scripts/canonical-sha256.mjs payload.json | tee out-result.json
+      - name: Emit receipt
+        env:
+          OPERATION_ID: ${{ inputs.operation_id }}
+          ATTEMPT: ${{ inputs.execution_attempt_ref }}
+        run: |
+          node scripts/emit-canonical-receipt.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-result
+          path: |
+            out-result.json
+            out/canonical-receipt.json

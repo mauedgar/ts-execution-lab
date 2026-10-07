@@ -20,7 +20,7 @@
   "properties": {
     "schema": { "const": "ts-execution-receipt/v0" },
     "operation_id": { "type": "string", "minLength": 1 },
-    "provider": { "const": "github-actions" },
+    "provider": { "enum": ["github-actions", "local-commander"] },
     "repository": { "type": "string", "minLength": 1 },
     "head_sha": { "type": "string", "minLength": 1 },
     "run_id": { "type": "string", "minLength": 1 },
@@ -28,6 +28,11 @@
     "runner_os": { "type": "string", "minLength": 1 },
     "status": { "const": "COMPLETE" },
     "authority_created": { "const": false },
-    "Product_effect_created": { "const": false }
+    "Product_effect_created": { "const": false },
+    "ExecutionAttempt_ref": { "type": "string" },
+    "execution_profile_ref": { "type": "string" },
+    "semantic_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "result_artifact_id": { "type": "string" },
+    "result_artifact_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
   }
 }

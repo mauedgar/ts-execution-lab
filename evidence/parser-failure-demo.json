@@ -1,0 +1,11 @@
+{
+    "errors":  [
+                   "Token \u0027{\u0027 inesperado en la expresión o la instrucción.",
+                   "Falta el paréntesis de cierre \u0027)\u0027 después de la expresión en la instrucción \u0027if\u0027.",
+                   "Falta la llave de cierre \"}\" en el bloque de instrucciones o la definición de tipo."
+               ],
+    "script":  "evidence/broken.ps1",
+    "parsed_at":  "2026-10-07T16:52:33.7658742Z",
+    "error_count":  3,
+    "parse_ok":  false
+}
