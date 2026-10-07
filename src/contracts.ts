@@ -4,6 +4,7 @@ import { z } from "zod";
 export const REQUEST_CONTRACT_VERSION = "ts-execution-request/v0.2" as const;
 export const RESULT_CONTRACT_VERSION = "ts-execution-result/v0.2" as const;
 export const RECEIPT_CONTRACT_VERSION = "ts-execution-receipt/v0.2" as const;
+export const CONTEXT_MANIFEST_CONTRACT_VERSION = "ts-execution-context-manifest/v0.2" as const;
 
 const NonEmptyString = z.string().min(1);
 const JsonObject = z.record(z.string(), z.unknown());
@@ -22,6 +23,33 @@ export const ExecutionRequestSchema = z.object({
 }).strict();
 
 export type ExecutionRequest = z.infer<typeof ExecutionRequestSchema>;
+
+export const ExecutionContextManifestSchema = z.discriminatedUnion("mode", [
+  z.object({
+    contract_version: z.literal(CONTEXT_MANIFEST_CONTRACT_VERSION),
+    context_id: NonEmptyString,
+    mode: z.literal("REF_ONLY"),
+    refs: z.array(NonEmptyString).min(1),
+  }).strict(),
+  z.object({
+    contract_version: z.literal(CONTEXT_MANIFEST_CONTRACT_VERSION),
+    context_id: NonEmptyString,
+    mode: z.literal("INLINE_SMALL"),
+    inline: JsonObject,
+  }).strict(),
+  z.object({
+    contract_version: z.literal(CONTEXT_MANIFEST_CONTRACT_VERSION),
+    context_id: NonEmptyString,
+    mode: z.literal("FROZEN_BUNDLE"),
+    frozen_bundle: z.object({
+      artifact_ref: NonEmptyString,
+      sha256: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+      bytes: z.number().int().nonnegative(),
+    }).strict(),
+  }).strict(),
+]);
+
+export type ExecutionContextManifest = z.infer<typeof ExecutionContextManifestSchema>;
 
 export const ResultStatusSchema = z.enum(["PASS", "PARTIAL", "FAIL", "BLOCKED", "UNAVAILABLE"]);
 export const EffectStateSchema = z.enum(["NONE", "CONFIRMED", "UNKNOWN"]);
