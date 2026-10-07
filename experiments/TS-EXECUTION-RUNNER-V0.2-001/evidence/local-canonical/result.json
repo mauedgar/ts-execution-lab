@@ -1,0 +1,32 @@
+{
+  "contract_version": "ts-execution-result/v0.2",
+  "request_id": "req-canonical-sha256-0001",
+  "Product_ref": "synthetic/product-alpha",
+  "Product_operation_ref": "op://synthetic/product-alpha/digest-payload",
+  "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/1",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "subject_ref": "sha://synthetic/product-alpha@main",
+  "context_id": "ctx-alpha-0001",
+  "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+  "result_status": "PASS",
+  "effect_state": "NONE",
+  "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+  "profile_output": {
+    "profile": "canonical-sha256/v0",
+    "input_bytes": 23,
+    "canonical_bytes": 23,
+    "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
+  },
+  "observation": {
+    "binding": "local-commander",
+    "profile": "profile://ts-execution-lab/canonical-sha256/v0",
+    "result_class": "SUCCESS",
+    "effect_state": "NONE",
+    "timings": {
+      "validation_ms": 4.953,
+      "profile_ms": 0.107,
+      "total_ms": 5.094
+    },
+    "subprocess_count": 0
+  }
+}

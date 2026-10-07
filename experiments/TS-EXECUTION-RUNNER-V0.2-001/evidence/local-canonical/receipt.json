@@ -1,0 +1,29 @@
+{
+  "contract_version": "ts-execution-receipt/v0.2",
+  "Product_operation_ref": "op://synthetic/product-alpha/digest-payload",
+  "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/1",
+  "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+  "selected_binding_ref": "local-commander",
+  "started_at": "2026-10-07T22:48:47.942Z",
+  "completed_at": "2026-10-07T22:48:47.950Z",
+  "result_status": "PASS",
+  "effect_state": "NONE",
+  "exact_subject_ref": "sha://synthetic/product-alpha@main",
+  "provider_native_refs": [],
+  "evidence_refs": [],
+  "result_ref": "result.json",
+  "authority_created": false,
+  "Product_effect_created": false,
+  "observation": {
+    "binding": "local-commander",
+    "profile": "profile://ts-execution-lab/canonical-sha256/v0",
+    "result_class": "SUCCESS",
+    "effect_state": "NONE",
+    "timings": {
+      "validation_ms": 4.953,
+      "profile_ms": 0.107,
+      "total_ms": 5.094
+    },
+    "subprocess_count": 0
+  }
+}
