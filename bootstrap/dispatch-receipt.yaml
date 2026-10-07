@@ -1,0 +1,8 @@
+repository: mauedgar/ts-execution-lab
+branch: main
+dispatched_head_sha: dc1a5f59799908e71773e38703bb0d3443e00547
+operation_id: BOOTSTRAP-SMOKE-001
+workflow: remote-smoke.yml
+run_id: "37621354100"
+Product_authority: NONE
+Product_effect: NONE
