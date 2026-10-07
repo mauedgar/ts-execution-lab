@@ -1,0 +1,18 @@
+{
+  "schema": "ts-execution-engineering-adoption-receipt/v0.1",
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "authority": "NONE",
+  "Product_authority_created": false,
+  "Product_effect": "NONE",
+  "target": "mauedgar/ts-execution-lab:main",
+  "effect": "ADOPT_EXECUTION_LAB_CORE",
+  "main_before": "9d596bbc1a2d559da920ecc759f8c31d058ec390",
+  "adopted_terminal_subject": "03008d228067ef94edfb0f40dd22fd322ec61f27",
+  "qualified_execution_subject": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
+  "qualified_execution_tree": "65fa021d23f9ca166f87aaba668bd951352dd92b",
+  "correspondence": "FAST_FORWARD_CONFIRMED",
+  "observed_main_after": "03008d228067ef94edfb0f40dd22fd322ec61f27",
+  "Product_repositories_modified": false,
+  "Tecnotron_adoption": "NOT_PERFORMED",
+  "FitFlow_adoption": "NOT_PERFORMED"
+}
