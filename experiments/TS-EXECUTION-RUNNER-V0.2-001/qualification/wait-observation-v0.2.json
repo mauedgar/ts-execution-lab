@@ -1,0 +1,43 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "observation_surface": "github-actions-api",
+  "Commander_remote_polling": false,
+  "fixed_max_poll_count": false,
+  "prior_estimate_basis": "v0.1 successful remote runs typically completed in about 11-20 seconds",
+  "final_runs": [
+    {
+      "run_id": 37698737837,
+      "estimated_duration_ms_before_observation": 20000,
+      "actual_elapsed_ms": 14000,
+      "observations": [
+        {
+          "kind": "post_dispatch_remote_observation",
+          "information_gain": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run_id": 37698748419,
+      "estimated_duration_ms_before_observation": 20000,
+      "actual_elapsed_ms": 19000,
+      "observations": [
+        {
+          "kind": "post_dispatch_remote_observation",
+          "information_gain": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "kind": "adaptive_followup",
+          "information_gain": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "no_information_observations_final_qualification": 0,
+  "diagnosis_transition_required": false,
+  "status": "PASS"
+}
