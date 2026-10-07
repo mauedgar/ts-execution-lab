@@ -1,0 +1,9 @@
+{
+  "profile": "canonical-sha256/v0",
+  "binding": "local-commander",
+  "attempt": "attempt://synthetic/product-alpha/digest-payload/attempt-A",
+  "induced_failure": "preflight payload exceeds 65536 bytes (exit=3)",
+  "effect": "EFFECT_NONE",
+  "result": null,
+  "note": "binding-level/preflight failure; no execution, no ambiguous external effect; safe precondition for NEW ExecutionAttempt fallback"
+}
