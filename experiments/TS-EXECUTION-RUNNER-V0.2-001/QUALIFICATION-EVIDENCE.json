@@ -1,0 +1,136 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "qualified_implementation": {
+    "commit": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
+    "tree": "65fa021d23f9ca166f87aaba668bd951352dd92b"
+  },
+  "local_windows": {
+    "node": "22.23.3",
+    "tests": {
+      "passed": 16,
+      "failed": 0
+    },
+    "canonical": {
+      "binding": "local-commander",
+      "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+      "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/1",
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+      "runner_timings_ms": {
+        "validation": 4.953,
+        "profile": 0.107,
+        "total": 5.094
+      },
+      "subprocess_count": 0,
+      "observed_wall_ms": 857,
+      "generated_shell_artifacts": 0,
+      "parser_calls": 0,
+      "steady_state_process_launches": 1
+    }
+  },
+  "remote_actions": {
+    "node": "22.23.3",
+    "equivalence": {
+      "run_id": 37699334066,
+      "candidate_ref": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
+      "created_at": "2026-10-07T22:56:49Z",
+      "completed_at": "2026-10-07T22:57:03Z",
+      "observed_elapsed_ms": 14000,
+      "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+      "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/remote-1",
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+      "selected_binding_ref": "github-actions",
+      "runner_timings_ms": {
+        "validation": 4.78,
+        "profile": 0.148,
+        "total": 4.957
+      },
+      "subprocess_count": 0,
+      "artifact": {
+        "id": 11516742025,
+        "digest": "sha256:a86b52d9c61c2b27de0bf5386118bb1bb2db0bdd274212e68c3e0fcfd7fee786",
+        "size_bytes": 1279
+      }
+    },
+    "private_product": {
+      "run_id": 37699344269,
+      "candidate_ref": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
+      "created_at": "2026-10-07T22:56:56Z",
+      "completed_at": "2026-10-07T22:57:15Z",
+      "observed_elapsed_ms": 19000,
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "exact_subject_ref": "git:mauedgar/ts-execution-private-consumer@f5aeba43b4168b0040f44f353082e055dba8e152",
+      "selected_binding_ref": "github-actions",
+      "artifact": {
+        "id": 11516871482,
+        "digest": "sha256:f3eb6e06d7b1f3df93e1bcc8931df4c579157d7b7156cbf0024835777062808f",
+        "size_bytes": 1337
+      }
+    }
+  },
+  "fallback": {
+    "stable_request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+    "attempt_A": {
+      "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/local-preflight-fail",
+      "binding": "local-commander",
+      "induced_failure": "runner entrypoint missing / MODULE_NOT_FOUND before runner load",
+      "effect_state": "NONE",
+      "profile_executed": false,
+      "observed_wall_ms": 714
+    },
+    "attempt_B": {
+      "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/remote-1",
+      "binding": "github-actions",
+      "run_id": 37699334066,
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
+    },
+    "unknown_rule": "EFFECT_UNKNOWN blocks fallback until competent reconciliation"
+  },
+  "context_transport": {
+    "contract_version": "ts-execution-context-manifest/v0.2",
+    "modes": [
+      "REF_ONLY",
+      "INLINE_SMALL",
+      "FROZEN_BUNDLE"
+    ],
+    "runner_is_context_packager": false,
+    "previous_v0_1_evidence": "evidence/dod07-context-transport.json",
+    "multi_product_namespace_preserved": true
+  },
+  "wait_observation": {
+    "fixed_max_poll_count": false,
+    "remote_surface": "GitHub Actions API/logs/artifacts",
+    "commander_remote_polling": false,
+    "equivalence_observations": [
+      {
+        "after_ms": 10000,
+        "information_gain": "TERMINAL_SUCCESS"
+      }
+    ],
+    "private_observations": [
+      {
+        "after_ms": 10000,
+        "information_gain": "IN_PROGRESS"
+      },
+      {
+        "after_ms": 18000,
+        "information_gain": "TERMINAL_SUCCESS"
+      }
+    ]
+  },
+  "development_binding": {
+    "core_worker": "OpenCode + openai/gpt-5.6-sol",
+    "actions_worker": "OpenCode + openai/gpt-5.6-luna",
+    "qualification_worker": "OpenCode + openai/gpt-5.6-luna",
+    "steady_state_runtime_depends_on_OpenCode": false,
+    "broad_permission_weakening": false
+  }
+}
