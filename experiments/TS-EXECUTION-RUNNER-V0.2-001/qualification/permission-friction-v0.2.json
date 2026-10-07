@@ -1,0 +1,34 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "steady_state": {
+    "OpenCode_required": false,
+    "Orca_required": false,
+    "broad_permission_weakening": false,
+    "extra_GitHub_credentials": false,
+    "status": "PASS"
+  },
+  "development_observations": [
+    {
+      "class": "ORCA_BRANCH_BINDING_ALIAS_DRIFT",
+      "observation": "Orca worktrees used local branch names under mauedgar/... while planned remote siblings were devlab/..., so workers pushed to unexpected but recoverable refs.",
+      "Product_effect": "NONE"
+    },
+    {
+      "class": "INLINE_LAUNCH_QUOTING_FRICTION",
+      "observation": "Long inline terminal sends were mangled; short pre-materialized launcher paths were reliable.",
+      "Product_effect": "NONE"
+    },
+    {
+      "class": "WORKFLOW_DISPATCH_DEFAULT_BRANCH_LIMIT",
+      "observation": "Direct workflow_dispatch by filename was unavailable while the new workflow existed only off the default branch; reusable workflow invocation from the synthetic private caller provided a competent qualification route.",
+      "Product_effect": "NONE"
+    },
+    {
+      "class": "REMOTE_ADAPTER_MATERIALIZATION_DEFECT",
+      "observation": "Initial reusable runs failed because runner/remote was absent; repaired by creating the directory before request materialization, then rerun on a new exact candidate.",
+      "Product_effect": "NONE"
+    }
+  ],
+  "permission_problem_requires_separate_project": false,
+  "status": "PASS"
+}
