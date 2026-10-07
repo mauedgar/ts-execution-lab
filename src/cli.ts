@@ -11,7 +11,7 @@ import {
   REQUEST_CONTRACT_VERSION,
   RESULT_CONTRACT_VERSION,
   recoverRequestIdentity,
-  sha256Identity,
+  requestIdentity,
   type ExecutionReceipt,
   type ExecutionRequest,
   type ExecutionResult,
@@ -88,8 +88,8 @@ async function main(args: string[]): Promise<number> {
 
   const registration = resolveProfile(parsed.request.execution_profile_ref);
   if (!registration) {
-    await publishFailure(options, parsed.request, parsed.requestIdentity, startedAt, validationMs,
-      "UNKNOWN_PROFILE", "UNAVAILABLE", "NONE", [{ code: "UNKNOWN_PROFILE", message: `unregistered profile: ${parsed.request.execution_profile_ref}` }]);
+    await publishFailure(options, pickIdentity(parsed.request), parsed.requestIdentity, startedAt, validationMs,
+      "UNKNOWN_PROFILE", "BLOCKED", "NONE", [{ code: "UNKNOWN_PROFILE", message: `unregistered profile: ${parsed.request.execution_profile_ref}` }]);
     return 1;
   }
 
@@ -117,7 +117,7 @@ async function main(args: string[]): Promise<number> {
   } catch (error) {
     const profileMs = elapsed(profileStarted);
     const isInputError = error instanceof ProfileInputError;
-    await publishFailure(options, parsed.request, parsed.requestIdentity, startedAt, validationMs,
+    await publishFailure(options, pickIdentity(parsed.request), parsed.requestIdentity, startedAt, validationMs,
       isInputError ? "PROFILE_INPUT_INVALID" : "PROFILE_ERROR", isInputError ? "BLOCKED" : "FAIL", "NONE",
       [{ code: isInputError ? "PROFILE_INPUT_INVALID" : "PROFILE_ERROR", message: error instanceof Error ? error.message : String(error) }],
       profileMs, elapsed(totalStarted));
@@ -153,19 +153,19 @@ async function parseRequest(path: string): Promise<RequestParse> {
     return { ok: false, code: "INVALID_JSON", errors: [{ code: "INVALID_JSON", message: error instanceof Error ? error.message : String(error) }] };
   }
   const identity = recoverRequestIdentity(value);
-  const requestIdentity = sha256Identity(value);
+  const computedRequestIdentity = requestIdentity(value);
   if (typeof value === "object" && value !== null && "contract_version" in value &&
       (value as { contract_version?: unknown }).contract_version !== REQUEST_CONTRACT_VERSION) {
     return {
-      ok: false, value, identity, requestIdentity, code: "UNSUPPORTED_VERSION",
+      ok: false, value, identity, requestIdentity: computedRequestIdentity, code: "UNSUPPORTED_VERSION",
       errors: [{ code: "UNSUPPORTED_VERSION", message: `contract_version must be ${REQUEST_CONTRACT_VERSION}`, path: "contract_version" }],
     };
   }
   const result = ExecutionRequestSchema.safeParse(value);
   if (!result.success) {
-    return { ok: false, value, identity, requestIdentity, code: "INVALID", errors: zodErrors(result.error) };
+    return { ok: false, value, identity, requestIdentity: computedRequestIdentity, code: "INVALID", errors: zodErrors(result.error) };
   }
-  return { ok: true, request: result.data, requestIdentity };
+  return { ok: true, request: result.data, requestIdentity: computedRequestIdentity };
 }
 
 function zodErrors(error: ZodError): Array<{ code: string; message: string; path?: string }> {

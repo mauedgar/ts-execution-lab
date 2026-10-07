@@ -41,6 +41,49 @@ test("run publishes validated result and receipt", () => {
   }
 });
 
+test("request identity is stable across attempts and changes with request semantics", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ts-exec-identity-"));
+  try {
+    const request = JSON.parse(readFileSync(fixture, "utf8"));
+    const identityFor = (candidate: Record<string, unknown>, name: string): string => {
+      const requestPath = join(directory, `${name}.json`);
+      writeFileSync(requestPath, JSON.stringify(candidate));
+      const output = execFileSync(process.execPath, ["src/cli.ts", "validate", requestPath], { cwd: root, encoding: "utf8" });
+      return JSON.parse(output).request_identity;
+    };
+
+    const attemptA = identityFor({ ...request, ExecutionAttempt_ref: "attempt://A" }, "attempt-A");
+    const attemptB = identityFor({ ...request, ExecutionAttempt_ref: "attempt://B" }, "attempt-B");
+    const changedOperation = identityFor({ ...request, Product_operation_ref: `${request.Product_operation_ref}/changed` }, "operation");
+    const changedInput = identityFor({ ...request, input: { ...request.input, payload: "changed" } }, "input");
+
+    assert.equal(attemptA, attemptB);
+    assert.notEqual(attemptA, changedOperation);
+    assert.notEqual(attemptA, changedInput);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("run preserves attempt reference separately from request identity", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ts-exec-attempt-"));
+  try {
+    const request = JSON.parse(readFileSync(fixture, "utf8"));
+    request.ExecutionAttempt_ref = "attempt://separate/B";
+    const requestPath = join(directory, "request.json");
+    const out = join(directory, "out");
+    writeFileSync(requestPath, JSON.stringify(request));
+    execFileSync(process.execPath, ["src/cli.ts", "run", requestPath, "--out", out], { cwd: root, encoding: "utf8" });
+
+    const result = ExecutionResultSchema.parse(JSON.parse(readFileSync(join(out, "result.json"), "utf8")));
+    const receipt = ExecutionReceiptSchema.parse(JSON.parse(readFileSync(join(out, "receipt.json"), "utf8")));
+    assert.equal(result.ExecutionAttempt_ref, "attempt://separate/B");
+    assert.equal(receipt.ExecutionAttempt_ref, "attempt://separate/B");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("unsupported version emits BLOCKED/NONE artifacts when identity is recoverable", () => {
   const directory = mkdtempSync(join(tmpdir(), "ts-exec-rejected-"));
   try {
@@ -59,6 +102,32 @@ test("unsupported version emits BLOCKED/NONE artifacts when identity is recovera
     assert.equal(result.result_status, "BLOCKED");
     assert.equal(result.effect_state, "NONE");
     assert.equal(result.observation.result_class, "UNSUPPORTED_VERSION");
+    assert.equal(receipt.result_status, "BLOCKED");
+    assert.equal(receipt.effect_state, "NONE");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unknown profile emits BLOCKED/NONE artifacts", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ts-exec-unknown-profile-"));
+  try {
+    const request = JSON.parse(readFileSync(fixture, "utf8"));
+    request.execution_profile_ref = "profile://ts-execution-lab/unknown/v0";
+    const requestPath = join(directory, "request.json");
+    const out = join(directory, "out");
+    writeFileSync(requestPath, JSON.stringify(request));
+    const execution = spawnSync(process.execPath, ["src/cli.ts", "run", requestPath, "--out", out], {
+      cwd: root,
+      encoding: "utf8",
+    });
+
+    assert.equal(execution.status, 1);
+    const result = ExecutionResultSchema.parse(JSON.parse(readFileSync(join(out, "result.json"), "utf8")));
+    const receipt = ExecutionReceiptSchema.parse(JSON.parse(readFileSync(join(out, "receipt.json"), "utf8")));
+    assert.equal(result.result_status, "BLOCKED");
+    assert.equal(result.effect_state, "NONE");
+    assert.equal(result.observation.result_class, "UNKNOWN_PROFILE");
     assert.equal(receipt.result_status, "BLOCKED");
     assert.equal(receipt.effect_state, "NONE");
   } finally {
