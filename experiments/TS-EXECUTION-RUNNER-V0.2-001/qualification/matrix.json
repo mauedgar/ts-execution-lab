@@ -103,7 +103,8 @@
       ],
       "evidence": [
         "qualification/remote-execution-v0.2.json",
-        "run 37698737837"
+        "run 37699334066",
+        "qualified subject 07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456"
       ],
       "status": "PASS"
     },
@@ -118,7 +119,7 @@
       ],
       "evidence": [
         "qualification/remote-execution-v0.2.json",
-        "run 37698748419"
+        "run 37699344269"
       ],
       "status": "PASS"
     },
@@ -146,7 +147,8 @@
         "EFFECT_UNKNOWN blocks fallback"
       ],
       "evidence": [
-        "qualification/fallback-executed-v0.2.json"
+        "qualification/fallback-executed-v0.2.json",
+        "run 37699334066"
       ],
       "status": "PASS"
     },
@@ -180,7 +182,8 @@
         "no fixed poll count"
       ],
       "evidence": [
-        "qualification/wait-observation-v0.2.json"
+        "qualification/wait-observation-v0.2.json",
+        "runs 37699334066 and 37699344269"
       ],
       "status": "PASS"
     },
@@ -228,5 +231,7 @@
       "status": "PASS"
     }
   ],
-  "terminal_disposition": "PASS_RECONCILED_TERMINAL"
+  "terminal_disposition": "PASS_RECONCILED_TERMINAL",
+  "qualified_execution_subject": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
+  "qualified_execution_tree": "65fa021d23f9ca166f87aaba668bd951352dd92b"
 }
