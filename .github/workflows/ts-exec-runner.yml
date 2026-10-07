@@ -24,7 +24,7 @@ jobs:
       - name: Materialize request
         env:
           REQUEST_JSON: ${{ inputs.request_json }}
-        run: node -e "require('fs').writeFileSync('remote/request.json', process.env.REQUEST_JSON + '\\n')"
+        run: node -e "const fs=require('fs'); fs.mkdirSync('remote',{recursive:true}); fs.writeFileSync('remote/request.json', process.env.REQUEST_JSON + '\\n')"
       - name: Execute request
         run: node src/cli.ts run remote/request.json --out remote/out
       - uses: actions/upload-artifact@v4
