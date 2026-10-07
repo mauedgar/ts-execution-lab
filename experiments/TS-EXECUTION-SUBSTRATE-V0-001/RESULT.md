@@ -28,7 +28,7 @@ branch: devlab/execution-substrate-v0-001
 - topology B QUALIFIED_NEGATIVE: public lab runner could not check out the private consumer with default GITHUB_TOKEN only (run 37663798724, "Repository not found", exit 128). No PAT/App/secrets added. Topology A is simpler and safer.
 
 ## Wait findings
-- Runs: 37655572280 (13s), 37655975430 (17s), 37661477555 (18s), 37661622747 (16s), 37663582852 (20s), 37663798724 (46s, expected checkout failure), 37664046391 (11s). Queue_time not separately exposed; estimated 60s before observation; ChatGPT used adaptive remote observation on GitHub Actions API; never polled Commander; no fixed max-poll count. Transitions: RUNNING_EXPECTED → TERMINAL in all.
+- Runs: 37655572280 (13s), 37655975430 (17s), 37661477555 (18s), 37661622747 (16s), 37663582852 (20s), 37663798724 (46s, expected checkout failure), 37664046391 (11s). Queue_time not separately exposed; estimated 60s before observation; ChatGPT used adaptive remote observation on the GitHub Actions API with no Commander polling for remote-run observation and no fixed max-poll count. Commander terminal state was consulted only after explicit transition to local worker DIAGNOSIS. Transitions: RUNNING_EXPECTED → TERMINAL in the recorded remote runs.
 
 ## Parser findings
 - Parser failure (evidence/parser-failure-demo.json) and successful materialize→parse→execute (evidence/parser-launch-worker.json) recorded; parser and execution failures recorded separately.
