@@ -263,13 +263,15 @@ Harness/provider-native ownership remains native:
 Execution_Runner_v0_2:
   status: PASS_RECONCILED_TERMINAL
   qualified_for_execution_lab_core_adoption: true
+  execution_lab_core_adopted: true
   qualified_execution_subject: 07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456
   Product_authority_created: false
   Product_effect: NONE
 
-next_eligible_effect:
+execution_lab_core_adoption:
+  status: CONFIRMED
   target: mauedgar/ts-execution-lab:main
-  meaning: ADOPT_EXECUTION_LAB_CORE
+  adoption_receipt: ADOPTION-RECEIPT.json
   Product_effect: NONE
 
 Product_boundary:
