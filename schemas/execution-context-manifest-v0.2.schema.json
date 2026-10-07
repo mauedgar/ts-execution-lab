@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-context-manifest-v0.2.schema.json",
+  "title": "ts-execution-context-manifest/v0.2",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["contract_version", "context_id", "mode", "refs"],
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": { "const": "ts-execution-context-manifest/v0.2" },
+        "context_id": { "type": "string", "minLength": 1 },
+        "mode": { "const": "REF_ONLY" },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["contract_version", "context_id", "mode", "inline"],
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": { "const": "ts-execution-context-manifest/v0.2" },
+        "context_id": { "type": "string", "minLength": 1 },
+        "mode": { "const": "INLINE_SMALL" },
+        "inline": { "type": "object" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["contract_version", "context_id", "mode", "frozen_bundle"],
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": { "const": "ts-execution-context-manifest/v0.2" },
+        "context_id": { "type": "string", "minLength": 1 },
+        "mode": { "const": "FROZEN_BUNDLE" },
+        "frozen_bundle": {
+          "type": "object",
+          "required": ["artifact_ref", "sha256", "bytes"],
+          "additionalProperties": false,
+          "properties": {
+            "artifact_ref": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "bytes": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  ]
+}
