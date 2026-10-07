@@ -26,7 +26,9 @@ jobs:
           REQUEST_JSON: ${{ inputs.request_json }}
         run: node -e "const fs=require('fs'); fs.mkdirSync('remote',{recursive:true}); fs.writeFileSync('remote/request.json', process.env.REQUEST_JSON + '\\n')"
       - name: Execute request
-        run: node src/cli.ts run remote/request.json --out remote/out
+        run: node src/cli.ts run remote/request.json --out remote/out --binding github-actions
+      - name: Emit compact execution summary
+        run: node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('remote/out/result.json','utf8')); const c=JSON.parse(fs.readFileSync('remote/out/receipt.json','utf8')); console.log('TS_EXEC_SUMMARY='+JSON.stringify({request_identity:r.request_identity,ExecutionAttempt_ref:r.ExecutionAttempt_ref,result_status:r.result_status,effect_state:r.effect_state,semantic_digest:r.semantic_digest,exact_subject_ref:c.exact_subject_ref,selected_binding_ref:c.selected_binding_ref,subprocess_count:r.observation.subprocess_count,timings:r.observation.timings}))"
       - uses: actions/upload-artifact@v4
         with:
           name: ts-exec-runner-${{ github.run_id }}
