@@ -1,0 +1,17 @@
+{
+  "contract_version": "ts-execution-request/v0.2",
+  "request_id": "req-remote-canonical-001",
+  "Product_ref": "synthetic-product/remote-binding",
+  "Product_operation_ref": "synthetic-product/operation/canonical",
+  "ExecutionAttempt_ref": "synthetic-product/operation/canonical/attempt-001",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "subject_ref": "git:synthetic-product:remote-fixture",
+  "context_id": "ctx-remote-canonical-001",
+  "input": {
+    "payload_json": {
+      "binding": "github-actions",
+      "fixture": "remote-canonical",
+      "version": 1
+    }
+  }
+}

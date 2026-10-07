@@ -1,0 +1,47 @@
+name: ts-exec-reusable
+
+on:
+  workflow_call:
+    inputs:
+      lab_ref:
+        description: Exact ts-execution-lab commit or ref containing the runner
+        required: true
+        type: string
+      request_json:
+        description: Bounded ExecutionRequest JSON
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private caller
+        uses: actions/checkout@v4
+        with:
+          path: product
+      - name: Checkout runner
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/ts-execution-lab
+          ref: ${{ inputs.lab_ref }}
+          path: runner
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Materialize request
+        env:
+          REQUEST_JSON: ${{ inputs.request_json }}
+        run: node -e "require('fs').writeFileSync('runner/remote/request.json', process.env.REQUEST_JSON + '\\n')"
+      - name: Execute request
+        working-directory: runner
+        run: node src/cli.ts run remote/request.json --out remote/out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ts-exec-reusable-${{ github.run_id }}
+          path: |
+            runner/remote/out/result.json
+            runner/remote/out/receipt.json

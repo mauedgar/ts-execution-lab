@@ -1,0 +1,33 @@
+name: ts-exec-runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_json:
+        description: Bounded ExecutionRequest JSON
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Materialize request
+        env:
+          REQUEST_JSON: ${{ inputs.request_json }}
+        run: node -e "require('fs').writeFileSync('remote/request.json', process.env.REQUEST_JSON + '\\n')"
+      - name: Execute request
+        run: node src/cli.ts run remote/request.json --out remote/out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ts-exec-runner-${{ github.run_id }}
+          path: |
+            remote/out/result.json
+            remote/out/receipt.json
