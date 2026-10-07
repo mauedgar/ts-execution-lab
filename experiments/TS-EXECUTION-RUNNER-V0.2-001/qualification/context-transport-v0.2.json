@@ -7,13 +7,18 @@
       "contract_version": "ts-execution-context-manifest/v0.2",
       "context_id": "ctx-ref-only",
       "mode": "REF_ONLY",
-      "refs": ["git://mauedgar/ts-execution-lab@candidate"]
+      "refs": [
+        "git://mauedgar/ts-execution-lab@candidate"
+      ]
     },
     {
       "contract_version": "ts-execution-context-manifest/v0.2",
       "context_id": "ctx-inline-small",
       "mode": "INLINE_SMALL",
-      "inline": {"delta":"bounded","bytes":23}
+      "inline": {
+        "delta": "bounded",
+        "bytes": 23
+      }
     },
     {
       "contract_version": "ts-execution-context-manifest/v0.2",
@@ -32,5 +37,11 @@
     "shared_mutable_context": false,
     "context_crossing_observed": false
   },
-  "status": "PENDING_FINAL_RECONCILIATION"
+  "status": "PASS",
+  "evidence": [
+    "test/core-context.test.ts (REF_ONLY / INLINE_SMALL / FROZEN_BUNDLE validation)",
+    "experiments/TS-EXECUTION-RUNNER-V0.2-001/evidence/local-canonical/result.json (context_id preserved)",
+    "run 37698737837 synthetic/product-alpha",
+    "run 37698748419 synthetic/private-consumer"
+  ]
 }
