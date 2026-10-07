@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-receipt-v0.2.schema.json",
+  "title": "ts-execution-receipt/v0.2",
+  "type": "object",
+  "required": ["contract_version", "Product_operation_ref", "ExecutionAttempt_ref", "request_identity", "selected_binding_ref", "started_at", "completed_at", "result_status", "effect_state", "provider_native_refs", "evidence_refs", "result_ref", "authority_created", "Product_effect_created", "observation"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": { "const": "ts-execution-receipt/v0.2" },
+    "Product_operation_ref": { "type": "string", "minLength": 1 },
+    "ExecutionAttempt_ref": { "type": "string", "minLength": 1 },
+    "request_identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "selected_binding_ref": { "type": "string", "minLength": 1 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "result_status": { "enum": ["PASS", "PARTIAL", "FAIL", "BLOCKED", "UNAVAILABLE"] },
+    "effect_state": { "enum": ["NONE", "CONFIRMED", "UNKNOWN"] },
+    "exact_subject_ref": { "type": "string", "minLength": 1 },
+    "provider_native_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "result_ref": { "type": "string", "minLength": 1 },
+    "authority_created": { "const": false },
+    "Product_effect_created": { "const": false },
+    "observation": { "$ref": "execution-result-v0.2.schema.json#/$defs/observation" }
+  }
+}

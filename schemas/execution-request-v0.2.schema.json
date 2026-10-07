@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-request-v0.2.schema.json",
+  "title": "ts-execution-request/v0.2",
+  "type": "object",
+  "required": ["contract_version", "request_id", "Product_ref", "Product_operation_ref", "ExecutionAttempt_ref", "execution_profile_ref", "subject_ref", "context_id", "input"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": { "const": "ts-execution-request/v0.2" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "Product_ref": { "type": "string", "minLength": 1 },
+    "Product_operation_ref": { "type": "string", "minLength": 1 },
+    "ExecutionAttempt_ref": { "type": "string", "minLength": 1 },
+    "execution_profile_ref": { "type": "string", "minLength": 1 },
+    "subject_ref": { "type": "string", "minLength": 1 },
+    "context_id": { "type": "string", "minLength": 1 },
+    "context_manifest_ref": { "type": "string", "minLength": 1 },
+    "input": { "type": "object" }
+  }
+}
