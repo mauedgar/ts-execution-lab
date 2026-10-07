@@ -1,0 +1,112 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "authority": "NONE",
+  "product_effect": "NONE",
+  "source_documents": [
+    "WORK_PACKAGE.md",
+    "REUSE-BEFORE-BUILD-ADDENDUM.md",
+    "ZOD-BOUNDARY-HANDOFF.md",
+    "PARALLEL-IMPLEMENTATION-PLAN.md"
+  ],
+  "status_vocabulary": ["PENDING_EXECUTION", "PASS", "FAIL", "QUALIFIED_NEGATIVE"],
+  "items": [
+    {
+      "id": "DOD-01",
+      "title": "Native TypeScript execution qualification",
+      "required_proof": ["local Windows Node 22.x", "GitHub Actions ubuntu-latest Node 22.x"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-02",
+      "title": "Machine contracts are JSON-first",
+      "required_proof": ["portable JSON carriers", "Zod request/result/receipt boundary validation", "malformed request rejected before profile execution"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-03",
+      "title": "Small TypeScript runner",
+      "required_proof": ["validate", "run", "profiles", "result.json", "receipt.json", "structured pre-effect failure receipt"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-04",
+      "title": "Known profile registry",
+      "required_proof": ["canonical-sha256/v0", "git-exact-subject/v0", "bounded predetermined operations", "exact tree/subject correspondence"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-05",
+      "title": "Local steady-state path reduction",
+      "required_proof": ["one bounded Node invocation", "no generated shell", "no parser process", "no OpenCode/Orca execution dependency", "internal validation"],
+      "evidence": ["experiments/TS-EXECUTION-SUBSTRATE-V0-001/RESULT.md"],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-06",
+      "title": "Remote steady-state path uses same runner",
+      "required_proof": ["same runner/profile code on Ubuntu", "local/remote semantic correspondence"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-07",
+      "title": "Private Product reusable workflow topology",
+      "required_proof": ["private caller checkout", "public lab mechanics", "no additional credentials", "caller correlation"],
+      "evidence": ["evidence/dod08-private-topology.json"],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-08",
+      "title": "Context/transport compatibility",
+      "required_proof": ["REF_ONLY", "INLINE_SMALL", "FROZEN_BUNDLE", "two synthetic Products without shared mutable state"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-09",
+      "title": "Fallback semantics preserved",
+      "required_proof": ["Attempt A EFFECT_NONE", "Attempt B new ExecutionAttempt", "same logical operation/profile/request", "EFFECT_UNKNOWN blocks fallback"],
+      "evidence": ["fallback-proof.json", "evidence/dod09-fallback.json"],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-10",
+      "title": "Feedback instrumentation without telemetry backend",
+      "required_proof": ["binding", "profile", "result class", "effect state", "timings", "subprocess count", "experiment efficiency observations"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-11",
+      "title": "Wait strategy remains external but measurable",
+      "required_proof": ["estimated duration", "actual elapsed", "observation timestamps", "information gain", "no fixed poll count"],
+      "evidence": ["evidence/dod10-wait-observation.json"],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-12",
+      "title": "Quantified efficiency improvement",
+      "required_proof": ["local canonical before/after", "remote canonical before/after", "private Product before/after", "at least two evidenced improvements"],
+      "evidence": ["EFFICIENCY-DRAFT.json"],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-13",
+      "title": "Permission-friction adjudication",
+      "required_proof": ["steady-state independence from OpenCode approval", "no broad weakening", "binding/stage classification"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    },
+    {
+      "id": "DOD-14",
+      "title": "Terminal convergence",
+      "required_proof": ["RESULT.md", "WORKER_RESULT.json", "EFFICIENCY.json", "classification of every DoD"],
+      "evidence": [],
+      "status": "PENDING_EXECUTION"
+    }
+  ]
+}

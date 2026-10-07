@@ -1,0 +1,25 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "fixture_kind": "fallback_semantics",
+  "logical_operation": "product://synthetic/alpha/operation/digest",
+  "profile": "profile://ts-execution-lab/canonical-sha256/v0",
+  "request_identity_input": {"n": 1, "hello": "world"},
+  "attempt_A": {
+    "ExecutionAttempt_ref": "attempt://synthetic/alpha/digest/A",
+    "binding": "local-commander",
+    "failure_stage": "binding_preflight",
+    "result_status": "BLOCKED",
+    "effect_state": "NONE",
+    "required_observation": "no profile execution and no external effect"
+  },
+  "attempt_B": {
+    "ExecutionAttempt_ref": "attempt://synthetic/alpha/digest/B",
+    "binding": "github-actions",
+    "required_invariants": ["same Product_operation_ref", "same profile", "same request identity", "new ExecutionAttempt_ref"],
+    "expected_result_status": "PASS",
+    "expected_effect_state": "CONFIRMED",
+    "expected_semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
+  },
+  "blocking_rule": "EFFECT_UNKNOWN blocks fallback until independently reconciled",
+  "execution_status": "NOT_EXECUTED"
+}
