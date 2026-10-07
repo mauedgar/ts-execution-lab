@@ -38,7 +38,7 @@ jobs:
       - name: Materialize request
         env:
           REQUEST_JSON: ${{ inputs.request_json }}
-        run: node -e "require('fs').writeFileSync('runner/remote/request.json', process.env.REQUEST_JSON + '\\n')"
+        run: node -e "const fs=require('fs'); fs.mkdirSync('runner/remote',{recursive:true}); fs.writeFileSync('runner/remote/request.json', process.env.REQUEST_JSON + '\\n')"
       - name: Execute request
         working-directory: runner
         run: node src/cli.ts run remote/request.json --out remote/out
