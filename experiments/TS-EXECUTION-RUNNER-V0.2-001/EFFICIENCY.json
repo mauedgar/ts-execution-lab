@@ -1,6 +1,8 @@
 {
   "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
   "status": "PASS",
+  "authority": "NONE",
+  "Product_effect": "NONE",
   "improvement_rule": "At least two required dimensions must improve with evidence.",
   "cases": [
     {
@@ -22,7 +24,7 @@
         "parser_calls": 0,
         "external_process_launches": 1,
         "ChatGPT_Commander_execution_calls": 1,
-        "wall_clock_ms": 882,
+        "observed_wall_clock_ms": 857,
         "internal_total_ms": 5.094,
         "subprocess_count": 0,
         "evidence": [
@@ -42,20 +44,21 @@
       "v0_1": {
         "run_id": 37655975430,
         "elapsed_ms": 17000,
-        "binding": "github-actions",
-        "evidence": [
-          "evidence/dod10-wait-observation.json"
-        ]
+        "binding": "github-actions"
       },
       "v0_2": {
-        "run_id": 37698737837,
+        "run_id": 37699334066,
+        "exact_candidate": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
         "elapsed_ms": 14000,
+        "node": "22.23.3",
         "binding": "github-actions",
         "selected_binding_ref_in_receipt": "github-actions",
-        "portable_result_and_receipt": true,
-        "artifact_id": 11516228100
+        "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+        "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+        "artifact_id": 11516742025,
+        "artifact_digest": "sha256:a86b52d9c61c2b27de0bf5386118bb1bb2db0bdd274212e68c3e0fcfd7fee786"
       },
-      "note": "Observed wall time improved in this sample, but network/queue timing is not treated as an architectural guarantee."
+      "note": "3s lower elapsed in this sample; provider/network timing is observational, not a general latency guarantee."
     },
     {
       "case": "private-product",
@@ -63,30 +66,37 @@
         "run_id": 37663582852,
         "elapsed_ms": 20000,
         "Product_local_mechanical_steps": 4,
-        "result_shape": "digest-only experiment output",
-        "evidence": [
-          "evidence/dod08-private-topology.json"
-        ]
+        "caller_shape": "checkout caller + checkout public lab + setup node + direct profile script"
       },
       "v0_2": {
-        "run_id": 37698748419,
+        "run_id": 37699344269,
+        "exact_candidate": "07c0c2a383fc31ae2d46c4e4d7a71caab4d7e456",
         "elapsed_ms": 19000,
         "Product_local_mechanical_steps": 1,
-        "result_shape": "portable result + receipt via reusable public workflow",
-        "extra_credentials": 0
+        "caller_shape": "one reusable-workflow call plus portable request",
+        "result_shape": "portable result + receipt",
+        "extra_credentials": 0,
+        "artifact_id": 11516871482,
+        "artifact_digest": "sha256:f3eb6e06d7b1f3df93e1bcc8931df4c579157d7b7156cbf0024835777062808f"
       },
       "improved_dimensions": [
         "Product_local_mechanical_steps",
         "portable_result_normalization"
-      ]
+      ],
+      "note": "1s lower elapsed in this sample; timing is observational only."
     }
   ],
   "required_dimension_pass": {
     "generated_shell_artifacts": "IMPROVED",
     "parser_calls": "IMPROVED",
     "external_process_launches": "IMPROVED_LOCAL",
-    "ChatGPT_Commander_execution_calls": "IMPROVED_LOCAL"
+    "ChatGPT_Commander_execution_calls": "IMPROVED_LOCAL",
+    "Product_local_mechanical_steps": "IMPROVED"
   },
-  "steady_state_prompt_reduction": "Mechanics move from generated shell instructions to a bounded JSON request plus one known runner invocation.",
+  "steady_state_prompt_reduction": {
+    "direction": "generated shell instructions -> bounded JSON request + known runner",
+    "quantified_bytes": null,
+    "quantitative_claim": false
+  },
   "dedicated_telemetry_backend_created": false
 }
