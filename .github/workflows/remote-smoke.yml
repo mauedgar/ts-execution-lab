@@ -1,0 +1,26 @@
+name: remote-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation_id:
+        description: Operation identifier
+        required: true
+        type: string
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Emit receipt
+        env:
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: node scripts/emit-receipt.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receipt
+          path: out/receipt.json

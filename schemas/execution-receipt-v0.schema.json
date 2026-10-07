@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-receipt-v0.schema.json",
+  "title": "ts-execution-receipt/v0",
+  "type": "object",
+  "required": [
+    "schema",
+    "operation_id",
+    "provider",
+    "repository",
+    "head_sha",
+    "run_id",
+    "run_attempt",
+    "runner_os",
+    "status",
+    "authority_created",
+    "Product_effect_created"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "ts-execution-receipt/v0" },
+    "operation_id": { "type": "string", "minLength": 1 },
+    "provider": { "const": "github-actions" },
+    "repository": { "type": "string", "minLength": 1 },
+    "head_sha": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "run_attempt": { "type": "string", "minLength": 1 },
+    "runner_os": { "type": "string", "minLength": 1 },
+    "status": { "const": "COMPLETE" },
+    "authority_created": { "const": false },
+    "Product_effect_created": { "const": false }
+  }
+}
