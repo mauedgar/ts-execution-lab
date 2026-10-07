@@ -1,0 +1,40 @@
+{
+  "schema": "ts-execution-lab-adoption-receipt/v0.1",
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "adoption": {
+    "target": "mauedgar/ts-execution-lab:main",
+    "meaning": "adopt_execution_lab_core",
+    "pre_main": "0ad95a9891030efb3a73ff7194f3c499b1b45f4c",
+    "adopted_terminal_subject": "46824d91e5b6e1cd05031306dd38302afe399e6a",
+    "qualified_execution_subject": "8c62e4110683091a9d4ee2beacc984adc11239d1",
+    "fast_forward_proven": true,
+    "force_used": false,
+    "effect_state": "CONFIRMED"
+  },
+  "observations": {
+    "GitHub_compare": {
+      "status": "ahead",
+      "ahead_by": 47,
+      "behind_by": 0,
+      "merge_base": "0ad95a9891030efb3a73ff7194f3c499b1b45f4c"
+    },
+    "initial_non_force_push": {
+      "result": "REJECTED_NEEDS_FORCE_BEFORE_LOCAL_REF_REFRESH",
+      "effect_state": "NONE"
+    },
+    "local_ref_refresh": {
+      "ancestry_check": "PASS"
+    },
+    "final_non_force_push": {
+      "result": "PASS",
+      "observed_remote_main": "46824d91e5b6e1cd05031306dd38302afe399e6a"
+    }
+  },
+  "Product_authority_created": false,
+  "Tecnotron_modified": false,
+  "Upper_LC_modified": false,
+  "TC_Core_modified": false,
+  "next_boundary": "BOUNDED_PRODUCT_HANDOFF_ONLY"
+}
