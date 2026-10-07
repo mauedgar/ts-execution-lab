@@ -1,149 +1,121 @@
-export type Provider = "local-commander" | "github-actions";
+import { createHash } from "node:crypto";
+import { z } from "zod";
 
-export interface Binding {
-  provider: Provider;
-  repository?: string;
-  workflow?: string;
-  ref?: string;
-}
+export const REQUEST_CONTRACT_VERSION = "ts-execution-request/v0.2" as const;
+export const RESULT_CONTRACT_VERSION = "ts-execution-result/v0.2" as const;
+export const RECEIPT_CONTRACT_VERSION = "ts-execution-receipt/v0.2" as const;
 
-export interface ExecutionRequest {
-  schema: "ts-execution-request/v0";
-  request_id: string;
-  Product_ref: string;
-  Product_operation_ref: string;
-  ExecutionAttempt_ref: string;
-  execution_profile_ref: string;
-  subject_ref: string;
-  context_id: string;
-  input: Record<string, unknown>;
-  binding: Binding;
-}
+const NonEmptyString = z.string().min(1);
+const JsonObject = z.record(z.string(), z.unknown());
 
-export interface ProfileBinding {
-  provider: Provider;
-  entrypoint: string;
-  runtime?: string;
-}
+export const ExecutionRequestSchema = z.object({
+  contract_version: z.literal(REQUEST_CONTRACT_VERSION),
+  request_id: NonEmptyString,
+  Product_ref: NonEmptyString,
+  Product_operation_ref: NonEmptyString,
+  ExecutionAttempt_ref: NonEmptyString,
+  execution_profile_ref: NonEmptyString,
+  subject_ref: NonEmptyString,
+  context_id: NonEmptyString,
+  context_manifest_ref: NonEmptyString.optional(),
+  input: JsonObject,
+}).strict();
 
-export interface ExecutionProfile {
-  schema: "ts-execution-profile/v0";
-  profile_ref: string;
-  profile_id: string;
-  status: "QUALIFIED" | "CANDIDATE" | "RETIRED";
-  input: { kind: string; max_bytes: number };
-  output: { semantic_digest_alg: string; receipt: string };
-  bindings: ProfileBinding[];
-}
+export type ExecutionRequest = z.infer<typeof ExecutionRequestSchema>;
 
-export interface ContextMaterialization {
-  class: "REF_ONLY" | "INLINE_SMALL" | "FROZEN_BUNDLE";
-  ref: string;
-  bytes?: number;
-  required?: boolean;
-  reason?: string;
-}
+export const ResultStatusSchema = z.enum(["PASS", "PARTIAL", "FAIL", "BLOCKED", "UNAVAILABLE"]);
+export const EffectStateSchema = z.enum(["NONE", "CONFIRMED", "UNKNOWN"]);
 
-export interface ExecutionContextManifest {
-  schema: "ts-execution-context-manifest/v0";
-  context_id: string;
-  Product_ref: string;
-  cutoff: string;
-  baseline_refs: string[];
-  delta_refs: string[];
-  unknowns: string[];
-  materializations: ContextMaterialization[];
-}
+export const ObservationSchema = z.object({
+  binding: NonEmptyString,
+  profile: NonEmptyString,
+  result_class: NonEmptyString,
+  effect_state: EffectStateSchema,
+  timings: z.object({
+    validation_ms: z.number().nonnegative(),
+    profile_ms: z.number().nonnegative(),
+    total_ms: z.number().nonnegative(),
+  }).strict(),
+  subprocess_count: z.number().int().nonnegative(),
+}).strict();
 
-export type ResultClass = "SUCCESS" | "REJECTED_REQUEST" | "PROFILE_ERROR" | "PROFILE_FAILURE";
-export type EffectState = "SUCCESS" | "EFFECT_NONE" | "FAILURE" | "EFFECT_UNKNOWN";
+const ErrorDetailSchema = z.object({
+  code: NonEmptyString,
+  message: NonEmptyString,
+  path: z.string().optional(),
+}).strict();
 
-export interface Observation {
-  binding: string;
-  profile: string;
-  result_class: ResultClass;
-  effect_state: EffectState;
-  timings: { validation_ms: number; profile_ms: number; total_ms: number };
-  subprocess_count: number;
-}
+const RequestIdentityFields = {
+  request_id: NonEmptyString,
+  Product_ref: NonEmptyString,
+  Product_operation_ref: NonEmptyString,
+  ExecutionAttempt_ref: NonEmptyString,
+  execution_profile_ref: NonEmptyString,
+  subject_ref: NonEmptyString,
+  context_id: NonEmptyString,
+};
 
-export interface ExecutionResult {
-  schema: "ts-execution-result/v0";
-  request_id: string;
-  profile: string;
-  result_class: ResultClass;
-  effect_state: EffectState;
-  semantic_digest?: string;
-  profile_output?: Record<string, unknown>;
-  errors?: string[];
-  observation: Observation;
-}
+export const ExecutionResultSchema = z.object({
+  contract_version: z.literal(RESULT_CONTRACT_VERSION),
+  ...RequestIdentityFields,
+  request_identity: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  result_status: ResultStatusSchema,
+  effect_state: EffectStateSchema,
+  semantic_digest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
+  profile_output: JsonObject.optional(),
+  errors: z.array(ErrorDetailSchema).min(1).optional(),
+  observation: ObservationSchema,
+}).strict();
 
-export interface ExecutionReceipt {
-  schema: "ts-execution-receipt/v0";
-  operation_id: string;
-  provider: Provider;
-  repository: string;
-  head_sha: string;
-  run_id: string;
-  run_attempt: string;
-  runner_os: string;
-  status: "COMPLETE";
-  authority_created: false;
-  Product_effect_created: false;
-  ExecutionAttempt_ref: string;
-  execution_profile_ref: string;
-  semantic_digest?: string;
-  result_artifact_id?: string;
-  result_artifact_digest?: string;
-  observation?: Observation;
-}
+export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;
 
-export function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
+export const ExecutionReceiptSchema = z.object({
+  contract_version: z.literal(RECEIPT_CONTRACT_VERSION),
+  Product_operation_ref: NonEmptyString,
+  ExecutionAttempt_ref: NonEmptyString,
+  request_identity: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  selected_binding_ref: NonEmptyString,
+  started_at: z.iso.datetime(),
+  completed_at: z.iso.datetime(),
+  result_status: ResultStatusSchema,
+  effect_state: EffectStateSchema,
+  exact_subject_ref: NonEmptyString.optional(),
+  provider_native_refs: z.array(NonEmptyString),
+  evidence_refs: z.array(NonEmptyString),
+  result_ref: NonEmptyString,
+  authority_created: z.literal(false),
+  Product_effect_created: z.literal(false),
+  observation: ObservationSchema,
+}).strict();
 
-export function validateRequest(v: unknown): string[] {
-  const errors: string[] = [];
-  if (!isRecord(v)) return ["request must be a JSON object"];
-  const req = v as Record<string, unknown>;
-  if (req.schema !== "ts-execution-request/v0") errors.push("schema must be ts-execution-request/v0");
-  for (const key of ["request_id", "Product_ref", "Product_operation_ref", "ExecutionAttempt_ref", "execution_profile_ref", "subject_ref", "context_id"]) {
-    if (typeof req[key] !== "string" || req[key].length === 0) errors.push(`${key} must be a non-empty string`);
+export type ExecutionReceipt = z.infer<typeof ExecutionReceiptSchema>;
+
+export type RecoverableRequestIdentity = Pick<ExecutionRequest,
+  "request_id" | "Product_ref" | "Product_operation_ref" | "ExecutionAttempt_ref" |
+  "execution_profile_ref" | "subject_ref" | "context_id"
+>;
+
+export function recoverRequestIdentity(value: unknown): RecoverableRequestIdentity | undefined {
+  if (!isRecord(value)) return undefined;
+  const recovered: Record<string, string> = {};
+  for (const key of Object.keys(RequestIdentityFields)) {
+    if (typeof value[key] !== "string" || value[key].length === 0) return undefined;
+    recovered[key] = value[key];
   }
-  const allowed = new Set(["schema", "request_id", "Product_ref", "Product_operation_ref", "ExecutionAttempt_ref", "execution_profile_ref", "subject_ref", "context_id", "input", "binding"]);
-  for (const key of Object.keys(req)) if (!allowed.has(key)) errors.push(`unexpected property: ${key}`);
-  if (!isRecord(req.input)) errors.push("input must be an object");
-  if (!isRecord(req.binding)) {
-    errors.push("binding must be an object");
-  } else {
-    if (req.binding.provider !== "local-commander" && req.binding.provider !== "github-actions") {
-      errors.push("binding.provider must be local-commander or github-actions");
-    }
-    for (const key of Object.keys(req.binding)) if (!["provider", "repository", "workflow", "ref"].includes(key)) errors.push(`unexpected binding property: ${key}`);
-    for (const key of ["repository", "workflow", "ref"] as const) if (req.binding[key] !== undefined && typeof req.binding[key] !== "string") errors.push(`binding.${key} must be a string`);
-  }
-  return errors;
+  return recovered as RecoverableRequestIdentity;
 }
 
-export function validateContextManifest(v: unknown): string[] {
-  const errors: string[] = [];
-  if (!isRecord(v)) return ["manifest must be a JSON object"];
-  if (v.schema !== "ts-execution-context-manifest/v0") errors.push("schema must be ts-execution-context-manifest/v0");
-  if (typeof v.context_id !== "string" || !v.context_id) errors.push("context_id required");
-  if (typeof v.Product_ref !== "string" || !v.Product_ref) errors.push("Product_ref required");
-  if (typeof v.cutoff !== "string" || !v.cutoff) errors.push("cutoff required");
-  for (const k of ["baseline_refs", "delta_refs", "unknowns"]) if (!Array.isArray(v[k]) || (v[k] as unknown[]).some((x) => typeof x !== "string")) errors.push(`${k} must be string[]`);
-  if (!Array.isArray(v.materializations)) errors.push("materializations must be an array");
-  else for (const m of v.materializations) {
-    if (!isRecord(m) || !["REF_ONLY", "INLINE_SMALL", "FROZEN_BUNDLE"].includes(m.class as string) || typeof m.ref !== "string" || !m.ref) errors.push("invalid materialization entry");
-  }
-  return errors;
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return "[" + value.map(canonicalize).join(",") + "]";
-  const keys = Object.keys(value as Record<string, unknown>).sort();
-  return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonicalize((value as Record<string, unknown>)[k])).join(",") + "}";
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(object[key])}`).join(",")}}`;
+}
+
+export function sha256Identity(value: unknown): string {
+  return `sha256:${createHash("sha256").update(canonicalize(value), "utf8").digest("hex")}`;
 }

@@ -1,55 +1,55 @@
-import type { ExecutionProfile } from "./contracts.ts";
 import { runCanonicalSha256, ProfileInputError } from "./profiles/canonical-sha256.ts";
-import { runGitExactSubject, GIT_SUBPROCESS_COUNT } from "./profiles/git-exact-subject.ts";
+import { runGitExactSubject } from "./profiles/git-exact-subject.ts";
 
-export interface ProfileRegistration {
-  profile: ExecutionProfile;
-  execute: (input: Record<string, unknown>) => Record<string, unknown>;
+export interface ExecutionProfile {
+  contract_version: "ts-execution-profile/v0.2";
+  profile_ref: string;
+  profile_id: string;
+  input: { kind: "bounded-json"; max_bytes: number };
+  effect_class: "READ_ONLY";
+}
+
+export interface ProfileExecution {
+  output: Record<string, unknown>;
   subprocessCount: number;
 }
 
-const canonicalProfile: ExecutionProfile = {
-  schema: "ts-execution-profile/v0",
-  profile_ref: "profile://ts-execution-lab/canonical-sha256/v0",
-  profile_id: "canonical-sha256/v0",
-  status: "QUALIFIED",
-  input: { kind: "bounded-json", max_bytes: 65536 },
-  output: { semantic_digest_alg: "sha256", receipt: "ts-execution-receipt/v0" },
-  bindings: [
-    { provider: "local-commander", entrypoint: "node src/cli.ts run", runtime: "node" },
-    { provider: "github-actions", entrypoint: "node src/cli.ts run", runtime: "node" },
-  ],
-};
+export interface ProfileRegistration {
+  profile: ExecutionProfile;
+  execute: (input: Record<string, unknown>) => ProfileExecution;
+}
 
-const gitProfile: ExecutionProfile = {
-  schema: "ts-execution-profile/v0",
-  profile_ref: "profile://ts-execution-lab/git-exact-subject/v0",
-  profile_ref2: undefined as never,
-  profile_id: "git-exact-subject/v0",
-  status: "QUALIFIED",
-  input: { kind: "bounded-json", max_bytes: 65536 },
-  output: { semantic_digest_alg: "sha256", receipt: "ts-execution-receipt/v0" },
-  bindings: [
-    { provider: "local-commander", entrypoint: "node src/cli.ts run", runtime: "node" },
-    { provider: "github-actions", verified": "" as never },
-  ],
-} as ExecutionProfile;
+const profiles: ProfileRegistration[] = [
+  {
+    profile: {
+      contract_version: "ts-execution-profile/v0.2",
+      profile_ref: "profile://ts-execution-lab/canonical-sha256/v0",
+      profile_id: "canonical-sha256/v0",
+      input: { kind: "bounded-json", max_bytes: 65536 },
+      effect_class: "READ_ONLY",
+    },
+    execute: (input) => ({ output: runCanonicalSha256(input), subprocessCount: 0 }),
+  },
+  {
+    profile: {
+      contract_version: "ts-execution-profile/v0.2",
+      profile_ref: "profile://ts-execution-lab/git-exact-subject/v0",
+      profile_id: "git-exact-subject/v0",
+      input: { kind: "bounded-json", max_bytes: 65536 },
+      effect_class: "READ_ONLY",
+    },
+    execute: runGitExactSubject,
+  },
+];
 
-export const registry: Record<string, ProfileRegistration> = {
-  "profile://ts-execution-lab/canonical-sha256/v0": {
-    profile: canonicalProfile,
-    execute: runCanonicalSha256 as (input: Record<string, unknown>) => Record<string, unknown>,
-    subprocessCount: 0,
-  },
-  "profile://ts-execution-lab/git-exact-subject/v0": {
-    profile: gitProfile,
-    execute: runGitExactSubject as (input: Record<string, unknown>) => Record<string, unknown>,
-    subprocessCount: GIT_SUBPROCESS_COUNT,
-  },
-};
+export const registry = new Map(profiles.map((registration) => [registration.profile.profile_ref, registration]));
 
 export function resolveProfile(ref: string): ProfileRegistration | undefined {
-  return registry[ref];
+  return registry.get(ref);
+}
+
+export function listProfiles(): ExecutionProfile[] {
+  return profiles.map(({ profile }) => profile);
 }
 
 export { ProfileInputError };

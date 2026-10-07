@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-result-v0.2.schema.json",
+  "title": "ts-execution-result/v0.2",
+  "type": "object",
+  "required": ["contract_version", "request_id", "Product_ref", "Product_operation_ref", "ExecutionAttempt_ref", "execution_profile_ref", "subject_ref", "context_id", "request_identity", "result_status", "effect_state", "observation"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": { "const": "ts-execution-result/v0.2" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "Product_ref": { "type": "string", "minLength": 1 },
+    "Product_operation_ref": { "type": "string", "minLength": 1 },
+    "ExecutionAttempt_ref": { "type": "string", "minLength": 1 },
+    "execution_profile_ref": { "type": "string", "minLength": 1 },
+    "subject_ref": { "type": "string", "minLength": 1 },
+    "context_id": { "type": "string", "minLength": 1 },
+    "request_identity": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "result_status": { "enum": ["PASS", "PARTIAL", "FAIL", "BLOCKED", "UNAVAILABLE"] },
+    "effect_state": { "enum": ["NONE", "CONFIRMED", "UNKNOWN"] },
+    "semantic_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "profile_output": { "type": "object" },
+    "errors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/error" } },
+    "observation": { "$ref": "#/$defs/observation" }
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "path": { "type": "string" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["binding", "profile", "result_class", "effect_state", "timings", "subprocess_count"],
+      "additionalProperties": false,
+      "properties": {
+        "binding": { "type": "string", "minLength": 1 },
+        "profile": { "type": "string", "minLength": 1 },
+        "result_class": { "type": "string", "minLength": 1 },
+        "effect_state": { "enum": ["NONE", "CONFIRMED", "UNKNOWN"] },
+        "timings": {
+          "type": "object",
+          "required": ["validation_ms", "profile_ms", "total_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "validation_ms": { "type": "number", "minimum": 0 },
+            "profile_ms": { "type": "number", "minimum": 0 },
+            "total_ms": { "type": "number", "minimum": 0 }
+          }
+        },
+        "subprocess_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
