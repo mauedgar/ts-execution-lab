@@ -119,3 +119,9 @@ export function canonicalize(value: unknown): string {
 export function sha256Identity(value: unknown): string {
   return `sha256:${createHash("sha256").update(canonicalize(value), "utf8").digest("hex")}`;
 }
+
+export function requestIdentity(value: unknown): string {
+  if (!isRecord(value)) return sha256Identity(value);
+  const { ExecutionAttempt_ref: _executionAttemptRef, ...mechanicalRequest } = value;
+  return sha256Identity(mechanicalRequest);
+}
