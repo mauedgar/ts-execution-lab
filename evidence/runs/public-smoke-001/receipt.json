@@ -1,0 +1,13 @@
+{
+  "schema": "ts-execution-receipt/v0",
+  "operation_id": "PUBLIC-SMOKE-001",
+  "provider": "github-actions",
+  "repository": "mauedgar/ts-execution-lab",
+  "head_sha": "0ad95a9891030efb3a73ff7194f3c499b1b45f4c",
+  "run_id": "37655572280",
+  "run_attempt": "1",
+  "runner_os": "Linux",
+  "status": "COMPLETE",
+  "authority_created": false,
+  "Product_effect_created": false
+}

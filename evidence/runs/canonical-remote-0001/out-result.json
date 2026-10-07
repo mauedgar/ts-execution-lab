@@ -1,0 +1,6 @@
+{
+  "profile": "canonical-sha256/v0",
+  "input_bytes": 23,
+  "canonical_bytes": 23,
+  "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728"
+}
