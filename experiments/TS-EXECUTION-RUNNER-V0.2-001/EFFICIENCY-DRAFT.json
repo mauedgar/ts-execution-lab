@@ -1,0 +1,41 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "status": "MEASUREMENT_TEMPLATE_NOT_A_RESULT",
+  "source_v0_1": [
+    "experiments/TS-EXECUTION-SUBSTRATE-V0-001/RESULT.md",
+    "evidence/parser-launch-worker.json",
+    "evidence/parser-failure-demo.json",
+    "evidence/dod10-wait-observation.json"
+  ],
+  "comparison_dimensions": [
+    "generated_shell_artifact_count",
+    "external_process_launch_count",
+    "ChatGPT_Commander_execution_call_count",
+    "parser_call_count",
+    "repeated_permission_prompt_count",
+    "steady_state_prompt_bytes",
+    "elapsed_ms",
+    "developer_intervention_count"
+  ],
+  "runs": [
+    {
+      "case": "local-canonical",
+      "v0_1": {"status": "TO_BE_FILLED_FROM_RUN_LOG", "evidence": ["evidence/parser-launch-worker.json"]},
+      "v0_2": {"status": "UNEXECUTED", "evidence": []},
+      "required_path": "Commander -> one bounded Node runner invocation -> result/receipt"
+    },
+    {
+      "case": "remote-canonical",
+      "v0_1": {"status": "TO_BE_FILLED_FROM_RUN_LOG", "evidence": ["evidence/dod10-wait-observation.json", "experiments/TS-EXECUTION-SUBSTRATE-V0-001/RESULT.md"]},
+      "v0_2": {"status": "UNEXECUTED", "evidence": []},
+      "required_path": "Actions adapter -> same Node runner/profile -> result/receipt"
+    },
+    {
+      "case": "private-product",
+      "v0_1": {"status": "TO_BE_FILLED_FROM_RUN_LOG", "evidence": ["evidence/dod08-private-topology.json"]},
+      "v0_2": {"status": "UNEXECUTED", "evidence": []},
+      "required_path": "private caller checkout -> public lab runner mechanics -> correlated result/receipt"
+    }
+  ],
+  "improvement_rule": "Only mark PASS after measured evidence demonstrates improvement in at least two dimensions; do not infer from architecture."
+}
