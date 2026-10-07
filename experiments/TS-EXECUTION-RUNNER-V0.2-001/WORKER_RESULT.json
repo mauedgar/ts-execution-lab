@@ -99,13 +99,8 @@
     "DOD-13": "PASS",
     "DOD-14": "PASS"
   },
-  "main_merged": false,
+  "main_merged": true,
   "Product_adoption": false,
-  "next_eligible_effect": {
-    "target": "mauedgar/ts-execution-lab:main",
-    "meaning": "ADOPT_EXECUTION_LAB_CORE",
-    "Product_effect": "NONE"
-  },
   "artifacts": [
     "RESULT.md",
     "EFFICIENCY.json",
@@ -117,5 +112,7 @@
     "qualification/wait-observation-v0.2.json",
     "qualification/permission-friction-v0.2.json",
     "EXECUTION-ENGINEERING-FINDINGS.json"
-  ]
+  ],
+  "execution_lab_core_adopted": true,
+  "adoption_receipt": "ADOPTION-RECEIPT.json"
 }
