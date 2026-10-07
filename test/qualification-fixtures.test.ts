@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const root = "experiments/TS-EXECUTION-RUNNER-V0.2-001";
+const root = resolve(import.meta.dirname, "..", "experiments", "TS-EXECUTION-RUNNER-V0.2-001");
 
 function load<T>(path: string): T {
-  return JSON.parse(readFileSync(`${root}/${path}`, "utf8")) as T;
+  return JSON.parse(readFileSync(resolve(root, path), "utf8")) as T;
 }
 
 test("qualification matrix covers DOD-01 through DOD-14 without unearned PASS", () => {
