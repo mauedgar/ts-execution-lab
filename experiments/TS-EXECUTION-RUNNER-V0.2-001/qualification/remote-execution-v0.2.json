@@ -1,0 +1,47 @@
+{
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "qualified_execution_subject": "8c62e4110683091a9d4ee2beacc984adc11239d1",
+  "runner_os": "Ubuntu 24.04",
+  "node_version": "22.23.3",
+  "runs": [
+    {
+      "role": "local_remote_equivalence",
+      "run_id": 37698737837,
+      "created_at": "2026-10-07T22:50:55Z",
+      "completed_at": "2026-10-07T22:51:09Z",
+      "elapsed_ms": 14000,
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+      "ExecutionAttempt_ref": "attempt://synthetic/product-alpha/digest-payload/remote-1",
+      "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+      "selected_binding_ref": "github-actions",
+      "subprocess_count": 0,
+      "internal_total_ms": 10.81,
+      "artifact_id": 11516228100,
+      "artifact_digest": "sha256:a00b5b74f3b6343f2f1cc8e05413b8d32a6af448e1ac89c31ae51abeefeb9039"
+    },
+    {
+      "role": "private_product_correlation",
+      "run_id": 37698748419,
+      "created_at": "2026-10-07T22:51:01Z",
+      "completed_at": "2026-10-07T22:51:20Z",
+      "elapsed_ms": 19000,
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "request_identity": "sha256:62c1197937e65e6a786b1109c69b9b912d9e4166c3211f275ba712795baa4225",
+      "ExecutionAttempt_ref": "attempt://synthetic/private-consumer/correlate/1",
+      "exact_subject_ref": "git:mauedgar/ts-execution-private-consumer@9a21cde2717c3fd6f7f4722db2ca79da05710beb",
+      "semantic_digest": "sha256:914b454c7491eb1921f7b1c94f157c15c46f8a0514a49b837de235c376136530",
+      "selected_binding_ref": "github-actions",
+      "subprocess_count": 0,
+      "internal_total_ms": 3.426,
+      "artifact_id": 11517240237,
+      "artifact_digest": "sha256:22a5300c96bb2cf15d7a5aab4b2ff2ca0627b7bc82794e70f4d12007f8268317"
+    }
+  ],
+  "extra_credentials_added": false,
+  "Product_authority_created": false,
+  "Product_effect_created": false,
+  "status": "PASS"
+}
