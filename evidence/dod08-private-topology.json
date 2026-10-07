@@ -1,0 +1,28 @@
+{
+  "experiment_id": "TS-EXECUTION-SUBSTRATE-V0-001",
+  "dod": "DOD-08",
+  "A_private_product_owned": {
+    "consumer_repo": "mauedgar/ts-execution-private-consumer",
+    "visibility": "private",
+    "private_repo_created": "2026-10-07T18:00Z",
+    "fixture": "payload.json {\"fixture\":\"private-consumer\",\"n\":1}, zero Product semantics, zero secrets",
+    "workflow": "consume-public-lab.yml (actions/checkout of itself + public mauedgar/ts-execution-lab at devlab/execution-substrate-v0-001, runs lab/scripts/canonical-sha256.mjs)",
+    "run_id": "37663582852",
+    "created_at": "2026-10-07T18:01:15Z",
+    "completed_at": "2026-10-07T18:01:35Z",
+    "conclusion": "success",
+    "semantic_digest": "sha256:9da28dc8f861c8a8cd013d72dd055842c627f719ffd5d252f092ad01ccf5f053",
+    "effect": "private source remained private; public lab runner/profile logic consumed exactly, copied nothing Product-semantic into the lab"
+  },
+  "B_central_public_runner_default_token": {
+    "workflow": ".github/workflows/dod08-private-checkout-attempt.yml on mauedgar/ts-execution-lab@devlab/execution-substrate-v0-001",
+    "run_id": "37663798724",
+    "created_at": "2026-10-07T18:02:54Z",
+    "completed_at": "2026-10-07T18:03:40Z",
+    "conclusion": "failure",
+    "error": "remote: Repository not found; fatal: repository 'https://github.com/mauedgar/ts-execution-private-consumer/' not found; git exit 128",
+    "auth_material": "default GITHUB_TOKEN only; no PAT, no GitHub App, no repo secrets added",
+    "adjudication": "QUALIFIED_NEGATIVE"
+  },
+  "routing_note": "Topology A (private Product-owned workflow consuming the public lab runner/profile) is simpler and safer for future private Products. Topology B cannot work with only the default token and must not be forced with PATs/App secrets."
+}

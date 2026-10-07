@@ -13,8 +13,17 @@
       "updated_at": "2026-10-07T17:01:13Z",
       "actual_terminal_elapsed_ms": 13000,
       "observations": [
-        {"t": "2026-10-07T17:01:00Z", "yielded": true, "state": "RUNNING_EXPECTED"},
-        {"t": "2026-10-07T17:01:13Z", "yielded": true, "state": "TERMINAL", "conclusion": "success"}
+        {
+          "t": "2026-10-07T17:01:00Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T17:01:13Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
       ],
       "max_poll_count": null,
       "polled_commander": false,
@@ -31,12 +40,158 @@
       "updated_at": "2026-10-07T17:03:21Z",
       "actual_terminal_elapsed_ms": 17000,
       "observations": [
-        {"t": "2026-10-07T17:03:04Z", "yielded": true, "state": "RUNNING_EXPECTED"},
-        {"t": "2026-10-07T17:03:21Z", "yielded": true, "state": "TERMINAL", "conclusion": "success"}
+        {
+          "t": "2026-10-07T17:03:04Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T17:03:21Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ],
+      "max_poll_count": null,
+      "polled_commander": false,
+      "observation_surface": "github-actions-api"
+    },
+    {
+      "run_id": "37661477555",
+      "operation_id": "product-alpha/op-001/attempt-001",
+      "head_sha": "f35b0c85fe2d4ddaff7077d175c319e76cb749b2",
+      "estimated_duration_ms_before_observation": 60000,
+      "queue_time": null,
+      "started_at": "2026-10-07T17:45:04Z",
+      "created_at": "2026-10-07T17:45:04Z",
+      "updated_at": "2026-10-07T17:45:22Z",
+      "actual_terminal_elapsed_ms": 18000,
+      "observations": [
+        {
+          "t": "2026-10-07T17:45:04Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T17:45:22Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ],
+      "max_poll_count": null,
+      "polled_commander": false,
+      "observation_surface": "github-actions-api"
+    },
+    {
+      "run_id": "37661622747",
+      "operation_id": "product-beta/op-002/attempt-001",
+      "head_sha": "f35b0c85fe2d4ddaff7077d175c319e76cb749b2",
+      "estimated_duration_ms_before_observation": 60000,
+      "queue_time": null,
+      "started_at": "2026-10-07T17:46:10Z",
+      "created_at": "2026-10-07T17:46:10Z",
+      "updated_at": "2026-10-07T17:46:26Z",
+      "actual_terminal_elapsed_ms": 16000,
+      "observations": [
+        {
+          "t": "2026-10-07T17:46:10Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T17:46:26Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ],
+      "max_poll_count": null,
+      "polled_commander": false,
+      "observation_surface": "github-actions-api"
+    },
+    {
+      "run_id": "37663582852",
+      "operation_id": "DOD-08A-PRIVATE-CONSUMER-CONSUME-PUBLIC-LAB",
+      "head_sha": "f33cca0",
+      "created_at": "2026-10-07T18:01:15Z",
+      "updated_at": "2026-10-07T18:01:35Z",
+      "actual_terminal_elapsed_ms": 20000,
+      "started_at": "2026-10-07T18:01:15Z",
+      "estimated_duration_ms_before_observation": 60000,
+      "queue_time": null,
+      "observations": [
+        {
+          "t": "2026-10-07T18:01:15Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T18:01:35Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
+      ],
+      "max_poll_count": null,
+      "polled_commander": false,
+      "observation_surface": "github-actions-api"
+    },
+    {
+      "run_id": "37663798724",
+      "operation_id": "DOD-08B-CENTRAL-RUNNER-PRIVATE-CHECKOUT-ATTEMPT",
+      "head_sha": "e549c65e038d169744eb559d9089afd6242195d6",
+      "created_at": "2026-10-07T18:02:54Z",
+      "updated_at": "2026-10-07T18:03:40Z",
+      "actual_terminal_elapsed_ms": 46000,
+      "started_at": "2026-10-07T18:02:54Z",
+      "estimated_duration_ms_before_observation": 60000,
+      "queue_time": null,
+      "observations": [
+        {
+          "t": "2026-10-07T18:02:54Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED"
+        },
+        {
+          "t": "2026-10-07T18:03:40Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "failure"
+        }
+      ],
+      "max_poll_count": null,
+      "polled_commander": false,
+      "observation_surface": "github-actions-api"
+    },
+    {
+      "run_id": "37664046391",
+      "operation_id": "DIGEST-PAYLOAD-FALLBACK-B",
+      "head_sha": "e549c65e038d169744eb559d9089afd6242195d6",
+      "created_at": "2026-10-07T18:04:48Z",
+      "updated_at": "2026-10-07T18:04:59Z",
+      "actual_terminal_elapsed_ms": 11000,
+      "started_at": "2026-10-07T18:04:48Z",
+      "estimated_duration_ms_before_observation": 60000,
+      "queue_time": null,
+      "observations": [
+        {
+          "t": "2026-10-07T18:04:48Z",
+          "yielded": true,
+          "state": "RUNNING_EXPECTED",
+          "state_note": true
+        },
+        {
+          "t": "2026-10-07T18:04:59Z",
+          "yielded": true,
+          "state": "TERMINAL",
+          "conclusion": "success"
+        }
       ],
       "max_poll_count": null,
       "polled_commander": false,
       "observation_surface": "github-actions-api"
     }
-  ]
+  ],
+  "observation_policy": "ChatGPT used adaptive remote observation on durable GitHub/provider state; never polled Commander; no fixed max-poll count."
 }

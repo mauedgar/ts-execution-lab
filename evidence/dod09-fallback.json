@@ -1,0 +1,26 @@
+{
+  "experiment_id": "TS-EXECUTION-SUBSTRATE-V0-001",
+  "dod": "DOD-09",
+  "logical_operation": "attempt://synthetic/product-alpha/digest-payload",
+  "profile": "canonical-sha256/v0",
+  "input_identity": "{\"n\":1,\"hello\":\"world\"} (evidence/sample-payload.json; canonical_bytes 23; expected semantic_digest sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728)",
+  "attempt_A": {
+    "ref": "attempt://synthetic/product-alpha/digest-payload/attempt-A",
+    "binding": "local-commander",
+    "outcome": "EFFECT_NONE binding/preflight failure (payload exceeds 65536 bytes, exit=3)",
+    "evidence": "evidence/dod09-attemptA-local-preflight-failure.json",
+    "effect": "EFFECT_NONE — no execution, no ambiguous external effect; safe precondition for a NEW ExecutionAttempt"
+  },
+  "attempt_B": {
+    "ref": "attempt://synthetic/product-alpha/digest-payload/attempt-B",
+    "binding": "github-actions (already-qualified in DOD-04/DOD-10)",
+    "run_id": "37664046391",
+    "created_at": "2026-10-07T18:04:48Z",
+    "completed_at": "2026-10-07T18:04:59Z",
+    "conclusion": "success",
+    "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+    "corresponds_to_local": true,
+    "receipt": "evidence/runs/digest-payload-fallback-B/canonical-result/out/canonical-receipt.json"
+  },
+  "fallback_policy": "attempt B is a NEW ExecutionAttempt; profile/input identity preserved; EFFECT_UNKNOWN would BLOCK fallback pending reconciliation; no ambiguous external effect was induced"
+}

@@ -1,0 +1,38 @@
+experiment_id: TS-EXECUTION-SUBSTRATE-V0-001
+branch: devlab/execution-substrate-v0-001
+authority: NONE
+Product_authority: NONE
+Product_effect: NONE
+repo_effects:
+  public_lab: mauedgar/ts-execution-lab (devlab/execution-substrate-v0-001, non-force push)
+  private_transport: mauedgar/ts-execution-transport (unchanged)
+  private_consumer_created: mauedgar/ts-execution-private-consumer (private, synthetic fixture)
+remote_run_ids:
+  bootstrap_smoke: "37621354100"
+  canonical_remote_0001: "37655975430"
+  transport_alpha: "37661477555"
+  transport_beta: "37661622747"
+  dod08A_private_consumer: "37663582852"
+  dod08B_central_runner_private_checkout: "37663798724"
+  dod09B_fallback_attempt: "37664046391"
+dod_status:
+  DOD-01: PASS
+  DOD-02: PASS
+  DOD-03: PASS
+  DOD-04: PASS
+  DOD-05: PASS
+  DOD-06: PASS
+  DOD-07: PASS
+  DOD-08: PASS (A proven; B QUALIFIED_NEGATIVE as permitted)
+  DOD-09: PASS
+  DOD-10: PASS
+  DOD-11: PASS
+blockers: []
+artifacts:
+  result: experiments/TS-EXECUTION-SUBSTRATE-V0-001/RESULT.md
+  worker_result: experiments/TS-EXECUTION-SUBSTRATE-V0-001/WORKER_RESULT.yaml
+  evidence_dod08: evidence/dod08-private-topology.json
+  evidence_dod09: evidence/dod09-fallback.json
+  evidence_dod10: evidence/dod10-wait-observation.json
+  fallback_receipt: evidence/runs/digest-payload-fallback-B/canonical-result/out/canonical-receipt.json
+semantics: DevLab evidence only; no Product authority created; no arbitrary executor; no secrets added.
