@@ -1,0 +1,111 @@
+{
+  "schema": "ts-execution-engineering-worker-result/v0.2",
+  "experiment_id": "TS-EXECUTION-RUNNER-V0.2-001",
+  "responsibility": "ADOPT_DATA_DRIVEN_TYPESCRIPT_EXECUTION_RUNNER_V0_2",
+  "status": "PASS_RECONCILED_TERMINAL",
+  "authority": "NONE",
+  "Product_authority_created": false,
+  "Product_effect": "NONE",
+  "qualified_execution_subject": {
+    "commit": "8c62e4110683091a9d4ee2beacc984adc11239d1",
+    "branch": "devlab/execution-runner-v0-2-001"
+  },
+  "local_qualification": {
+    "node": "22.23.3",
+    "os": "Windows",
+    "tests": {
+      "pass": 16,
+      "fail": 0
+    },
+    "canonical": {
+      "wall_clock_ms": 882,
+      "request_identity": "sha256:fb0a82c235ba8f17e81e139754e3bb6970ce6eb18ee06bc48c8dff813e92c474",
+      "semantic_digest": "sha256:32b769982a3a6e2df120530b06dcbaf1e8f75e004ceea92ac3e91bd7a248d728",
+      "result_status": "PASS",
+      "effect_state": "NONE",
+      "subprocess_count": 0,
+      "internal_total_ms": 5.094
+    }
+  },
+  "remote_qualification": {
+    "os": "Ubuntu 24.04",
+    "node": "22.23.3",
+    "equivalence_run": 37698737837,
+    "private_correlation_run": 37698748419,
+    "equivalence_status": "PASS",
+    "private_status": "PASS"
+  },
+  "contracts": {
+    "request": "ts-execution-request/v0.2",
+    "context_manifest": "ts-execution-context-manifest/v0.2",
+    "result": "ts-execution-result/v0.2",
+    "receipt": "ts-execution-receipt/v0.2",
+    "runtime_boundary": "Zod"
+  },
+  "profiles": [
+    {
+      "ref": "profile://ts-execution-lab/canonical-sha256/v0",
+      "effect_class": "READ_ONLY"
+    },
+    {
+      "ref": "profile://ts-execution-lab/git-exact-subject/v0",
+      "effect_class": "READ_ONLY"
+    }
+  ],
+  "fallback": {
+    "status": "PASS",
+    "stable_request_identity": true,
+    "new_ExecutionAttempt_per_attempt": true,
+    "UNKNOWN_blocks": true,
+    "automatic_retry": false
+  },
+  "context_transport": {
+    "REF_ONLY": "PASS",
+    "INLINE_SMALL": "PASS",
+    "FROZEN_BUNDLE": "PASS",
+    "universal_context_packager_created": false
+  },
+  "efficiency": {
+    "status": "PASS",
+    "improved_dimensions": [
+      "generated_shell_artifacts",
+      "parser_calls",
+      "external_process_launches_local",
+      "ChatGPT_Commander_execution_calls_local"
+    ]
+  },
+  "DoD": {
+    "DOD-01": "PASS",
+    "DOD-02": "PASS",
+    "DOD-03": "PASS",
+    "DOD-04": "PASS",
+    "DOD-05": "PASS",
+    "DOD-06": "PASS",
+    "DOD-07": "PASS",
+    "DOD-08": "PASS",
+    "DOD-09": "PASS",
+    "DOD-10": "PASS",
+    "DOD-11": "PASS",
+    "DOD-12": "PASS",
+    "DOD-13": "PASS",
+    "DOD-14": "PASS"
+  },
+  "main_merged": false,
+  "Product_adoption": false,
+  "next_eligible_effect": {
+    "target": "mauedgar/ts-execution-lab:main",
+    "meaning": "adopt_execution_lab_core",
+    "Product_effect": "NONE"
+  },
+  "artifacts": [
+    "RESULT.md",
+    "EFFICIENCY.json",
+    "qualification/matrix.json",
+    "qualification/remote-execution-v0.2.json",
+    "qualification/fallback-executed-v0.2.json",
+    "qualification/context-transport-v0.2.json",
+    "qualification/wait-observation-v0.2.json",
+    "qualification/permission-friction-v0.2.json",
+    "EXECUTION-ENGINEERING-FINDINGS.json"
+  ]
+}
