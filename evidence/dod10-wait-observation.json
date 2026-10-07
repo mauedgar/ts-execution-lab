@@ -193,5 +193,5 @@
       "observation_surface": "github-actions-api"
     }
   ],
-  "observation_policy": "ChatGPT used adaptive remote observation on durable GitHub/provider state; never polled Commander; no fixed max-poll count."
+  "observation_policy": "Remote GitHub Actions runs were observed adaptively through durable GitHub/provider state with no Commander polling and no fixed max-poll count. Commander terminal state was consulted only during explicit local worker launch/stall DIAGNOSIS, not as the remote run observation surface."
 }
