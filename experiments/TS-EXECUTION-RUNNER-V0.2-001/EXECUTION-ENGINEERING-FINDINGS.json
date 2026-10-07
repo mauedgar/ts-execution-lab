@@ -1,0 +1,39 @@
+{
+  "artifact": "Execution_Engineering_Finding",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "findings": [
+    {
+      "observed_problem": "Orca branch identity can drift from the intended remote carrier name.",
+      "repeated_evidence": "Parallel worker branches were pushed to mauedgar/... rather than the planned devlab/... refs.",
+      "affected_binding_or_boundary": "Orca worktree -> Git branch binding",
+      "current_workaround": "Reobserve the actual remote branch and compose exact commits by SHA.",
+      "proposed_contract_delta": "Before worker launch, assert local branch, intended remote ref, and push target correspondence; expose them in the launch receipt.",
+      "confidence": "HIGH"
+    },
+    {
+      "observed_problem": "Long inline terminal commands are fragile under layered quoting.",
+      "repeated_evidence": "Multiple terminal-send launch attempts failed or mangled quoting; pre-materialized short launcher paths succeeded.",
+      "affected_binding_or_boundary": "Commander -> Orca terminal launch",
+      "current_workaround": "Materialize a bounded launcher and send only its path.",
+      "proposed_contract_delta": "Prefer argv/file-based launch bindings over nested shell strings.",
+      "confidence": "HIGH"
+    },
+    {
+      "observed_problem": "Candidate-only workflow_dispatch is constrained by GitHub default-branch workflow discovery.",
+      "repeated_evidence": "Direct dispatch of ts-exec-runner.yml failed while it was absent from main; reusable workflow invocation by exact SHA from the fixture caller succeeded.",
+      "affected_binding_or_boundary": "GitHub Actions candidate qualification",
+      "current_workaround": "Use a reusable workflow called from a qualified fixture/default-branch caller.",
+      "proposed_contract_delta": "Treat reusable exact-SHA caller workflows as the preferred pre-adoption Actions qualification path.",
+      "confidence": "HIGH"
+    },
+    {
+      "observed_problem": "Artifact-only remote results require extra retrieval before semantic inspection.",
+      "repeated_evidence": "Adding TS_EXEC_SUMMARY exposed request identity, binding, status, effect state, digest and timing directly in durable job logs.",
+      "affected_binding_or_boundary": "Actions result observation",
+      "current_workaround": "Emit a compact validated summary plus keep full result/receipt artifacts.",
+      "proposed_contract_delta": "Standardize a compact execution-summary line for remote bindings while keeping artifacts canonical.",
+      "confidence": "HIGH"
+    }
+  ]
+}
