@@ -1,0 +1,9 @@
+{
+  "profile": "context-transport/v0 evidence (manifest/ref-first)",
+  "observations": [
+    { "class": "REF_ONLY", "materialization_required": false, "bytes": 0, "note": "executor resolves baseline_refs directly (public lab source on Actions)" },
+    { "class": "INLINE_SMALL", "materialization_required": true, "bytes": 23, "note": "bounded delta metadata inlined in request payload; JSON parse successful" },
+    { "class": "FROZEN_BUNDLE", "materialization_required": true, "bytes": 2048, "sha256": "e4fde89f39bc53b90e9935a8015b80dd6e4135485e894094a3517fa250e344ae", "note": "bounded synthetic unavailable-source fixture; frozen binary carried as artifact" }
+  ],
+  "decision_log": "materialize only when executor cannot resolve refs directly; no universal ContextPackager built"
+}
