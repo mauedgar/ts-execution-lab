@@ -1,0 +1,99 @@
+name: tecnotron-validator-qualification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-exact-tecnotron-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout experimental runner candidate
+        uses: actions/checkout@v4
+        with:
+          path: runner
+          persist-credentials: false
+      - name: Checkout exact Tecnotron candidate (not tools)
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 7f33fedcb97c00355e253ac64237f734f99e7a15
+          path: product
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install runner dependencies
+        working-directory: runner
+        run: npm ci
+      - name: Test runner profile guards
+        working-directory: runner
+        run: npm test
+      - name: Materialize isolated experimental request
+        working-directory: runner
+        run: |
+          mkdir -p remote
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          const sha = '7f33fedcb97c00355e253ac64237f734f99e7a15';
+          const req = {
+            contract_version: 'ts-execution-request/v0.2',
+            request_id: 'EE-TECNOTRON-VALIDATOR-QUALIFICATION-001',
+            Product_ref: 'mauedgar/tecnotron-ai',
+            Product_operation_ref: 'EXPERIMENTAL-NONPRODUCT-QUALIFICATION',
+            ExecutionAttempt_ref: 'EE-VALIDATOR-QUALIFICATION-ATTEMPT-001',
+            execution_profile_ref: 'profile://ts-execution-lab/tecnotron-promotion-grade/v0',
+            subject_ref: sha,
+            context_id: 'exact-tecnotron-github-first-circuit-candidate',
+            input: {
+              repository: '../product',
+              expected_commit: sha,
+              expected_tree: 'a8ec296f737defaac7cf1dbcb88ab2f82b1f21c4',
+              expected_parent: 'fb820d97bd480281ba7bab8cf752897aebdf5fb7'
+            }
+          };
+          writeFileSync('remote/request.json', JSON.stringify(req, null, 2) + '\n');
+          NODE
+      - name: Exact-subject promotion-grade execution
+        working-directory: runner
+        run: node src/cli.ts run remote/request.json --out remote/out --binding github-actions-ephemeral
+      - name: Summarize portable evidence
+        if: always()
+        working-directory: runner
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs';
+          if (!existsSync('remote/out/result.json')) {
+            console.log('NO_PORTABLE_RESULT');
+            process.exit(0);
+          }
+          const r = JSON.parse(readFileSync('remote/out/result.json','utf8'));
+          const c = JSON.parse(readFileSync('remote/out/receipt.json','utf8'));
+          console.log('VALIDATOR_RESULT=' + JSON.stringify({
+            result_status:r.result_status,
+            effect_state:r.effect_state,
+            exact_subject:c.exact_subject_ref,
+            profile:r.execution_profile_ref,
+            request_identity:r.request_identity,
+            operation:r.Product_operation_ref,
+            attempt:r.ExecutionAttempt_ref,
+            stages:r.profile_output?.stages,
+            errors:r.errors
+          }));
+          NODE
+      - name: Upload exact portable result and receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tecnotron-validator-qualification-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            runner/remote/request.json
+            runner/remote/out/result.json
+            runner/remote/out/receipt.json
