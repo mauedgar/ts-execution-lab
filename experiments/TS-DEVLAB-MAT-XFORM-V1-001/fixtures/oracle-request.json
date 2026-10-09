@@ -1,0 +1,8 @@
+{
+  "contract_version": "ts-mat-xform-request/v1",
+  "request_id": "historical-mat-xform-batch-001",
+  "batch_id": "historical-mat-xform-batch-001",
+  "artifacts": [
+    { "artifact_id": "payload", "relative_path": "mat-xform/payload.txt", "utf8_text": "BEGIN_MAT_XFORM\nline one\nEND_MAT_XFORM\n" }
+  ]
+}

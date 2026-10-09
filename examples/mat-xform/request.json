@@ -1,0 +1,9 @@
+{
+  "contract_version": "ts-mat-xform-request/v1",
+  "request_id": "req-mat-xform-example",
+  "batch_id": "batch-mat-xform-example",
+  "artifacts": [
+    { "artifact_id": "readme", "relative_path": "nested/readme.txt", "utf8_text": "MAT-XFORM\r\n" },
+    { "artifact_id": "empty", "relative_path": "empty.bin", "utf8_text": "" }
+  ]
+}

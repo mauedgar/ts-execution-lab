@@ -1,0 +1,9 @@
+{
+  "experiment": "TS-DEVLAB-MAT-XFORM-V1-001",
+  "status": "QUALIFIED",
+  "authority_created": false,
+  "Product_effect": "NONE",
+  "Tecnotron_effect": "NONE",
+  "tests": "test/mat-xform-v1.test.ts",
+  "adoption_claim": false
+}
