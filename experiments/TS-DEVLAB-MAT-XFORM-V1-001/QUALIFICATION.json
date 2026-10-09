@@ -1,0 +1,73 @@
+{
+  "experiment": "TS-DEVLAB-MAT-XFORM-V1-001",
+  "status": "PASS_RECONCILED_TERMINAL",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "Tecnotron_effect": "NONE",
+  "qualified_subject": {
+    "commit": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
+    "tree": "f85e2c9cf70d64b90fe138a65c1d150401597e63",
+    "branch": "devlab/mat-xform-v1-001"
+  },
+  "contracts": {
+    "request": "ts-mat-xform-request/v1",
+    "result": "ts-mat-xform-result/v1",
+    "receipt": "ts-mat-xform-receipt/v1",
+    "runtime_boundary": "Zod",
+    "implementation": "TypeScript"
+  },
+  "tests": {
+    "node_version": "22.23.3",
+    "pass": 17,
+    "fail": 0
+  },
+  "historical_oracle": {
+    "source_candidate": "807e00b1efb1b46e2af42c2a77220fc9ec898559",
+    "compatible_artifacts": [
+      {
+        "relative_path": "nested/one.txt",
+        "bytes": 7,
+        "sha256": "sha256:7f2adbdb77890209f13a322e75d8aa13b9169722e702a2e367250125d33e8832",
+        "correspondence": "EXACT"
+      },
+      {
+        "relative_path": "two.txt",
+        "bytes": 8,
+        "sha256": "sha256:e01ad58b3ec99df096e31ef809bff7fcf8fcfc87a8ba389b2ee25eb84e757e40",
+        "correspondence": "EXACT"
+      }
+    ],
+    "correspondence": "EXACT"
+  },
+  "v1_extension": {
+    "case": "payload_without_trailing_newline",
+    "historical_wrapper": "REJECTED_BEFORE_WRITE",
+    "v1": "PASS_CONFIRMED",
+    "relative_path": "no-newline.txt",
+    "bytes": 19,
+    "sha256": "sha256:a87e145c566174e542604777074a880d92565dba0519f8784002ba9dff6aece3"
+  },
+  "qualification_run": {
+    "request_identity": "sha256:7579fa1c3dda380a9e4160b850203136bcaf3c24e34743f339fbf0f725500429",
+    "binding": "qualification-local/v1",
+    "result_status": "PASS",
+    "effect_state": "CONFIRMED",
+    "artifact_count": 3,
+    "internal_total_ms": 5.435,
+    "output_scope": "TEMPORARY_QUALIFICATION_ONLY"
+  },
+  "safety": {
+    "create_only_target_root": true,
+    "deterministic_staging_guard": true,
+    "publication_paths_create_only": true,
+    "publication_inside_output_blocked": true,
+    "path_traversal_blocked": true,
+    "Windows_reserved_paths_blocked": true,
+    "request_selects_output_root": false,
+    "blind_retry": false
+  },
+  "adoption": {
+    "execution_lab": "PENDING_INTEGRATION_REGRESSION",
+    "Tecnotron": "NOT_PERFORMED"
+  }
+}
