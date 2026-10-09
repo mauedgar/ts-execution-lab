@@ -221,22 +221,47 @@ def _report(manifest: dict[str, Any], status: str) -> dict[str, Any]:
     }
 
 
+def _require_absent(path: Path, label: str) -> None:
+    if path.exists() or path.is_symlink():
+        raise CarrierError(f"{label} already exists")
+
+
+def _require_report_outside_output(output: Path, report_path: Path) -> None:
+    try:
+        report_path.resolve().relative_to(output.resolve())
+    except ValueError:
+        return
+    raise CarrierError("report path must stay outside extracted output")
+
+
+def _write_bytes_create_only(path: Path, payload: bytes) -> None:
+    with path.open("xb") as handle:
+        handle.write(payload)
+
+
 def _write_report(report_path: Path, report: dict[str, Any]) -> None:
-    report_path.write_bytes(_canonical_json(report) + b"\n")
+    _write_bytes_create_only(report_path, _canonical_json(report) + b"\n")
 
 
 def project(source: Path, output: Path, report_path: Path) -> None:
+    _require_absent(output, "bundle output")
+    _require_absent(report_path, "report output")
+    if output.resolve() == report_path.resolve():
+        raise CarrierError("bundle and report paths must differ")
     manifest, members = _read_tar(source)
-    output.write_bytes(_encode_bundle(manifest, members))
+    _write_bytes_create_only(output, _encode_bundle(manifest, members))
     _write_report(report_path, _report(manifest, "PASS"))
 
 
 def verify(bundle: Path, report_path: Path) -> None:
+    _require_absent(report_path, "report output")
     manifest, _ = _parse_bundle(bundle)
     _write_report(report_path, _report(manifest, "PASS"))
 
 
 def extract(bundle: Path, output: Path, report_path: Path) -> None:
+    _require_absent(report_path, "report output")
+    _require_report_outside_output(output, report_path)
     if output.is_symlink() or (output.exists() and (not output.is_dir() or any(output.iterdir()))):
         raise CarrierError("output directory must be absent or empty")
     manifest, members = _parse_bundle(bundle)
@@ -402,6 +427,12 @@ def _validate_readable_manifest(manifest: dict[str, Any]) -> None:
         if not isinstance(archive["sha256"], str) or len(archive["sha256"]) != 64 or any(char not in "0123456789abcdef" for char in archive["sha256"]):
             raise CarrierError("invalid archive metadata")
     archives = manifest["archives"]
+    chains = [tuple(archive["archive_chain"]) for archive in archives]
+    if len(chains) != len(set(chains)):
+        raise CarrierError("duplicate archive chain")
+    chain_set = set(chains)
+    if any(chain and chain[:-1] not in chain_set for chain in chains):
+        raise CarrierError("archive chain parent missing")
     if archives != sorted(archives, key=lambda archive: (archive["archive_chain"], archive["source_member_path"] or "")) or archives[0]["archive_chain"] != [] or archives[0]["source_member_path"] is not None or source != {"sha256": archives[0]["sha256"], "size": archives[0]["byte_length"], "entry_count": archives[0]["entry_count"]}:
         raise CarrierError("invalid archive manifest ordering")
 
@@ -478,12 +509,17 @@ def _readable_report(manifest: dict[str, Any], status: str) -> dict[str, Any]:
 
 
 def project_readable(source: Path, output: Path, report_path: Path) -> None:
+    _require_absent(output, "bundle output")
+    _require_absent(report_path, "report output")
+    if output.resolve() == report_path.resolve():
+        raise CarrierError("bundle and report paths must differ")
     manifest, leaves = _read_readable_tar(source)
-    output.write_bytes(_encode_readable_bundle(manifest, leaves))
+    _write_bytes_create_only(output, _encode_readable_bundle(manifest, leaves))
     _write_report(report_path, _readable_report(manifest, "PASS"))
 
 
 def verify_readable(bundle: Path, report_path: Path) -> None:
+    _require_absent(report_path, "report output")
     manifest, _ = _parse_readable_bundle(bundle)
     _write_report(report_path, _readable_report(manifest, "PASS"))
 
