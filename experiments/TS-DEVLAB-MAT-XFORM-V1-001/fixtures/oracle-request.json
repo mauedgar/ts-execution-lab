@@ -3,6 +3,8 @@
   "request_id": "historical-mat-xform-batch-001",
   "batch_id": "historical-mat-xform-batch-001",
   "artifacts": [
-    { "artifact_id": "payload", "relative_path": "mat-xform/payload.txt", "utf8_text": "BEGIN_MAT_XFORM\nline one\nEND_MAT_XFORM\n" }
+    { "artifact_id": "one", "relative_path": "nested/one.txt", "utf8_text": "café\r\n" },
+    { "artifact_id": "two", "relative_path": "two.txt", "utf8_text": "第二\r\n" },
+    { "artifact_id": "three", "relative_path": "no-newline.txt", "utf8_text": "no trailing newline" }
   ]
 }

@@ -6,8 +6,8 @@ import type { MatXformRequest, MatXformResult, MatXformReceipt } from "./contrac
 
 export type MaterializeOptions = { outputRoot: string; resultPath?: string; receiptPath?: string; binding?: string };
 
-function errorResult(request: MatXformRequest, identity: string, status: MatXformResult["result_status"], effect: MatXformResult["effect_state"], code: string, message: string, validationMs = 0): MatXformResult {
-  return MatXformResultSchema.parse({ contract_version: RESULT_CONTRACT_VERSION, request_identity: identity, request_id: request.request_id, batch_id: request.batch_id, result_status: status, effect_state: effect, artifact_count: request.artifacts.length, artifacts: [], timings: { validation_ms: validationMs, materialization_ms: 0, total_ms: validationMs }, error: { code, message } });
+function errorResult(request: MatXformRequest, identity: string, status: MatXformResult["result_status"], effect: MatXformResult["effect_state"], code: string, message: string, validationMs = 0, materializationMs = 0, totalMs = validationMs): MatXformResult {
+  return MatXformResultSchema.parse({ contract_version: RESULT_CONTRACT_VERSION, request_identity: identity, request_id: request.request_id, batch_id: request.batch_id, result_status: status, effect_state: effect, artifact_count: 0, artifacts: [], timings: { validation_ms: validationMs, materialization_ms: materializationMs, total_ms: totalMs }, error: { code, message } });
 }
 
 function pathError(path: string): string | undefined {
@@ -60,16 +60,28 @@ export function materialize(request: MatXformRequest, options: MaterializeOption
   const validationStart = nowMs();
   const validationError = preflight(request);
   const validationMs = nowMs() - validationStart;
+  const stage = `${outputRoot}.staging-${identity.slice(7)}`;
+  const resultPath = options.resultPath && resolve(options.resultPath);
+  const receiptPath = options.receiptPath && resolve(options.receiptPath);
   let result: MatXformResult;
   if (validationError) {
     result = errorResult(request, identity, "BLOCKED", "NONE", "INVALID_PATH_OR_DUPLICATE", validationError, validationMs);
   } else if (statExists(outputRoot)) {
     result = errorResult(request, identity, "BLOCKED", "NONE", "OUTPUT_EXISTS", "final output root already exists", validationMs);
+  } else if (resultPath && statExists(resultPath)) {
+    result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_EXISTS", "result publication path already exists", validationMs);
+  } else if (receiptPath && statExists(receiptPath)) {
+    result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_EXISTS", "receipt publication path already exists", validationMs);
+  } else if (resultPath && receiptPath && resultPath === receiptPath) {
+    result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_PATH_COLLISION", "result and receipt publication paths resolve to the same path", validationMs);
+  } else if (statExists(stage)) {
+    result = errorResult(request, identity, "BLOCKED", "NONE", "STAGING_EXISTS", "deterministic staging path already exists", validationMs);
   } else {
-    const stage = `${outputRoot}.staging-${identity.slice(7)}`;
     const materializationStart = nowMs();
+    let ownsStage = false;
     try {
       mkdirSync(stage);
+      ownsStage = true;
       const expected = request.artifacts.map((artifact) => {
         const bytes = Buffer.from(artifact.utf8_text, "utf8");
         const destination = join(stage, ...artifact.relative_path.split("/"));
@@ -89,8 +101,9 @@ export function materialize(request: MatXformRequest, options: MaterializeOption
       result = MatXformResultSchema.parse({ contract_version: RESULT_CONTRACT_VERSION, request_identity: identity, request_id: request.request_id, batch_id: request.batch_id, result_status: "PASS", effect_state: "CONFIRMED", artifact_count: expected.length, artifacts: expected, timings: { validation_ms: validationMs, materialization_ms: nowMs() - materializationStart, total_ms: nowMs() - totalStart } });
     } catch (error) {
       const targetExists = statExists(outputRoot);
-      result = errorResult(request, identity, targetExists ? "UNAVAILABLE" : "FAIL", targetExists ? "UNKNOWN" : "NONE", "MATERIALIZATION_FAILED", error instanceof Error ? error.message : String(error), validationMs);
-      if (!targetExists && statExists(stage)) rmSync(stage, { recursive: true, force: true });
+      const materializationMs = nowMs() - materializationStart;
+      result = errorResult(request, identity, targetExists ? "UNAVAILABLE" : "FAIL", targetExists ? "UNKNOWN" : "NONE", "MATERIALIZATION_FAILED", error instanceof Error ? error.message : String(error), validationMs, materializationMs, nowMs() - totalStart);
+      if (!targetExists && ownsStage && statExists(stage)) rmSync(stage, { recursive: true, force: true });
     }
   }
   const completed = new Date();
@@ -101,6 +114,9 @@ export function materialize(request: MatXformRequest, options: MaterializeOption
 function statExists(path: string): boolean { try { statSync(path); return true; } catch { return false; } }
 
 export function writePublication(value: { result: MatXformResult; receipt: MatXformReceipt }, options: MaterializeOptions): void {
-  if (options.resultPath) writeFileSync(resolve(options.resultPath), `${JSON.stringify(value.result, null, 2)}\n`, "utf8");
-  if (options.receiptPath) writeFileSync(resolve(options.receiptPath), `${JSON.stringify(value.receipt, null, 2)}\n`, "utf8");
+  const resultPath = options.resultPath && resolve(options.resultPath);
+  const receiptPath = options.receiptPath && resolve(options.receiptPath);
+  if (resultPath && receiptPath && resultPath === receiptPath) throw new Error("result and receipt publication paths resolve to the same path");
+  if (resultPath) writeFileSync(resultPath, `${JSON.stringify(value.result, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  if (receiptPath) writeFileSync(receiptPath, `${JSON.stringify(value.receipt, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
 }

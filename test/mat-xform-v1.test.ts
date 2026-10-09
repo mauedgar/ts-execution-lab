@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { MatXformReceiptSchema, MatXformResultSchema } from "../src/mat-xform/contracts.ts";
+import { MatXformReceiptSchema, MatXformResultSchema, requestIdentity } from "../src/mat-xform/contracts.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const cli = join(root, "src", "mat-xform", "cli.ts");
@@ -108,4 +108,67 @@ test("invalid JSON and contract produce no publication", () => {
     assert.equal(output.status, 1);
     assert.equal(output.stdout, "");
   } finally { cleanup(dir); }
+});
+
+test("validate emits a result that passes the result schema", () => {
+  const dir = mkdtempSync(join(root, ".mat-xform-validate-"));
+  try {
+    const input = join(dir, "request.json");
+    writeFileSync(input, JSON.stringify(request()));
+    const output = spawnSync(process.execPath, [cli, "validate", input], { cwd: root, encoding: "utf8" });
+    assert.equal(output.status, 0);
+    const result = MatXformResultSchema.parse(JSON.parse(output.stdout));
+    assert.equal(result.result_status, "PASS");
+    assert.equal(result.artifact_count, 0);
+  } finally { cleanup(dir); }
+});
+
+test("preserves preexisting deterministic staging and does not create final output", () => {
+  const execution = run(request());
+  try {
+    rmSync(execution.output, { recursive: true, force: true });
+    const identity = JSON.parse(readFileSync(execution.input, "utf8"));
+    const staging = `${execution.output}.staging-${requestIdentity(identity).slice(7)}`;
+    mkdirSync(staging);
+    writeFileSync(join(staging, "sentinel.txt"), "untouched");
+    const retry = spawnSync(process.execPath, [cli, "materialize", execution.input, "--out", execution.output, "--result", join(execution.dir, "staging-result.json")], { cwd: root, encoding: "utf8" });
+    const result = JSON.parse(readFileSync(join(execution.dir, "staging-result.json"), "utf8"));
+    assert.equal(retry.status, 1);
+    assert.equal(result.error.code, "STAGING_EXISTS");
+    assert.equal(result.artifact_count, 0);
+    assert.equal(existsSync(execution.output), false);
+    assert.equal(readFileSync(join(staging, "sentinel.txt"), "utf8"), "untouched");
+  } finally { cleanup(execution.dir); }
+});
+
+test("blocks preexisting and same-path publication targets", () => {
+  const execution = run(request());
+  try {
+    rmSync(execution.output, { recursive: true, force: true });
+    const resultPath = join(execution.dir, "existing-result.json");
+    writeFileSync(resultPath, "existing");
+    const existing = spawnSync(process.execPath, [cli, "materialize", execution.input, "--out", execution.output, "--result", resultPath], { cwd: root, encoding: "utf8" });
+    assert.equal(existing.status, 1);
+    assert.equal(readFileSync(resultPath, "utf8"), "existing");
+    const same = join(execution.dir, "same.json");
+    const collision = spawnSync(process.execPath, [cli, "materialize", execution.input, "--out", execution.output, "--result", same, "--receipt", same], { cwd: root, encoding: "utf8" });
+    assert.equal(collision.status, 1);
+    assert.equal(existsSync(execution.output), false);
+    assert.equal(existsSync(same), false);
+  } finally { cleanup(execution.dir); }
+});
+
+test("matches the historical materialized-byte oracle", () => {
+  const fixture = join(root, "experiments", "TS-DEVLAB-MAT-XFORM-V1-001", "fixtures");
+  const execution = run(JSON.parse(readFileSync(join(fixture, "oracle-request.json"), "utf8")));
+  try {
+    const expected = JSON.parse(readFileSync(join(fixture, "oracle-expected.json"), "utf8")).artifacts;
+    const result = MatXformResultSchema.parse(JSON.parse(readFileSync(join(execution.dir, "result.json"), "utf8")));
+    assert.deepEqual(result.artifacts, expected);
+    for (const artifact of expected) {
+      const bytes = readFileSync(join(execution.output, ...artifact.relative_path.split("/")));
+      assert.equal(bytes.length, artifact.bytes);
+      assert.equal(hash(bytes), artifact.sha256);
+    }
+  } finally { cleanup(execution.dir); }
 });

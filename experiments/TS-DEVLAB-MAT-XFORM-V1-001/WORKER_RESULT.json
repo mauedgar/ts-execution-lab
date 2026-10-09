@@ -1,6 +1,7 @@
 {
   "experiment": "TS-DEVLAB-MAT-XFORM-V1-001",
-  "status": "QUALIFIED",
+  "status": "CANDIDATE",
+  "qualification": "PENDING_EXTERNAL_RECONCILIATION",
   "authority_created": false,
   "Product_effect": "NONE",
   "Tecnotron_effect": "NONE",
