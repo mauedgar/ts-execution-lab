@@ -53,3 +53,10 @@ Execution Lab adoption remains pending the integration regression and exact fast
 `npm test`: **30 PASS / 0 FAIL** on Node 22.23.3.
 
 Execution Lab adoption is qualified pending exact fast-forward reconciliation. Tecnotron adoption remains NOT_PERFORMED.
+
+
+## Lab adoption
+
+MAT-XFORM v1 was adopted into `mauedgar/ts-execution-lab:main` by exact fast-forward. See `ADOPTION-RECEIPT.json`.
+
+Tecnotron adoption remains **NOT_PERFORMED**. This result creates no Product authority.
