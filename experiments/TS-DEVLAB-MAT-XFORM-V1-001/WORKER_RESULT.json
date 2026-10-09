@@ -1,10 +1,15 @@
 {
   "experiment": "TS-DEVLAB-MAT-XFORM-V1-001",
-  "status": "CANDIDATE",
-  "qualification": "PENDING_EXTERNAL_RECONCILIATION",
+  "status": "PASS_RECONCILED_TERMINAL",
+  "qualification": "QUALIFICATION.json",
   "authority_created": false,
   "Product_effect": "NONE",
   "Tecnotron_effect": "NONE",
-  "tests": "test/mat-xform-v1.test.ts",
-  "adoption_claim": false
+  "tests": {
+    "pass": 17,
+    "fail": 0
+  },
+  "adoption_claim": false,
+  "qualified_subject": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
+  "execution_lab_adoption": "PENDING_INTEGRATION_REGRESSION"
 }
