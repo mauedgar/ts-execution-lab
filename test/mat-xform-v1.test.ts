@@ -158,7 +158,26 @@ test("blocks preexisting and same-path publication targets", () => {
   } finally { cleanup(execution.dir); }
 });
 
-test("matches the historical materialized-byte oracle", () => {
+test("blocks publication paths inside final output or deterministic staging", () => {
+  const dir = mkdtempSync(join(root, ".mat-xform-publication-scope-"));
+  try {
+    const input = join(dir, "request.json");
+    const value = request();
+    writeFileSync(input, JSON.stringify(value));
+    const output = join(dir, "out");
+    const insideResult = spawnSync(process.execPath, [cli, "materialize", input, "--out", output, "--result", join(output, "result.json")], { cwd: root, encoding: "utf8" });
+    assert.equal(insideResult.status, 1);
+    assert.equal(existsSync(output), false);
+
+    const staging = `${output}.staging-${requestIdentity(value).slice(7)}`;
+    const insideStage = spawnSync(process.execPath, [cli, "materialize", input, "--out", output, "--receipt", join(staging, "receipt.json")], { cwd: root, encoding: "utf8" });
+    assert.equal(insideStage.status, 1);
+    assert.equal(existsSync(output), false);
+    assert.equal(existsSync(staging), false);
+  } finally { cleanup(dir); }
+});
+
+test("matches the materialized-byte oracle and explicit v1 extension fixture", () => {
   const fixture = join(root, "experiments", "TS-DEVLAB-MAT-XFORM-V1-001", "fixtures");
   const execution = run(JSON.parse(readFileSync(join(fixture, "oracle-request.json"), "utf8")));
   try {
