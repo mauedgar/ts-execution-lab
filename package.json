@@ -8,7 +8,7 @@
     "mat-xform": "src/mat-xform/cli.ts"
   },
   "scripts": {
-    "test": "node --test test/core-*.test.ts test/profile-*.test.ts test/mat-xform-*.test.ts"
+    "test": "node --test test/core-*.test.ts test/profile-*.test.ts test/mat-xform-*.test.ts test/qualification-*.test.ts"
   },
   "engines": {
     "node": ">=22.6"
