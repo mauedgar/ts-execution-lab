@@ -17,6 +17,8 @@ END_MEMBER = b"\nEND-MEMBER\n"
 END_BUNDLE = b"END-BUNDLE\n"
 READABLE_MAGIC = b"IR-TXT-REVIEW-PROJECTION/1\n"
 MAX_ARCHIVE_DEPTH = 8
+WINDOWS_RESERVED_SEGMENTS = frozenset({"con", "prn", "aux", "nul", *(f"com{number}" for number in range(1, 10)), *(f"lpt{number}" for number in range(1, 10))})
+WINDOWS_INVALID_SEGMENT_CHARACTERS = frozenset('<>:"|?*')
 
 
 class CarrierError(ValueError):
@@ -43,6 +45,18 @@ def _safe_path(name: str) -> None:
         or any(part in ("", ".", "..") for part in path.parts)
     ):
         raise CarrierError(f"unsafe member path: {name!r}")
+    for part in path.parts:
+        if part.endswith((".", " ")) or any(character in WINDOWS_INVALID_SEGMENT_CHARACTERS for character in part) or part.split(".", 1)[0].casefold() in WINDOWS_RESERVED_SEGMENTS:
+            raise CarrierError(f"unsafe member path: {name!r}")
+
+
+def _readable_text(payload: bytes, path: str) -> None:
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CarrierError(f"member is not valid UTF-8: {path!r}") from error
+    if any(character not in "\t\r\n" and not character.isprintable() for character in text):
+        raise CarrierError(f"member is not reviewer-readable text: {path!r}")
 
 
 def _read_tar(source: Path) -> tuple[dict[str, Any], list[tuple[dict[str, Any], bytes]]]:
@@ -59,9 +73,9 @@ def _read_tar(source: Path) -> tuple[dict[str, Any], list[tuple[dict[str, Any], 
             _safe_path(entry.name)
             if not entry.isfile():
                 raise CarrierError(f"non-regular TAR member: {entry.name!r}")
-            if entry.name in paths:
+            if entry.name.casefold() in paths:
                 raise CarrierError(f"duplicate TAR member path: {entry.name!r}")
-            paths.add(entry.name)
+            paths.add(entry.name.casefold())
             payload_file = archive.extractfile(entry)
             if payload_file is None:
                 raise CarrierError(f"cannot read TAR member: {entry.name!r}")
@@ -185,7 +199,7 @@ def _parse_bundle(bundle: Path) -> tuple[dict[str, Any], list[tuple[dict[str, An
     if cursor != len(data):
         raise CarrierError("trailing data after bundle")
     paths = [metadata["path"] for metadata, _ in members]
-    if len(paths) != len(set(paths)):
+    if len(paths) != len({path.casefold() for path in paths}):
         raise CarrierError("duplicate member path")
     if paths != sorted(paths):
         raise CarrierError("members are not sorted")
@@ -305,9 +319,9 @@ def _read_readable_archive(
         paths: set[str] = set()
         for entry in entries:
             _safe_path(entry.name)
-            if entry.name in paths:
+            if entry.name.casefold() in paths:
                 raise CarrierError(f"duplicate TAR member path: {entry.name!r}")
-            paths.add(entry.name)
+            paths.add(entry.name.casefold())
             if entry.isdir():
                 continue
             if not entry.isfile():
@@ -332,10 +346,7 @@ def _read_readable_archive(
                         leaves,
                     )
                     continue
-            try:
-                payload.decode("utf-8")
-            except UnicodeDecodeError as error:
-                raise CarrierError(f"member is not valid UTF-8: {entry.name!r}") from error
+            _readable_text(payload, entry.name)
             leaves.append(
                 (
                     {
@@ -428,7 +439,7 @@ def _validate_readable_manifest(manifest: dict[str, Any]) -> None:
             raise CarrierError("invalid archive metadata")
     archives = manifest["archives"]
     chains = [tuple(archive["archive_chain"]) for archive in archives]
-    if len(chains) != len(set(chains)):
+    if len(chains) != len({tuple(item.casefold() for item in chain) for chain in chains}):
         raise CarrierError("duplicate archive chain")
     chain_set = set(chains)
     if any(chain and chain[:-1] not in chain_set for chain in chains):
@@ -480,11 +491,13 @@ def _parse_readable_bundle(bundle: Path) -> tuple[dict[str, Any], list[tuple[dic
         cursor += length
         if _sha256(payload) != metadata["sha256"]:
             raise CarrierError(f"leaf hash mismatch: {metadata['path']!r}")
+        _readable_text(payload, metadata["path"])
         leaves.append((metadata, payload))
     ordered = sorted(leaves, key=lambda leaf: (leaf[0]["archive_chain"], leaf[0]["path"]))
     provenance = [(tuple(metadata["archive_chain"]), metadata["path"]) for metadata, _ in leaves]
+    portable_provenance = [(tuple(item.casefold() for item in chain), path.casefold()) for chain, path in provenance]
     archive_chains = {tuple(archive["archive_chain"]) for archive in manifest["archives"]}
-    if leaves != ordered or len(provenance) != len(set(provenance)) or any(chain not in archive_chains for chain, _ in provenance) or manifest["leaves"] != [metadata for metadata, _ in leaves]:
+    if leaves != ordered or len(provenance) != len(set(portable_provenance)) or any(chain not in archive_chains for chain, _ in provenance) or manifest["leaves"] != [metadata for metadata, _ in leaves]:
         raise CarrierError("invalid leaf ordering or manifest")
     return manifest, leaves
 
