@@ -44,8 +44,8 @@ jobs:
       PROFILE_SOURCE_COMMIT: 95418f00385ce7cbf98fb6de2f7ea7bce3b7afbd
       PROFILE_REF: profile://ts-execution-lab/tecnotron-promotion-grade/v0
       PRODUCT_REPOSITORY: mauedgar/tecnotron-ai
-      QUALIFIED_SUBJECT_COMMIT: 7f33fedcb97c00355e253ac64237f734f99e7a15
-      QUALIFIED_SUBJECT_TREE: a8ec296f737defaac7cf1dbcb88ab2f82b1f21c4
+      QUALIFIED_SUBJECT_COMMIT: f363ac84e372892f24e44accb3ea92afffc7207e
+      QUALIFIED_SUBJECT_TREE: 63d776e2420ef70beb0a0f0190f8b24204bae79a
       QUALIFIED_SUBJECT_PARENT: fb820d97bd480281ba7bab8cf752897aebdf5fb7
     steps:
       - name: Checkout exact qualified runner/profile source
