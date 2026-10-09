@@ -9,10 +9,11 @@ function load<T>(path: string): T {
   return JSON.parse(readFileSync(resolve(root, path), "utf8")) as T;
 }
 
-test("qualification matrix covers DOD-01 through DOD-14 without unearned PASS", () => {
-  const matrix = load<{ items: Array<{ id: string; status: string }> }>("qualification/matrix.json");
+test("qualification matrix reflects terminal DOD-01 through DOD-14 reconciliation", () => {
+  const matrix = load<{ terminal_disposition?: string; items: Array<{ id: string; status: string }> }>("qualification/matrix.json");
   assert.deepEqual(matrix.items.map((item) => item.id), Array.from({ length: 14 }, (_, i) => `DOD-${String(i + 1).padStart(2, "0")}`));
-  assert.ok(matrix.items.every((item) => item.status === "PENDING_EXECUTION"));
+  assert.equal(matrix.terminal_disposition, "PASS_RECONCILED_TERMINAL");
+  assert.ok(matrix.items.every((item) => item.status === "PASS"));
 });
 
 test("equivalence fixture preserves one request and one expected digest", () => {
