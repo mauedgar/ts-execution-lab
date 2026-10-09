@@ -1,0 +1,16 @@
+{
+  "source_library_file": "CTRL-HUB-MAT-XFORM-001 — Transport Extractor Bundle(1).md",
+  "source_library_file_id": "file_0000000054c4820eabab311e97c8542d",
+  "source_materialization": "INDEXED_TEXT_RECONSTRUCTION",
+  "raw_byte_identity_claimed": false,
+  "extracted_artifacts": [
+    {
+      "id": "MAT-XFORM-SCRIPT",
+      "filename": "transport_extractor.py"
+    },
+    {
+      "id": "MAT-XFORM-MANIFEST",
+      "filename": "transport-manifest.example.json"
+    }
+  ]
+}
