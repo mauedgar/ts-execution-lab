@@ -1,0 +1,17 @@
+{
+  "batch": "RB-B01-SEMANTIC-NUCLEUS",
+  "transport": {
+    "document_title": "RB-B01-SEMANTIC-NUCLEUS",
+    "expected_download_filename": "RB-B01-SEMANTIC-NUCLEUS.md"
+  },
+  "artifacts": [
+    {
+      "id": "RB-SEM-OP-001",
+      "filename": "RB-SEM-OP-001.md"
+    },
+    {
+      "id": "RB-GOV-EFX-001",
+      "filename": "RB-GOV-EFX-001.md"
+    }
+  ]
+}
