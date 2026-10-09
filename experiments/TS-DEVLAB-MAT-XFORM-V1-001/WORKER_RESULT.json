@@ -11,5 +11,10 @@
   },
   "adoption_claim": false,
   "qualified_subject": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
-  "execution_lab_adoption": "PENDING_INTEGRATION_REGRESSION"
+  "execution_lab_adoption": "QUALIFIED_PENDING_FAST_FORWARD",
+  "integration_regression": {
+    "tests": 30,
+    "pass": 30,
+    "fail": 0
+  }
 }
