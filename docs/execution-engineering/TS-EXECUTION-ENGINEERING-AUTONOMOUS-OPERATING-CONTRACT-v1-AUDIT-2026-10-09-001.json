@@ -1,0 +1,72 @@
+{
+  "schema": "ts-execution-engineering-operating-contract-audit/v1",
+  "contract": "TS-EXECUTION-ENGINEERING-AUTONOMOUS-OPERATING-CONTRACT-v1",
+  "status": "PASS_RECONCILED_CURRENT",
+  "authority": {
+    "Execution_Engineering_operating_method": "AUTHORITATIVE",
+    "Product_semantics": "NONE",
+    "Product_authority": "NONE",
+    "TaskCycle_authority": "NONE",
+    "Upper_LC_authority": "NONE"
+  },
+  "repository_SOT": {
+    "repository": "mauedgar/ts-execution-lab",
+    "branch": "main",
+    "main_observed": "a61e1d88ce02d5ea3a7b19121c11428ae3e19e7e",
+    "path": "docs/execution-engineering/TS-EXECUTION-ENGINEERING-AUTONOMOUS-OPERATING-CONTRACT-v1.md",
+    "contract_blob": "735d1f5e836fda22b63a37a9dcbfaa34580c2f29"
+  },
+  "verified_clauses": {
+    "activation_alias": true,
+    "durable_state_reconstruction": true,
+    "reobserve_before_effect": true,
+    "reuse_before_build": true,
+    "visible_state_signals": true,
+    "Web_owned_waits": true,
+    "Commander_polling_forbidden": true,
+    "Commander_execution_only": true,
+    "bounded_diagnosis_exception": true,
+    "model_routing_by_competence": true,
+    "bounded_parallelism": true,
+    "no_blind_retry": true,
+    "UNKNOWN_stop_boundary": true,
+    "multi_Product_federation": true,
+    "cross_project_memory_for_integration_forbidden": true,
+    "shared_capability_not_shared_authority": true,
+    "stable_correlation_envelope": true,
+    "Product_onboarding_binding_first": true,
+    "MAT_XFORM_batch_materialization": true,
+    "Independent_Review_TXT_mechanism_qualified": true,
+    "audit_requirements": true,
+    "user_interruptibility": true,
+    "sunset_to_qualified_LC_Primitives_Recipes": true
+  },
+  "evidence": {
+    "MAT_XFORM_v1": {
+      "status": "PASS_RECONCILED_TERMINAL",
+      "qualified_subject": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
+      "adopted_in_execution_lab_main": true,
+      "Product_adoption": false
+    },
+    "IR_TXT_projection": {
+      "status": "PASS_RECONCILED_TERMINAL",
+      "qualified_subject": "5c7d21198e878576c1d49d3e36b497dce3576ad6",
+      "real_Tecnotron_fixture": true,
+      "canonical_TAR_replacement": "NOT_DECIDED"
+    }
+  },
+  "multi_Product_topology": {
+    "shared_execution_core": "mauedgar/ts-execution-lab",
+    "shared_transport": "mauedgar/ts-execution-transport",
+    "Product_SOT": "PER_PRODUCT_REPOSITORY",
+    "Product_Control": "PER_PRODUCT",
+    "TaskCycle": "PER_PRODUCT",
+    "Product_operation": "PER_PRODUCT",
+    "ExecutionAttempt": "PER_PRODUCT",
+    "binding": "EXPLICIT_PER_PRODUCT_WHEN_NEEDED",
+    "shared_mutable_Product_state": false
+  },
+  "activation_text": "Activo modo autónomo. Operá como Execution Engineering según TS-EXECUTION-ENGINEERING-AUTONOMOUS-OPERATING-CONTRACT-v1.md.",
+  "audit_effect": "NONE",
+  "Product_effect": "NONE"
+}
