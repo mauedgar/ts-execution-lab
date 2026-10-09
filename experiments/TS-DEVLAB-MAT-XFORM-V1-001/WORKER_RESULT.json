@@ -11,10 +11,12 @@
   },
   "adoption_claim": false,
   "qualified_subject": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
-  "execution_lab_adoption": "QUALIFIED_PENDING_FAST_FORWARD",
+  "execution_lab_adoption": "CONFIRMED",
   "integration_regression": {
     "tests": 30,
     "pass": 30,
     "fail": 0
-  }
+  },
+  "adoption_receipt": "ADOPTION-RECEIPT.json",
+  "Tecnotron_adoption": "NOT_PERFORMED"
 }
