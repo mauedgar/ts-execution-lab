@@ -1,0 +1,20 @@
+{
+  "schema": "ts-execution-engineering-adoption-receipt/v0.1",
+  "experiment": "TS-DEVLAB-MAT-XFORM-V1-001",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "target": "mauedgar/ts-execution-lab:main",
+  "main_before": "083d3b96f533e246c6f6fb58a0e1a7efdc431c31",
+  "adopted_head": "f6248df12a8a2844cefc7a3fe7a8caddafec101d",
+  "qualified_implementation_subject": "c36e5e8adb45274c9f0bbc33fe7af6adcab0285e",
+  "qualified_implementation_tree": "f85e2c9cf70d64b90fe138a65c1d150401597e63",
+  "correspondence": "FAST_FORWARD_CONFIRMED",
+  "integration_regression": {
+    "tests": 30,
+    "pass": 30,
+    "fail": 0,
+    "node": "22.23.3"
+  },
+  "Tecnotron_adoption": "NOT_PERFORMED",
+  "canonical_Product_effect": "NONE"
+}
