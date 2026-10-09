@@ -1,5 +1,6 @@
 import { runCanonicalSha256, ProfileInputError } from "./profiles/canonical-sha256.ts";
 import { runGitExactSubject } from "./profiles/git-exact-subject.ts";
+import { runTecnotronPromotionGrade } from "./profiles/tecnotron-promotion-grade.ts";
 
 export interface ExecutionProfile {
   contract_version: "ts-execution-profile/v0.2";
@@ -39,6 +40,16 @@ const profiles: ProfileRegistration[] = [
       effect_class: "READ_ONLY",
     },
     execute: runGitExactSubject,
+  },
+  {
+    profile: {
+      contract_version: "ts-execution-profile/v0.2",
+      profile_ref: "profile://ts-execution-lab/tecnotron-promotion-grade/v0",
+      profile_id: "tecnotron-promotion-grade/v0",
+      input: { kind: "bounded-json", max_bytes: 65536 },
+      effect_class: "READ_ONLY",
+    },
+    execute: runTecnotronPromotionGrade,
   },
 ];
 

@@ -140,5 +140,6 @@ test("profiles lists only registered known profiles", () => {
   assert.deepEqual(profiles.map((profile: { profile_id: string }) => profile.profile_id), [
     "canonical-sha256/v0",
     "git-exact-subject/v0",
+    "tecnotron-promotion-grade/v0",
   ]);
 });
