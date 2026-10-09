@@ -1,0 +1,51 @@
+{
+  "experiment": "TS-DEVLAB-INDEPENDENT-REVIEW-TXT-CARRIER-001",
+  "status": "PASS_RECONCILED_TERMINAL",
+  "authority": "NONE",
+  "Product_effect": "NONE",
+  "Independent_Review_effect": "NONE",
+  "qualified_subject": {
+    "branch": "devlab/ind-review-txt-carrier-001",
+    "commit": "5c7d21198e878576c1d49d3e36b497dce3576ad6"
+  },
+  "focused_tests": {
+    "pass": 10,
+    "fail": 0
+  },
+  "real_tecnotron_fixture": {
+    "source_repository": "mauedgar/ts-execution-transport",
+    "source_commit": "b81518bbefe77f7392284255ecde831296af6347",
+    "source_blob": "35fa3c1da0cc1f8db27e86422fd7d8b8e4cdaa8f",
+    "source_tar_sha256": "b887750e9f5a3eb3bbaa9f7dff95cd8aaa7fa8a4072b8679cad5fe6a43fe6ff2",
+    "source_tar_bytes": 314880,
+    "source_tar_entries": 12,
+    "projection_format": "IR-TXT-REVIEW-PROJECTION/1",
+    "bundle_bytes": 274140,
+    "bundle_sha256": "b91edd751d5098f13df3577b1ab2812ba1ee7e2916781efd30c2bee4aec8811f",
+    "archive_count": 4,
+    "leaf_count": 47,
+    "max_archive_depth": 2,
+    "review_leaf_payload_equivalence": "PASS",
+    "archive_container_identity_preserved_as_metadata": true,
+    "source_archive_byte_reconstruction": "NOT_CLAIMED",
+    "nested_archive_byte_reconstruction": "NOT_CLAIMED",
+    "all_leaf_payloads_utf8": true
+  },
+  "safety": {
+    "regular_files_only": true,
+    "safe_directories_as_structure_only": true,
+    "links_devices_fifo_rejected": true,
+    "path_traversal_rejected": true,
+    "case_insensitive_duplicates_rejected": true,
+    "Windows_reserved_paths_rejected": true,
+    "non_readable_leaf_controls_rejected": true,
+    "depth_limit": 8,
+    "deterministic_projection": true,
+    "tamper_detection": true
+  },
+  "disposition": {
+    "review_txt_projection": "QUALIFIED_FOR_ARCHITECTURAL_PRODUCT_CONSIDERATION",
+    "canonical_TAR_replacement": "NOT_DECIDED",
+    "Product_recipe_changed": false
+  }
+}
