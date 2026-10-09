@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "bin": {
-    "ts-exec": "src/cli.ts"
+    "ts-exec": "src/cli.ts",
+    "mat-xform": "src/mat-xform/cli.ts"
   },
   "scripts": {
-    "test": "node --test test/core-*.test.ts test/profile-*.test.ts"
+    "test": "node --test test/core-*.test.ts test/profile-*.test.ts test/mat-xform-*.test.ts"
   },
   "engines": {
     "node": ">=22.6"
