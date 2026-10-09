@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, rmSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { MatXformRequestSchema, MatXformResultSchema, MatXformReceiptSchema, requestIdentity, RESULT_CONTRACT_VERSION, RECEIPT_CONTRACT_VERSION } from "./contracts.ts";
 import type { MatXformRequest, MatXformResult, MatXformReceipt } from "./contracts.ts";
 
@@ -42,6 +42,12 @@ function preflight(request: MatXformRequest): string | undefined {
 
 function digest(bytes: Buffer): string { return `sha256:${createHash("sha256").update(bytes).digest("hex")}`; }
 function nowMs(): number { return Number(process.hrtime.bigint()) / 1_000_000; }
+function pathKey(path: string): string { const resolved = resolve(path); return process.platform === "win32" ? resolved.toLowerCase() : resolved; }
+function samePath(a: string, b: string): boolean { return pathKey(a) === pathKey(b); }
+function isWithin(root: string, candidate: string): boolean {
+  const rel = relative(resolve(root), resolve(candidate));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
 
 export function validateRequest(value: unknown): { request?: MatXformRequest; identity?: string; error?: string } {
   const parsed = MatXformRequestSchema.safeParse(value);
@@ -72,8 +78,10 @@ export function materialize(request: MatXformRequest, options: MaterializeOption
     result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_EXISTS", "result publication path already exists", validationMs);
   } else if (receiptPath && statExists(receiptPath)) {
     result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_EXISTS", "receipt publication path already exists", validationMs);
-  } else if (resultPath && receiptPath && resultPath === receiptPath) {
+  } else if (resultPath && receiptPath && samePath(resultPath, receiptPath)) {
     result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_PATH_COLLISION", "result and receipt publication paths resolve to the same path", validationMs);
+  } else if ((resultPath && (isWithin(outputRoot, resultPath) || isWithin(stage, resultPath))) || (receiptPath && (isWithin(outputRoot, receiptPath) || isWithin(stage, receiptPath)))) {
+    result = errorResult(request, identity, "BLOCKED", "NONE", "PUBLICATION_INSIDE_MATERIALIZATION_ROOT", "result/receipt publication paths must stay outside output and staging roots", validationMs);
   } else if (statExists(stage)) {
     result = errorResult(request, identity, "BLOCKED", "NONE", "STAGING_EXISTS", "deterministic staging path already exists", validationMs);
   } else {
@@ -116,7 +124,7 @@ function statExists(path: string): boolean { try { statSync(path); return true; 
 export function writePublication(value: { result: MatXformResult; receipt: MatXformReceipt }, options: MaterializeOptions): void {
   const resultPath = options.resultPath && resolve(options.resultPath);
   const receiptPath = options.receiptPath && resolve(options.receiptPath);
-  if (resultPath && receiptPath && resultPath === receiptPath) throw new Error("result and receipt publication paths resolve to the same path");
+  if (resultPath && receiptPath && samePath(resultPath, receiptPath)) throw new Error("result and receipt publication paths resolve to the same path");
   if (resultPath) writeFileSync(resultPath, `${JSON.stringify(value.result, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   if (receiptPath) writeFileSync(receiptPath, `${JSON.stringify(value.receipt, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
 }
