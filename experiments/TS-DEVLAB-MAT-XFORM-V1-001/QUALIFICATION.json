@@ -67,7 +67,20 @@
     "blind_retry": false
   },
   "adoption": {
-    "execution_lab": "PENDING_INTEGRATION_REGRESSION",
+    "execution_lab": "QUALIFIED_PENDING_FAST_FORWARD",
     "Tecnotron": "NOT_PERFORMED"
+  },
+  "integration_regression": {
+    "node": "22.23.3",
+    "command": "npm test",
+    "tests": 30,
+    "pass": 30,
+    "fail": 0,
+    "includes": [
+      "ts-exec core/context",
+      "canonical-sha256/v0",
+      "git-exact-subject/v0",
+      "MAT-XFORM v1"
+    ]
   }
 }
