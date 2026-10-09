@@ -1,0 +1,277 @@
+name: tecnotron-validator-product-caller-v0
+
+on:
+  workflow_call:
+    inputs:
+      request_json:
+        description: Exact serialized ts-execution-request/v0.2 supplied by the competent Product caller.
+        required: true
+        type: string
+      request_sha256:
+        description: sha256:<hex> over the exact UTF-8 request_json bytes.
+        required: true
+        type: string
+      authorization_ref:
+        description: Existing competent Product authorization/evidence reference. Transported, never created here.
+        required: true
+        type: string
+      expected_product_operation_ref:
+        description: Authentic Product Operation identity supplied by the competent caller.
+        required: true
+        type: string
+      expected_execution_attempt_ref:
+        description: Fresh authorized ExecutionAttempt identity supplied by the competent caller.
+        required: true
+        type: string
+      subject_commit:
+        required: true
+        type: string
+      subject_tree:
+        required: true
+        type: string
+      subject_parent:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  invoke-validator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PROFILE_SOURCE_COMMIT: 95418f00385ce7cbf98fb6de2f7ea7bce3b7afbd
+      PROFILE_REF: profile://ts-execution-lab/tecnotron-promotion-grade/v0
+      PRODUCT_REPOSITORY: mauedgar/tecnotron-ai
+      QUALIFIED_SUBJECT_COMMIT: 7f33fedcb97c00355e253ac64237f734f99e7a15
+      QUALIFIED_SUBJECT_TREE: a8ec296f737defaac7cf1dbcb88ab2f82b1f21c4
+      QUALIFIED_SUBJECT_PARENT: fb820d97bd480281ba7bab8cf752897aebdf5fb7
+    steps:
+      - name: Checkout exact qualified runner/profile source
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/ts-execution-lab
+          ref: 95418f00385ce7cbf98fb6de2f7ea7bce3b7afbd
+          path: runner
+          persist-credentials: false
+
+      - name: Checkout exact Tecnotron subject
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: ${{ inputs.subject_commit }}
+          path: product
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pinned runner dependencies
+        working-directory: runner
+        run: npm ci
+
+      - name: Materialize and preflight Product invocation
+        env:
+          REQUEST_JSON: ${{ inputs.request_json }}
+          REQUEST_SHA256: ${{ inputs.request_sha256 }}
+          AUTHORIZATION_REF: ${{ inputs.authorization_ref }}
+          EXPECTED_PRODUCT_OPERATION_REF: ${{ inputs.expected_product_operation_ref }}
+          EXPECTED_EXECUTION_ATTEMPT_REF: ${{ inputs.expected_execution_attempt_ref }}
+          SUBJECT_COMMIT: ${{ inputs.subject_commit }}
+          SUBJECT_TREE: ${{ inputs.subject_tree }}
+          SUBJECT_PARENT: ${{ inputs.subject_parent }}
+        run: |
+          mkdir -p binding/out
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { writeFileSync } from 'node:fs';
+
+          const fail = (message) => {
+            console.error('CALLER_PREFLIGHT_BLOCKED=' + message);
+            process.exit(1);
+          };
+
+          const raw = process.env.REQUEST_JSON ?? '';
+          const digest = 'sha256:' + createHash('sha256').update(raw, 'utf8').digest('hex');
+          if (!/^sha256:[0-9a-f]{64}$/.test(process.env.REQUEST_SHA256 ?? '')) fail('invalid request_sha256');
+          if (digest !== process.env.REQUEST_SHA256) fail('request_sha256 mismatch');
+          if (!(process.env.AUTHORIZATION_REF ?? '').trim()) fail('authorization_ref missing');
+          if (!(process.env.EXPECTED_PRODUCT_OPERATION_REF ?? '').trim()) fail('Product_operation_ref missing');
+          if (!(process.env.EXPECTED_EXECUTION_ATTEMPT_REF ?? '').trim()) fail('ExecutionAttempt_ref missing');
+
+          let request;
+          try { request = JSON.parse(raw); }
+          catch { fail('request_json is not valid JSON'); }
+
+          const expectedCommit = process.env.QUALIFIED_SUBJECT_COMMIT;
+          const expectedTree = process.env.QUALIFIED_SUBJECT_TREE;
+          const expectedParent = process.env.QUALIFIED_SUBJECT_PARENT;
+
+          if (process.env.SUBJECT_COMMIT !== expectedCommit) fail('subject_commit is outside qualified exact subject');
+          if (process.env.SUBJECT_TREE !== expectedTree) fail('subject_tree is outside qualified exact subject');
+          if (process.env.SUBJECT_PARENT !== expectedParent) fail('subject_parent is outside qualified exact subject');
+
+          if (request.Product_ref !== process.env.PRODUCT_REPOSITORY) fail('Product_ref mismatch');
+          if (request.Product_operation_ref !== process.env.EXPECTED_PRODUCT_OPERATION_REF) fail('Product_operation_ref mismatch');
+          if (request.ExecutionAttempt_ref !== process.env.EXPECTED_EXECUTION_ATTEMPT_REF) fail('ExecutionAttempt_ref mismatch');
+          if (request.execution_profile_ref !== process.env.PROFILE_REF) fail('execution_profile_ref mismatch');
+          if (request.subject_ref !== expectedCommit) fail('subject_ref mismatch');
+
+          const input = request.input ?? {};
+          const keys = Object.keys(input).sort().join(',');
+          if (keys !== 'expected_commit,expected_parent,expected_tree,repository') fail('unexpected profile input shape');
+          if (input.repository !== '../product') fail('repository input must target isolated product checkout');
+          if (input.expected_commit !== expectedCommit) fail('expected_commit mismatch');
+          if (input.expected_tree !== expectedTree) fail('expected_tree mismatch');
+          if (input.expected_parent !== expectedParent) fail('expected_parent mismatch');
+
+          writeFileSync('binding/request.json', raw, 'utf8');
+          writeFileSync('binding/preflight.json', JSON.stringify({
+            schema: 'ts-execution-tecnotron-validator-caller-preflight/v0',
+            status: 'PASS',
+            request_sha256: digest,
+            authorization_ref: process.env.AUTHORIZATION_REF,
+            Product_operation_ref: request.Product_operation_ref,
+            ExecutionAttempt_ref: request.ExecutionAttempt_ref,
+            profile_source_commit: process.env.PROFILE_SOURCE_COMMIT,
+            execution_profile_ref: request.execution_profile_ref,
+            exact_subject: {
+              repository: process.env.PRODUCT_REPOSITORY,
+              commit: expectedCommit,
+              tree: expectedTree,
+              parent: expectedParent
+            },
+            authority_created: false,
+            Product_effect: 'NONE'
+          }, null, 2) + '\n');
+          NODE
+
+      - name: Validate portable request contract
+        working-directory: runner
+        run: node src/cli.ts validate ../binding/request.json
+
+      - name: Execute exact qualified Validator profile
+        working-directory: runner
+        run: node src/cli.ts run ../binding/request.json --out ../binding/out --binding github-actions-product-caller-v0
+
+      - name: Verify post-execution correspondence and emit binding receipt
+        if: success()
+        env:
+          AUTHORIZATION_REF: ${{ inputs.authorization_ref }}
+          REQUEST_SHA256: ${{ inputs.request_sha256 }}
+          EXPECTED_PRODUCT_OPERATION_REF: ${{ inputs.expected_product_operation_ref }}
+          EXPECTED_EXECUTION_ATTEMPT_REF: ${{ inputs.expected_execution_attempt_ref }}
+          SUBJECT_COMMIT: ${{ inputs.subject_commit }}
+          SUBJECT_TREE: ${{ inputs.subject_tree }}
+          SUBJECT_PARENT: ${{ inputs.subject_parent }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          JOB_REF: ${{ github.job }}
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const fail = (message) => {
+            console.error('CALLER_POSTCHECK_BLOCKED=' + message);
+            process.exit(1);
+          };
+          const git = (...args) => execFileSync('git', ['-C', 'product', ...args], { encoding: 'utf8' }).trim();
+
+          const commit = git('rev-parse', '--verify', 'HEAD^{commit}');
+          const tree = git('rev-parse', '--verify', 'HEAD^{tree}');
+          const parents = git('rev-list', '--parents', '-n', '1', 'HEAD').split(' ');
+          const tracked = git('status', '--porcelain', '--untracked-files=no');
+
+          if (commit !== process.env.SUBJECT_COMMIT) fail('post-execution commit drift');
+          if (tree !== process.env.SUBJECT_TREE) fail('post-execution tree drift');
+          if (parents.length !== 2 || parents[0] !== commit || parents[1] !== process.env.SUBJECT_PARENT) fail('post-execution parent drift');
+          if (tracked !== '') fail('post-execution tracked Product mutation');
+
+          const resultBytes = readFileSync('binding/out/result.json');
+          const receiptBytes = readFileSync('binding/out/receipt.json');
+          const result = JSON.parse(resultBytes);
+          const receipt = JSON.parse(receiptBytes);
+
+          if (result.Product_operation_ref !== process.env.EXPECTED_PRODUCT_OPERATION_REF) fail('result Product_operation_ref mismatch');
+          if (result.ExecutionAttempt_ref !== process.env.EXPECTED_EXECUTION_ATTEMPT_REF) fail('result ExecutionAttempt_ref mismatch');
+          if (receipt.Product_operation_ref !== process.env.EXPECTED_PRODUCT_OPERATION_REF) fail('receipt Product_operation_ref mismatch');
+          if (receipt.ExecutionAttempt_ref !== process.env.EXPECTED_EXECUTION_ATTEMPT_REF) fail('receipt ExecutionAttempt_ref mismatch');
+          if (result.subject_ref !== process.env.SUBJECT_COMMIT || receipt.exact_subject_ref !== process.env.SUBJECT_COMMIT) fail('portable exact subject mismatch');
+          if (result.effect_state !== 'NONE' || receipt.effect_state !== 'NONE') fail('Validator caller must remain effect NONE');
+
+          const sha = (bytes) => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
+          const postObservation = {
+            schema: 'ts-execution-tecnotron-validator-post-observation/v0',
+            correspondence: 'EXACT',
+            repository: 'mauedgar/tecnotron-ai',
+            commit,
+            tree,
+            parent: parents[1],
+            tracked_status_clean: true,
+            Product_effect: 'NONE'
+          };
+          writeFileSync('binding/post-observation.json', JSON.stringify(postObservation, null, 2) + '\n');
+
+          const postBytes = readFileSync('binding/post-observation.json');
+          const bindingReceipt = {
+            schema: 'ts-execution-tecnotron-validator-caller-receipt/v0',
+            authorization_ref: process.env.AUTHORIZATION_REF,
+            request_sha256: process.env.REQUEST_SHA256,
+            Product_operation_ref: result.Product_operation_ref,
+            ExecutionAttempt_ref: result.ExecutionAttempt_ref,
+            request_identity: result.request_identity,
+            execution_profile_ref: result.execution_profile_ref,
+            profile_source_commit: process.env.PROFILE_SOURCE_COMMIT,
+            selected_binding_ref: receipt.selected_binding_ref,
+            exact_subject: { repository: 'mauedgar/tecnotron-ai', commit, tree, parent: parents[1] },
+            result_status: result.result_status,
+            effect_state: result.effect_state,
+            provider: {
+              repository: process.env.CALLER_REPOSITORY,
+              caller_sha: process.env.CALLER_SHA,
+              workflow_ref: process.env.WORKFLOW_REF,
+              run_id: process.env.RUN_ID,
+              run_attempt: process.env.RUN_ATTEMPT,
+              job_ref: process.env.JOB_REF
+            },
+            evidence: {
+              result_sha256: sha(resultBytes),
+              runner_receipt_sha256: sha(receiptBytes),
+              post_observation_sha256: sha(postBytes)
+            },
+            authority_created: false,
+            Product_effect_created: false
+          };
+          writeFileSync('binding/binding-receipt.json', JSON.stringify(bindingReceipt, null, 2) + '\n');
+          console.log('TECNOTRON_VALIDATOR_CALLER_RESULT=' + JSON.stringify({
+            result_status: result.result_status,
+            effect_state: result.effect_state,
+            request_identity: result.request_identity,
+            Product_operation_ref: result.Product_operation_ref,
+            ExecutionAttempt_ref: result.ExecutionAttempt_ref,
+            exact_subject: commit,
+            binding: receipt.selected_binding_ref
+          }));
+          NODE
+
+      - name: Upload caller qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tecnotron-validator-product-caller-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            binding/request.json
+            binding/preflight.json
+            binding/out/result.json
+            binding/out/receipt.json
+            binding/post-observation.json
+            binding/binding-receipt.json
