@@ -485,9 +485,11 @@ model determines complete file batch
 
 Use JSON-first contracts for mature materializers.
 
-For textual file creation, prefer MAT-XFORM v1 or its eventual qualified successor once adopted.
+For textual file creation, MAT-XFORM v1 is qualified and adopted in `mauedgar/ts-execution-lab:main`.
 
-Until qualification is complete, use already-qualified bounded write methods.
+Prefer MAT-XFORM v1 for bounded batch UTF-8 text materialization when the complete file batch is already semantically determined.
+
+MAT-XFORM creates no Product authority. Product-local adoption/binding remains separate.
 
 ## 14. Independent Review transport
 
@@ -495,19 +497,25 @@ Independent Review identity and review independence remain Product/LC concerns.
 
 Execution Engineering may qualify transport formats.
 
-Current DevLab direction under qualification:
+Current DevLab qualification:
 
-```text
-frozen review semantic members
-→ deterministic readable TXT carrier
-→ per-member byte length + SHA-256
-→ binary member base64 representation when necessary
-→ exact payload reconstruction
+```yaml
+IR_TXT_projection:
+  status: PASS_RECONCILED_TERMINAL
+  qualified_subject: 5c7d21198e878576c1d49d3e36b497dce3576ad6
+  real_Tecnotron_fixture: PASS
+  canonical_TAR_replacement: NOT_DECIDED
 ```
 
-Do not switch canonical Product review transport from TAR to TXT solely because a DevLab experiment passes.
+The qualified reviewer-facing projection recursively opens safe nested TAR evidence and emits one deterministic readable UTF-8 TXT projection containing exact textual leaves plus provenance/container identities.
 
-Promotion requires competent LC/Product reconciliation.
+This is stronger than the previous Base64-of-whole-TAR text carrier because reviewers can consume the semantic leaves directly.
+
+There is also Product execution precedent for pinned `FROZEN-INPUT.txt` review interfaces without a TAR attachment.
+
+Do not switch canonical Product review transport from TAR to TXT solely because the DevLab mechanism passes.
+
+Promotion still requires competent LC/Product reconciliation.
 
 ## 15. Feedback capture
 
