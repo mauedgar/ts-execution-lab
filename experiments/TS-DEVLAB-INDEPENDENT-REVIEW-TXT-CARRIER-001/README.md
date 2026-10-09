@@ -8,9 +8,13 @@
 python review_txt_carrier.py project source.tar --out bundle.txt --report project-report.json
 python review_txt_carrier.py verify bundle.txt --report verify-report.json
 python review_txt_carrier.py extract bundle.txt --out extracted --report extract-report.json
+python review_txt_carrier.py project-readable source.tar --out review-bundle.txt --report review-project-report.json
+python review_txt_carrier.py verify-readable review-bundle.txt --report review-verify-report.json
 ```
 
 `extract` requires its output directory to be absent or empty. The carrier rejects non-regular members, unsafe paths, duplicate paths, and non-UTF-8 payloads.
+
+`project-readable` recursively projects safe UTF-8 leaves from TAR members that themselves parse as TAR, to a maximum archive depth of 8. It accepts safe directory entries as structure only. Its report preserves archive-container identities as metadata and explicitly does not claim source or nested TAR byte reconstruction.
 
 ## Framing
 

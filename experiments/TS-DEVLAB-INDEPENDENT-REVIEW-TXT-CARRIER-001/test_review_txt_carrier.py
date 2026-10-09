@@ -16,10 +16,26 @@ class ReviewTxtCarrierTests(unittest.TestCase):
                 if kind is not None:
                     info.type = kind
                     info.linkname = "target"
-                    archive.addfile(info)
+                    info.size = len(payload)
+                    archive.addfile(info, io.BytesIO(payload))
                 else:
                     info.size = len(payload)
                     archive.addfile(info, io.BytesIO(payload))
+
+    def tar_bytes(self, entries: list[tuple[str, bytes, bytes | None]]) -> bytes:
+        output = io.BytesIO()
+        with tarfile.open(fileobj=output, mode="w") as archive:
+            for name, payload, kind in entries:
+                info = tarfile.TarInfo(name)
+                if kind is not None:
+                    info.type = kind
+                    info.linkname = "target"
+                    info.size = len(payload)
+                    archive.addfile(info, io.BytesIO(payload))
+                else:
+                    info.size = len(payload)
+                    archive.addfile(info, io.BytesIO(payload))
+        return output.getvalue()
 
     def test_project_extracts_exact_text_payloads_deterministically(self) -> None:
         with self.subTest("projection and extraction"):
@@ -69,6 +85,55 @@ class ReviewTxtCarrierTests(unittest.TestCase):
             for source, expected in ((non_utf8, "UTF-8"), (symlink, "non-regular"), (hardlink, "non-regular")):
                 with self.assertRaisesRegex(carrier.CarrierError, expected):
                     carrier.project(source, root / "bundle.txt", root / "report.json")
+
+    def test_readable_projection_recurses_and_preserves_provenance(self) -> None:
+        with self._temp_dir() as root:
+            child = self.tar_bytes([("deep.txt", b"deep\n", None)])
+            history = self.tar_bytes([("safe-dir", b"", tarfile.DIRTYPE), ("child.tar", child, None), ("history.txt", b"history\n", None)])
+            source = root / "source.tar"
+            self.make_tar(source, [("root.txt", b"root\n", None), ("evidence/history.tar", history, None)])
+            first, second = root / "first.txt", root / "second.txt"
+            carrier.project_readable(source, first, root / "project.json")
+            carrier.project_readable(source, second, root / "project2.json")
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            carrier.verify_readable(first, root / "verify.json")
+            manifest, leaves = carrier._parse_readable_bundle(first)
+            self.assertEqual(len(manifest["archives"]), 3)
+            self.assertEqual([(metadata["archive_chain"], metadata["path"], payload) for metadata, payload in leaves], [([], "root.txt", b"root\n"), (["evidence/history.tar"], "history.txt", b"history\n"), (["evidence/history.tar", "child.tar"], "deep.txt", b"deep\n")])
+            report = json.loads((root / "verify.json").read_text())
+            self.assertEqual(report["archive_count"], 3)
+            self.assertEqual(report["max_archive_depth"], 2)
+            self.assertEqual(report["review_leaf_payload_equivalence"], "PASS")
+            self.assertTrue(report["all_leaf_payloads_utf8"])
+
+    def test_readable_projection_rejects_nested_unsafe_content_and_tampering(self) -> None:
+        with self._temp_dir() as root:
+            for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.CHRTYPE, tarfile.BLKTYPE, tarfile.FIFOTYPE):
+                with self.subTest(kind=kind):
+                    source = root / f"{kind.decode()}.tar"
+                    self.make_tar(source, [("nested.tar", self.tar_bytes([("unsafe", b"x", kind)]), None)])
+                    with self.assertRaisesRegex(carrier.CarrierError, "non-regular"):
+                        carrier.project_readable(source, root / "bundle.txt", root / "report.json")
+            source = root / "non-utf8.tar"
+            self.make_tar(source, [("nested.tar", self.tar_bytes([("bad.txt", b"\xff", None)]), None)])
+            with self.assertRaisesRegex(carrier.CarrierError, "UTF-8"):
+                carrier.project_readable(source, root / "bundle.txt", root / "report.json")
+            self.make_tar(source, [("nested.tar", self.tar_bytes([("good.txt", b"original", None)]), None)])
+            bundle = root / "bundle.txt"
+            carrier.project_readable(source, bundle, root / "report.json")
+            bundle.write_bytes(bundle.read_bytes().replace(b"original", b"tampered", 1))
+            with self.assertRaisesRegex(carrier.CarrierError, "hash mismatch"):
+                carrier.verify_readable(bundle, root / "verify.json")
+
+    def test_readable_projection_depth_limit_fails_closed(self) -> None:
+        with self._temp_dir() as root:
+            payload = self.tar_bytes([("leaf.txt", b"text\n", None)])
+            for depth in range(9):
+                payload = self.tar_bytes([(f"level-{depth}.tar", payload, None)])
+            source = root / "deep.tar"
+            source.write_bytes(payload)
+            with self.assertRaisesRegex(carrier.CarrierError, "maximum archive depth"):
+                carrier.project_readable(source, root / "bundle.txt", root / "report.json")
 
     def _temp_dir(self):
         class PathTemporaryDirectory(tempfile.TemporaryDirectory):
