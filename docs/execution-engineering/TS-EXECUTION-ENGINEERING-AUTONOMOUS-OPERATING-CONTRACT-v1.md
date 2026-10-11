@@ -219,6 +219,21 @@ Preferred observation surfaces:
 
 Commander MUST NOT be used for repeated polling of remote work or short-interval observation of a locally launched asynchronous process. A bounded reviewer CLI launch is not Commander performing semantic Independent Review; the reviewer and post-run interpretation remain separate.
 
+### Duration-aware execution and observation profile
+
+This is the normative operating profile for **how** bounded processes are dispatched and observed. It reconciles the earlier short-run bounded-observation feedback with the later Web-owned adaptive-wait qualification; it does not create Product authority.
+
+1. **Already-determined near-immediate command:** prefer one coarse-grained guarded invocation. For Remote Desktop Commander, the remote connector's synchronous response window is at most ~3 seconds even when `timeout_ms` is larger. If it returns a complete terminal result, consume that same result without another status/read call.
+2. **Short process that outlives the launch response:** preserve its PID/ExecutionAttempt. First prefer its promised native/durable receipt. If completion is reasonably expected after a short interval, use the **native ChatGPT Timer** (when exposed in this session) for one evidence-based wait, then make **one** targeted native status/result observation. For a local process lacking a durable provider result, a single expected terminal `read_process_output` after the waiting window is allowed as *result retrieval*, not repeated polling. If still RUNNING, do not repeat immediate reads: schedule a new evidence-based Web wait or return PENDING.
+3. **Long-running worker / OpenCode / Orca / Actions:** dispatch once with exact identity and durable output/receipt plan; do not put a multi-minute `WaitForExit`, a timeout `taskkill`, or an internal polling loop inside the launcher. Use Timer-mediated Web waiting and observe GitHub/transport/provider-native state. Commander is reserved for an exceptional bounded local liveness diagnosis if materially overdue with insufficient durable evidence.
+4. **Ambiguous completion / UNKNOWN:** no new launch, cleanup, forced termination or retry without reconciliation. A connector timeout, missing local stdout, or silence is not proof of no effect.
+
+Timer means **ChatGPT's own native Timer**, never a Commander timer, a PowerShell sleep, a Commander read loop, or a scheduled reminder. Its prior reported successful use is an operational input; do not assert a Timer invocation was technically verified in a particular run without a native invocation receipt. If the current session does not expose a usable native Timer, continue independent work or return PENDING rather than fabricating waiting.
+
+For initial wait sizing, use operation-specific observations and queue/provider state (P50/P90 when sample size is sufficient), not a universal fixed delay. Runner v0.2 witnessed 14s and 19s terminal runs with zero no-information observations after adaptive durable checks; those figures are experimental examples **not** a new SLO. The historical Round-2 40-second bounded local polling allowance was run-scoped and does **not** authorize repetitive Commander polling here.
+
+Operational receipt/feedback should capture: execution and provider identity, predicted duration basis, native launch state, Timer availability/invocation evidence if present, observation source/time/state, no-information observations, exceptional local diagnoses, native terminal result and effect classification. Never infer tool-call count from `subprocess_count` or equate process count with actual MCP calls. Reuse existing evidence and transport schema before inventing another telemetry system.
+
 ### Wait states
 
 ```text
