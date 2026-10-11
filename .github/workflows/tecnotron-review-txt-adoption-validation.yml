@@ -1,0 +1,102 @@
+name: tecnotron-review-txt-adoption-validation
+
+on:
+  push:
+    branches:
+      - experiment/tecnotron-review-txt-adoption-validation-002
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact Product candidate read-only
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 89b08cfc50888393d6c54cb621feac4556387bc2
+          fetch-depth: 2
+          persist-credentials: false
+          path: product
+      - name: Check exact immutable subject
+        working-directory: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed="$(git rev-parse HEAD)"
+          test "$observed" = "89b08cfc50888393d6c54cb621feac4556387bc2"
+          test "$(git rev-parse HEAD^{tree})" = "0fe6c42cba4d3b20244cd04790126a92f8839e5d"
+          test "$(git rev-parse HEAD^)" = "94447dfef9acb8ba8fb048a5c0f3f11b1b1672c3"
+          actual_paths="$(git diff-tree --no-commit-id --name-only -r HEAD | LC_ALL=C sort)"
+          expected_paths="$(printf '%s\n' \
+            'docs/tasks/TEC-TC-REVIEW-TXT-CARRIER-ADOPTION-001/TASK.md' \
+            'scripts/review_txt_carrier.py' \
+            'src/operational-spine-v0/recipes/materialize-frozen-review-interface.js' \
+            'tests/operational-spine-v0/materialize-frozen-review-interface.test.js' \
+            'tests/review-txt-carrier/test_review_txt_carrier.py' | LC_ALL=C sort)"
+          test "$actual_paths" = "$expected_paths"
+          test "$(git rev-parse HEAD:scripts/review_txt_carrier.py)" = "96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4"
+          test "$(git rev-parse HEAD:src/operational-spine-v0/recipes/materialize-frozen-review-interface.js)" = "889b70a18c6188f51ba46632378b38a0b277a1aa"
+          test -z "$(git status --porcelain)"
+          echo "EXACT_PRODUCT_SUBJECT_PASS=$observed"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Native Ubuntu dependency install
+        working-directory: product
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        working-directory: product
+        run: npm run build
+      - name: Typecheck
+        working-directory: product
+        run: npm run typecheck
+      - name: Focused Recipe tests
+        working-directory: product
+        run: node --test tests/operational-spine-v0/materialize-frozen-review-interface.test.js
+      - name: Qualified TXT carrier tests
+        working-directory: product
+        run: python3 -m unittest discover -s tests/review-txt-carrier -p test_review_txt_carrier.py
+      - name: Full Product regression
+        working-directory: product
+        run: npm test
+      - name: Emit source-bound validation receipt
+        working-directory: product
+        shell: bash
+        run: |
+          mkdir -p validation
+          cat > validation/VALIDATION_RECEIPT.json <<'JSON'
+          {
+            "schema": "ts-execution-engineering-bounded-validation/v0",
+            "responsibility": "ADOPT_QUALIFIED_IR_TXT_PROJECTION_IN_EXISTING_FROZEN_REVIEW_RECIPE",
+            "Product": "mauedgar/tecnotron-ai",
+            "candidate_commit": "89b08cfc50888393d6c54cb621feac4556387bc2",
+            "candidate_tree": "0fe6c42cba4d3b20244cd04790126a92f8839e5d",
+            "native_surface": "github-actions/ubuntu-latest/node24/python3",
+            "TaskCycle": "TASKCYCLE-TECNOTRON-REVIEW-TXT-CARRIER-ADOPTION-001",
+            "candidate_parent": "94447dfef9acb8ba8fb048a5c0f3f11b1b1672c3",
+            "write_scope": "EXACT_5_PATHS",
+            "npm_ci": "PASS",
+            "build": "PASS",
+            "typecheck": "PASS",
+            "focused_recipe_tests": "PASS",
+            "focused_python_carrier_tests": "PASS",
+            "full_regression": "PASS",
+            "independent_review": "NOT_RUN",
+            "Developer_acceptance": "NOT_GRANTED",
+            "Phase2": "NOT_RUN",
+            "Product_effect": "NONE"
+          }
+          JSON
+          cat validation/VALIDATION_RECEIPT.json
+      - name: Upload native receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tecnotron-review-txt-validation-${{ github.run_id }}
+          if-no-files-found: warn
+          path: product/validation/VALIDATION_RECEIPT.json
