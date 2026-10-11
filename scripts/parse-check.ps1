@@ -21,7 +21,7 @@ try {
   $file = Get-Item -LiteralPath $ScriptPath -ErrorAction Stop
   if (-not ($file -is [IO.FileInfo])) { throw 'SOURCE_NOT_REGULAR_FILE' }
   [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-  $parseOk = ($null -ne $errors -and $errors.Count -eq 0)
+  $parseOk = ($errors.Count -eq 0)
   if (-not $parseOk) {
     foreach ($item in $errors) { $findings.Add(('PARSER_ERROR:' + $item.Message)) }
   }
