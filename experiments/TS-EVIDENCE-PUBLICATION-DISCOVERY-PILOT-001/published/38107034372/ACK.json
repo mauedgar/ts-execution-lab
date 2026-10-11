@@ -1,0 +1,29 @@
+{
+  "artifact_id": "TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/38107034372",
+  "kind": "SOURCE_SPECIFIC_EVIDENCE_CONSUMPTION_ACK",
+  "recipient_line": "TS_EVIDENCE_PUBLICATION_DISCOVERY_PILOT_001",
+  "method_owner": "TS_EXECUTION_ENGINEERING",
+  "source_repo": "mauedgar/ts-execution-lab",
+  "source_branch": "experiment/evidence-publication-discovery-pilot-001",
+  "source_commit": "3e04efce1c27053ddcd7f06d3072a31fd956d644",
+  "source_path": "experiments/TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/published/38107034372/result.json",
+  "source_blob": "cefea8f1286589a11e188d43c5d631f92154816c",
+  "receipt_path": "experiments/TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/published/38107034372/receipt.json",
+  "receipt_blob": "67cbc0b19ae6dbe0d70b0b63c68c1cca3c62195c",
+  "enumerated_cutoff": "3e04efce1c27053ddcd7f06d3072a31fd956d644",
+  "native_run_url": "https://github.com/mauedgar/ts-execution-lab/actions/runs/38107034372",
+  "request_identity": "sha256:cef34eb3bd0aa4b5a37d1c6cf6d4bdeb94576db21961b88429e3ab6307343bf2",
+  "disposition": "READ_AND_RECONCILED_EXACT",
+  "read_evidence": {
+    "web": "GitHub connector fetch_file at exact publication commit: result blob cefe...16c; receipt blob 67cb...195c; identities, request_identity, execution PASS, no Product effect reconciled",
+    "independent_cli": "Authorized remote Git/CLI: git ls-remote branch HEAD 3e04efce...6d644; gh api line discovery -> run 38107034372; gh api per-file SHA -> cefe...16c and 67cb...195c",
+    "conflict_probe": "GitHub create_file on existing result rejected HTTP 422 missing sha; subsequent blob and branch HEAD unchanged",
+    "fixture_only": "10/10 deterministic in-memory checks for duplicate, conflicting source, no ACK before reconciliation, wrong-blob ACK and UNKNOWN block; not a live concurrent-reader qualification"
+  },
+  "dependencies_unresolved": [],
+  "remaining_owner_action": "No Product action; technical owner may review isolated pilot findings",
+  "publication_not_delivery": true,
+  "external_line_delivery": "NOT_PERFORMED",
+  "authority_created": false,
+  "Product_effect_created": false
+}
