@@ -7,7 +7,7 @@ $testCount = 0
 $passedCount = 0
 $failures = New-Object 'System.Collections.Generic.List[string]'
 $checkerPath = Join-Path $WorkRoot 'parse-check.ps1'
-$shaExpected = '58680430e08eda533eb83b35018619f6e2a459a4'
+$shaExpected = 'c6da1e98197e8c53cfee64429d4664955a73161a'
 $nativeExe = 'C:\Tools\opencode-v2\2.0.26\node_modules\@opencode\cli\bin\opencode.exe'
 $nativeSha = 'E13E57A7F6B7ABDDEC887E0B2D912D22484077C50DFF5BED4F3199BCF63B6088'
 function Get-PinnedFile {
@@ -49,7 +49,7 @@ function Assert-Case {
 }
 try {
   $sources = @(
-    @{ name='checker'; repo='mauedgar/ts-execution-lab'; rev='28c2e8540e3246cb8d457bf1be4972a907e5f26a'; path='scripts/parse-check.ps1';sha=$shaExpected;dest=$checkerPath },
+    @{ name='checker'; repo='mauedgar/ts-execution-lab'; rev='f6d9116eb34a8c9e46bd72d6f8dc1a21392103fb'; path='scripts/parse-check.ps1';sha=$shaExpected;dest=$checkerPath },
     @{ name='beta_bad';repo='mauedgar/ts-execution-transport';rev='9ba8679b7349ebe93c1a535b4f8e5aa7375213a3';path='requests/TECNOTRON-BETA-ULC-OP02-FRESH-IR-2026-10-11-001/DISPATCH_FRESH_READONLY_REVIEW_001.ps1';sha='37b929603e0ed68cd96d9b3e00675f568a55b1c5';dest=(Join-Path $WorkRoot 'beta-bad.ps1')},
     @{ name='legacy_bad';repo='mauedgar/ts-execution-transport';rev='508a7b66e654ae27c5cbc9cbedab013cd891a4c3';path='requests/TECNOTRON-REVIEW-TXT-CARRIER-ADOPTION-IR-001/LAUNCH_FRESH_REVIEW.ps1';sha='67ae29df6d48d16d3792a2ffae922b4db6747238';dest=(Join-Path $WorkRoot 'legacy-bad.ps1')},
     @{ name='lab_benign';repo='mauedgar/ts-execution-lab';rev='50d94969e90360db8c0cc3ffc66ebbd96d4a2990';path='scripts/launch-worker.ps1';sha='f73cd780c492bbb009f6ceaf6924d1e95174ccc4';dest=(Join-Path $WorkRoot 'benign.ps1')}
