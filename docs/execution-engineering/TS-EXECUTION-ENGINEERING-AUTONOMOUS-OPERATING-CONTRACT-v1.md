@@ -198,11 +198,17 @@ For asynchronous/long-running work:
 
 ```text
 estimate expected duration
-→ wait in ChatGPT Web
+→ wait in ChatGPT Web (prefer the native ChatGPT Timer when available)
 → query durable/provider-native state once
 → classify information gain
 → recalculate next wait
 ```
+
+**Native ChatGPT Timer / adaptive wait.** When exposed in the active ChatGPT session, use the Timer for Web-owned waiting. Choose and revise its duration using expected execution time, available P50/P90, queue/provider state, and information gain from the previous observation. Durations can be seconds or minutes; there is no fixed polling cadence or arbitrary maximum count. After the wait, inspect one durable/provider-native state and decide whether another wait is justified.
+
+If the Timer is not available in this session, **do not claim it ran** or substitute repeated Commander `read_process_output`, invented sleeps, or unrelated scheduled reminders. Continue independent work or return `PENDING` for later continuation. The Timer does not attest completion, provider-visible bytes, or autonomous wakeup after the turn ends.
+
+A long-running Commander-launched script's internal multi-minute `WaitForExit` or kill-on-timeout is not a substitute for Web-owned waiting. Any native execution deadline is separate from observation; preserve `UNKNOWN` and reconcile before kill/relaunch effects.
 
 Preferred observation surfaces:
 
@@ -211,7 +217,7 @@ Preferred observation surfaces:
 - transport repository for durable returned evidence;
 - provider-native durable state for other providers.
 
-Commander MUST NOT be used for repeated polling of remote work.
+Commander MUST NOT be used for repeated polling of remote work or short-interval observation of a locally launched asynchronous process. A bounded reviewer CLI launch is not Commander performing semantic Independent Review; the reviewer and post-run interpretation remain separate.
 
 ### Wait states
 
