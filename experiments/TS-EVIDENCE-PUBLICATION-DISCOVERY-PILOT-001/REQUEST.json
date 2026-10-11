@@ -1,0 +1,17 @@
+{
+  "contract_version": "ts-execution-request/v0.2",
+  "request_id": "req-ts-evidence-publication-discovery-001",
+  "Product_ref": "synthetic/ts-evidence-publication-discovery-pilot-001",
+  "Product_operation_ref": "op://synthetic/ts-evidence-publication-discovery-pilot-001/publish",
+  "ExecutionAttempt_ref": "attempt://ts-evidence-publication-discovery-pilot-001/001",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "subject_ref": "git:mauedgar/ts-execution-lab@c93609771da0642acd0dbc83b201b1554879ec49",
+  "context_id": "ctx-ts-evidence-publication-discovery-001",
+  "input": {
+    "payload_json": {
+      "line": "TS_EVIDENCE_PUBLICATION_DISCOVERY_PILOT_001",
+      "purpose": "bounded-native-publication",
+      "scope": "NON_PRODUCT"
+    }
+  }
+}
