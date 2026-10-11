@@ -1,0 +1,53 @@
+name: ts-evidence-publication-discovery-pilot-001
+on:
+  push:
+    branches: [experiment/evidence-publication-discovery-pilot-001]
+    paths:
+      - "experiments/TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/REQUEST.json"
+
+permissions:
+  contents: write
+
+jobs:
+  bounded-native-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install existing runner
+        run: npm ci
+      - name: Execute existing v0.2 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p remote
+          cp experiments/TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/REQUEST.json remote/request.json
+          node src/cli.ts run remote/request.json --out remote/out --binding github-actions
+      - name: Publish exact result and receipt to isolated Git branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir=remote/out
+          dest="experiments/TS-EVIDENCE-PUBLICATION-DISCOVERY-PILOT-001/published/${GITHUB_RUN_ID}"
+          test -s "$source_dir/result.json"
+          test -s "$source_dir/receipt.json"
+          mkdir -p "$dest"
+          cp "$source_dir/result.json" "$dest/result.json"
+          cp "$source_dir/receipt.json" "$dest/receipt.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$dest/result.json" "$dest/receipt.json"
+          git commit -m "evidence(pilot): auto-publish v0.2 result and receipt run ${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/experiment/evidence-publication-discovery-pilot-001"
+      - name: Retain native run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-evidence-publication-discovery-${{ github.run_id }}
+          path: remote/out/
+          if-no-files-found: ignore
