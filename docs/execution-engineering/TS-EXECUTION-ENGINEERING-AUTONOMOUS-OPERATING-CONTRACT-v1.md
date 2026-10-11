@@ -353,6 +353,18 @@ freeze interface
 
 Avoid simultaneous writers in the same worktree.
 
+### Deferred durable join — reuse of existing execution mechanics
+
+This is a **ChatGPT Web execution-order choice**, not a new scheduler, TaskCycle gate, Recipe, Primitive, background wakeup or Product authorization. Apply the existing correlation envelope (section 11), duration-aware observation (section 6), and Product lifecycle unchanged:
+
+1. **Dispatch once.** For an already-authorized bounded action, retain its Product operation, exact request identity, ExecutionAttempt, Git subject and write owner, provider-native run/PID, expected result/receipt location, dependencies, and no-replay constraint. Multiple workers may overlap only within the existing frozen-interface, disjoint-write and provider/device qualification limits above; no assumed global concurrency capacity.
+2. **Use the overlap.** While that external result is pending, advance only other independently authorized gates whose prerequisites do not depend on it. Neither an open issue nor a published artifact grants readiness, acceptance or execution authority. Do not insert a per-wait checkpoint or re-dispatch a terminal or unknown effect.
+3. **Join at the dependency boundary.** When a dependent gate becomes relevant, or no independent work remains, query the exact GitHub Actions/Transport/provider-native result once. Bind request/attempt, Product, candidate commit/tree, provider run, result/receipt identity and terminal effect state; a changed branch ref or publication alone is insufficient. A verified terminal result unlocks only the transitions permitted by competent Product authority.
+4. **Adapt rather than poll.** For a still-running attempt, estimate remaining time from elapsed time, native state and comparable operation-specific durations; stratify runner/provider/version and label small-sample P50/P90 *descriptive, not predictive*. Prefer a **real** native ChatGPT Timer when exposed; otherwise continue independent work, or return a portable `PENDING_EXTERNAL_RESULT` observation with exact refs. That label is execution observation only, **not a new Product lifecycle status**. No Commander polling, fabricated timers or automatic restart.
+5. **Reconcile exceptional effects.** Missing, late, failed, blocked or `UNKNOWN` results are assessed through existing exact-effect reconciliation before any repeat, repair, acceptance or integration. Record actual tool calls, launch/read counts, elapsed times, informative versus empty durable observations, Timer invocation evidence and gates unblocked; never infer tool calls from `subprocess_count`.
+
+The delayed GitHub Transport receipt precedent and observability pilot qualify this as **bounded reuse**, not a throughput guarantee: benign overlapping attempts do not establish production concurrency limits, and mixed-version timing samples do not calibrate P50/P90.
+
 ## 10. Retry / repair rule
 
 ```text
