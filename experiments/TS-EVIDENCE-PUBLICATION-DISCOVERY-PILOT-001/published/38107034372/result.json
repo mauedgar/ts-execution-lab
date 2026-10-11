@@ -1,0 +1,32 @@
+{
+  "contract_version": "ts-execution-result/v0.2",
+  "request_id": "req-ts-evidence-publication-discovery-001",
+  "Product_ref": "synthetic/ts-evidence-publication-discovery-pilot-001",
+  "Product_operation_ref": "op://synthetic/ts-evidence-publication-discovery-pilot-001/publish",
+  "ExecutionAttempt_ref": "attempt://ts-evidence-publication-discovery-pilot-001/001",
+  "execution_profile_ref": "profile://ts-execution-lab/canonical-sha256/v0",
+  "subject_ref": "git:mauedgar/ts-execution-lab@c93609771da0642acd0dbc83b201b1554879ec49",
+  "context_id": "ctx-ts-evidence-publication-discovery-001",
+  "request_identity": "sha256:cef34eb3bd0aa4b5a37d1c6cf6d4bdeb94576db21961b88429e3ab6307343bf2",
+  "result_status": "PASS",
+  "effect_state": "NONE",
+  "semantic_digest": "sha256:b04a285a23c15f6243c8cb7070e88299759b55b1cb7ea6bfca544755044853ed",
+  "profile_output": {
+    "profile": "canonical-sha256/v0",
+    "input_bytes": 115,
+    "canonical_bytes": 115,
+    "semantic_digest": "sha256:b04a285a23c15f6243c8cb7070e88299759b55b1cb7ea6bfca544755044853ed"
+  },
+  "observation": {
+    "binding": "github-actions",
+    "profile": "profile://ts-execution-lab/canonical-sha256/v0",
+    "result_class": "SUCCESS",
+    "effect_state": "NONE",
+    "timings": {
+      "validation_ms": 3.364,
+      "profile_ms": 0.098,
+      "total_ms": 3.482
+    },
+    "subprocess_count": 0
+  }
+}

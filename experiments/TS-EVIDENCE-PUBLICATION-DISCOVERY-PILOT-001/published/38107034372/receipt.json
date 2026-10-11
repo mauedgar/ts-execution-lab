@@ -1,0 +1,29 @@
+{
+  "contract_version": "ts-execution-receipt/v0.2",
+  "Product_operation_ref": "op://synthetic/ts-evidence-publication-discovery-pilot-001/publish",
+  "ExecutionAttempt_ref": "attempt://ts-evidence-publication-discovery-pilot-001/001",
+  "request_identity": "sha256:cef34eb3bd0aa4b5a37d1c6cf6d4bdeb94576db21961b88429e3ab6307343bf2",
+  "selected_binding_ref": "github-actions",
+  "started_at": "2026-10-11T03:01:24.603Z",
+  "completed_at": "2026-10-11T03:01:24.608Z",
+  "result_status": "PASS",
+  "effect_state": "NONE",
+  "exact_subject_ref": "git:mauedgar/ts-execution-lab@c93609771da0642acd0dbc83b201b1554879ec49",
+  "provider_native_refs": [],
+  "evidence_refs": [],
+  "result_ref": "result.json",
+  "authority_created": false,
+  "Product_effect_created": false,
+  "observation": {
+    "binding": "github-actions",
+    "profile": "profile://ts-execution-lab/canonical-sha256/v0",
+    "result_class": "SUCCESS",
+    "effect_state": "NONE",
+    "timings": {
+      "validation_ms": 3.364,
+      "profile_ms": 0.098,
+      "total_ms": 3.482
+    },
+    "subprocess_count": 0
+  }
+}
