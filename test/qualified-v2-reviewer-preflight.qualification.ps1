@@ -42,9 +42,9 @@ function Assert-Case {
   } catch {
     throw ('PREFLIGHT_OUTPUT_NOT_JSON:' + $Label + ':' + (($raw | Out-String).Trim()))
   }
-  $testCount++
+  $script:testCount++
   $ok = ($result.status -eq $ExpectedDecision) -and (($ExpectedDecision -eq 'BLOCKED' -and $exitCode -ne 0) -or ($ExpectedDecision -ne 'BLOCKED' -and $exitCode -eq 0))
-  if ($ok) { $passedCount++ } else { $failures.Add(('FAIL:' + $Label + ':status=' + $result.status + ':exit=' + $exitCode)) }
+  if ($ok) { $script:passedCount++ } else { $failures.Add(('FAIL:' + $Label + ':status=' + $result.status + ':exit=' + $exitCode)) }
   $checked.Add([ordered]@{ label=$Label;status=$result.status;exit_code=$exitCode;ok=$ok;finding_ids=@($result.source_errors);source=$Source;native_v2_checked=$result.native_v2_checked })
 }
 try {
