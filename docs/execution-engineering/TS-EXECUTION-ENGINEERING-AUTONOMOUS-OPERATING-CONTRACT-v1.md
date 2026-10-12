@@ -375,6 +375,32 @@ This is a **ChatGPT Web execution-order choice**, not a new scheduler, TaskCycle
 
 The delayed GitHub Transport receipt precedent and observability pilot qualify this as **bounded reuse**, not a throughput guarantee: benign overlapping attempts do not establish production concurrency limits, and mixed-version timing samples do not calibrate P50/P90.
 
+### Empirical qualification: Web-controlled overlap and measured stage durations (2026-10-12)
+
+**Classification:** `PASS_OVERLAP / QUALIFIED_SYNTHETIC_NONPRODUCT`. This records evidence for the already-adopted §9 execution order; it does **not** introduce a TaskCycle gate, provider contract, scheduler, new Recipe/Primitive, concurrent LLM instance, or Product authority.
+
+**Exact independently retrievable evidence:** `mauedgar/ts-execution-transport@1a571cf04c6f8928214f576e3c1c477370234244:results/TS-EE-MULTIGATE-OVERLAP-20261012-003/EXPERIMENT_OBSERVATION.json` (Git blob `3db2c04a5080207005a848d5f39fd159bb5a84a4`), preserving the original bounded experiment `TS-EE-MULTIGATE-OVERLAP-20261012-003`. Do not re-dispatch its terminal `A-ATTEMPT-001`.
+
+Measured observations, **not** predictive service levels:
+
+| Operation / measurement | Observed value | Interpretation |
+| --- | ---: | --- |
+| A external synthetic Python process | 85.000339 s | One dispatch; exact request/attempt/subject/PID verified; terminal PASS |
+| B independent synthetic gate matrix | 33.573857 s | 32/32 PASS; stage wall elapsed, including chat/tool latency |
+| C independent timing-method analysis | 56.962542 s | PASS; stage wall elapsed, including chat/tool latency |
+| B overlapped with A | 33.573793 s | Verified by interval intersection of start/end timestamps |
+| C overlapped with A | 29.320042 s | C continued after A was already terminal; only this portion overlapped |
+| Terminal join of A | 1 observation, 0 no-information reads | Original receipt and identity recovered without polling |
+
+This demonstrates **one ChatGPT Web control stream alternating independent work while one external operation remained active**, followed by a single exact join. It does not demonstrate parallel LLM inference, native timer wakeup, an independently qualified real Product TaskCycle, or measured causal speedup.
+
+For subsequent authorized consumers, retain per-operation `started_utc`, `completed_utc`, elapsed wall seconds, operation/binding/provider version, result and receipt identity, and when appropriate separate external process time from ChatGPT stage-wall time and individual tool duration. Record elapsed overlap from exact intervals, actual top-level and nested tool calls **when available**, no-information observations, retries, errors, manual interventions, and the point of dependency join. Never convert `subprocess_count` into tool-call counts or invent a total when it was not measured. The experiment's reported subset was one A dispatch, one A terminal join, B 3 top-level calls with 2 nested GitHub fetches, C 3 top-level calls, zero polling; the entire chat tool count was **NOT_ACCOUNTED**. One staging permission error occurred before A dispatch and was not a duplicate A execution.
+
+Duration samples are kept in **separate cohorts**. Synthetic external waits `[20, 75, 85.000339]` seconds give descriptive nearest-rank P50 `75` s and P90 `85.000339` s at `n=3`. B and C each provide `n=1` chat-stage samples. These figures must **not** calibrate ETA for independent reviews, GitHub Actions or other providers. Use measured, operation-specific comparable cohorts as future real receipts accumulate. A visual countdown or native Timer is never a prerequisite for §9 overlap; waiting remains Web-owned, and the existing `PENDING_EXTERNAL_RESULT` path applies when there is no qualified wait and no independent work.
+
+**Next qualification only when a real consumer exists:** repeat the already-defined §9 method with two independently authorized, non-conflicting Product TaskCycles, preserving their exact authorities, dependency/ownership guards, frozen subjects and separate receipts. No Product work or rollout is selected by this evidence.
+
+
 ## 10. Retry / repair rule
 
 ```text
