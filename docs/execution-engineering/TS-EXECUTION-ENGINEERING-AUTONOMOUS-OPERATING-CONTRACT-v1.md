@@ -228,14 +228,38 @@ Qualification ceiling: **in-turn Python blocking wait**, not autonomous wake of 
 
 Use per-operation cohorts. Small-sample P50/P90 are descriptive, never calibrated ETA. The historical 40-second bounded local-observation allowance was specific to its run, not a general polling policy. Record actual top-level/nested tool calls when measurable, elapsed wall time, source of estimated duration, informative/empty observations, retries and gates unblocked; do not confuse subprocess count with tool count.
 
-### States / exceptional local diagnosis
+### Material overrun / exceptional diagnosis (non-happy-path)
+
+This refines the **existing** §6 / §9 observation method, not a new TaskCycle state, gate, Recipe, watchdog or scheduler. Every classification is an **Execution Engineering observation** of the *same* original `ExecutionAttempt`; Product authority and lifecycle are unchanged. The generic sequence supports any finite set of independently authorized executions, not just the synthetic A+B+C example.
+
+**Trigger, not automatic timeout.** When actual elapsed time (including provider queue/startup) materially exceeds the evidence-backed observation window, or a provider-native failure/health signal appears earlier, switch from ordinary ETA-based waiting to a **bounded exact-identity provider diagnosis**. Prefer an explicit provider hard deadline or comparable operation-specific upper duration band where such evidence exists. When no calibrated cohort or deadline exists, record low confidence, elapsed time, provider stage and the reason for investigating; **do not invent a universal multiplier, a fixed poll frequency or a kill threshold**. An ETA breach alone does not mean `STALLED`, `FAILED` or `UNKNOWN`.
+
+1. **Reconcile observation identity first.** Keep Product/Operation/`ExecutionAttempt`, original immutable subject/commit/tree, provider run/session/PID, startup time, expected receipt and current effect state. Check the expected durable result and authoritative provider-native execution state under those IDs; do not infer the attempt's status from a changed branch, a missing local output file or mere elapsed time.
+2. **One purposeful diagnostic acquisition.** Acquire a compact, *exact* provider/job/session observation with whatever progress or stage, last native event/heartbeat if available, terminal exit/error, permissions/auth, queue/resource constraints and durable output identities the provider actually exposes. Commander is only an exceptional **single bounded mechanical liveness check** for a local process when native/durable evidence remains insufficient after material overrun; it never becomes a fast status loop or semantic debugger. Do not demand unavailable heartbeats as if absence proved no progress.
+3. **Classify and resolve within authority:**
+
+| Observed evidence | Operational disposition and next action |
+| --- | --- |
+| Original terminal receipt with valid identity (PASS/FAIL/BLOCKED) | Reconcile original terminal verdict/effect, preserve all findings; unlock only permitted gates. A failure is not an implicit retry grant. |
+| Provider says RUNNING/QUEUED with credible stage progression, activity or an explained queue/slowdown | `RUNNING_OVERTIME` (healthy/explicable); revise ETA using new provider evidence, record one new meaningful observation window, use bounded ChatGPT-side Python sleep when the active turn supports it; do not relaunch. |
+| Provider says RUNNING but no recent verifiable progress and material overtime, with incomplete evidence | `SUSPECTED_STALL`, **not a proven stall**. Perform only the bounded diagnostic above; if progress still cannot be established, report exact evidence, uncertainty and next competent action rather than wait indefinitely or repeatedly query status. |
+| Provider-native terminal error, failed job, exhausted quota, auth/permission denial, or confirmed unresponsive worker | Preserve exact `FAIL`/`BLOCKED` (or provider terminal classification), determine whether any **already-authorized** non-destructive correction can occur outside the frozen subject; otherwise return precise technical blocker for competent resolution. Never change reviewer binding automatically. |
+| Provider result/side effect cannot be reconciled, run identity conflicts, receipt missing despite ambiguous dispatch, or connector timeout hides the actual effect | `UNKNOWN` effect; acquire any remaining *bounded, targeted* original provider/transport evidence and fail closed. No blind relaunch, forced termination, cleanup, acceptance or integration. |
+
+4. **Exit from investigation.** Resume normal duration-aware waiting only with new evidence supporting a live attempt and a meaningful future observation. Otherwise return the precise terminal failure/blocker, or `PENDING_EXTERNAL_RESULT` with exact attempt/result refs when a live execution cannot be waited for in this active turn. If effect or identity is ambiguous, preserve `UNKNOWN`. Do not turn `PENDING_EXTERNAL_RESULT` into a fake terminal status or into endless Python sleep.
+5. **Accounting / feedback.** Record the expected-versus-observed timing basis, startup/queue time, overrun trigger, provider/run identity, last progress evidence, each diagnostic acquisition and its information gain, original receipt/effect, wait duration, bounded technical ruling and gates still independent. Do not claim reduced latency, automatic wakeup or a real provider-stall qualification from synthetic A+B+C+WAIT+JOIN evidence.
 
 ```text
-RUNNING_EXPECTED → RUNNING_OVERTIME → SUSPECTED_STALL → DIAGNOSIS
-                                                       ↘ TERMINAL
+RUNNING_EXPECTED
+  → material overtime / native alert
+  → EXACT PROVIDER STATUS + BOUNDED DIAGNOSIS
+      ├─ live / progressing  → RUNNING_OVERTIME → revise ETA → bounded wait → exact join
+      ├─ no proven progress → SUSPECTED_STALL  → bounded ruling / escalate
+      ├─ confirmed terminal → reconcile verdict/effect → authorized next gate
+      └─ ambiguous effect   → UNKNOWN → preserve / reconcile; no retry
 ```
 
-No fixed repeated observations. One local Commander liveness diagnosis is permitted only if material overtime and missing durable state warrant it; substantive interpretation belongs to ChatGPT Web.
+**Do not escalate just because one prediction was inaccurate.** Do escalate when the evidence no longer justifies further passive waiting. This is a technical observation boundary, not permission to kill, switch modalities, repair a frozen candidate or start another Product cycle.
 
 ## 7. Commander contract
 
