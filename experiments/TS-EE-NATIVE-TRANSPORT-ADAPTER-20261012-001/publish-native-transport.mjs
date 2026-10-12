@@ -56,6 +56,9 @@ function publish(requestFile) {
   assert(typeof p.transport_checkout === 'string' && typeof p.result_dir === 'string', 'MISSING_INPUT_PATH');
   const repo = resolve(p.transport_checkout), source = resolve(p.result_dir);
   assert(!/^https?:\/\/[^/]*:[^/]*@/.test(p.expected_remote_url), 'REMOTE_EMBEDDED_CREDENTIALS_FORBIDDEN');
+  const allowedTransportRemote = ['git@github.com:mauedgar/ts-execution-transport.git', 'https://github.com/mauedgar/ts-execution-transport.git', 'https://github.com/mauedgar/ts-execution-transport'];
+  const allowedLocalTestRemote = p.experimental_local === true && /^(\/|file:\/\/)/.test(p.expected_remote_url);
+  assert(allowedTransportRemote.includes(p.expected_remote_url) || allowedLocalTestRemote, 'UNAUTHORIZED_TRANSPORT_REMOTE');
   assert(repo !== source && !repo.startsWith(source + sep) && !source.startsWith(repo + sep), 'OVERLAPPING_SOURCE_AND_TRANSPORT');
   assert(typeof p.expected_head === 'string' && /^[0-9a-f]{40}$/.test(p.expected_head), 'INVALID_EXPECTED_HEAD');
   assert(typeof p.expected_remote_url === 'string' && p.expected_remote_url.length > 0, 'MISSING_REMOTE_URL');

@@ -42,7 +42,7 @@ node scripts/publish-native-transport.mjs publication-request.json
 }
 ```
 
-The actual request **must** use real exact values, not this placeholder. For production integration, the destination branch and auth must be allowed explicitly by Execution Engineering's qualified writer binding, and the output must be independently read back from GitHub. `GIT_TERMINAL_PROMPT=0` prevents credential prompts. The script embeds no credentials, never runs `git push --force`, and caps a package at 50 MiB (20 MiB default). Beyond the cap use already-qualified Actions artifacts / an authorized durable artifact store, plus hash and exact Git refs; do not silently stuff arbitrary binaries into Git.
+The actual request **must** use real exact values, not this placeholder. For production integration, the destination branch and auth must be allowed explicitly by Execution Engineering's qualified writer binding, and the output must be independently read back from GitHub. `GIT_TERMINAL_PROMPT=0` prevents credential prompts. The script explicitly allowlists the canonical `mauedgar/ts-execution-transport` SSH/HTTPS remote. Disposable **local filesystem** Git remotes require explicit `experimental_local: true`; a Product repository URL is always forbidden. The script embeds no credentials, never runs `git push --force`, and caps a package at 50 MiB (20 MiB default). Beyond the cap use already-qualified Actions artifacts / an authorized durable artifact store, plus hash and exact Git refs; do not silently stuff arbitrary binaries into Git.
 
 ## Tests and qualification
 
@@ -50,10 +50,11 @@ The actual request **must** use real exact values, not this placeholder. For pro
 node --test test-publish-native-transport.mjs
 ```
 
-`10/10 PASS` on Node 22.16.0 / Git 2.47.3 against disposable local bare Git remotes:
+`11/11 PASS` on Node 22.16.0 / Git 2.47.3 against disposable local bare Git remotes:
 
 - Terminal PASS, FAIL and BLOCKED each publish the original result/receipt/extra log + deterministic manifest; collision on identical second submission fails closed.
 - Stale local parent, changed remote, dirty checkout, unsafe relative path, identity mismatch and package limit all block.
+- Attempts to publish to a Product repository URL fail before writing, even with the local-test flag.
 - Deliberately rejected push is `PUBLICATION_UNKNOWN` with local commit preserved and no automatic retry.
 
 **Still unqualified**: credentialed local Commander/WSL-to-GitHub publish (exact host, allowlist, auth scope, remote permission), host-native PowerShell launcher consumption, binary/very large files beyond cap, meaningful end-to-end Product TaskCycle use, concurrency under multiple writers, crash recovery beyond fail-closed return. These must not be inferred from the offline tests or old FitFlow precedent. Preserve prior terminal experiments and every Product `UNKNOWN`.

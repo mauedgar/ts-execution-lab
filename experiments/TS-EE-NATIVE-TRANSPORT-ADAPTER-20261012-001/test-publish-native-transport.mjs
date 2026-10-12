@@ -19,7 +19,7 @@ function fixture(status='PASS',options={}){
   const receipt={contract_version:'ts-execution-receipt/v0.2',...common,selected_binding_ref:'test-binding',exact_subject_ref:'testsubject',started_at:'2026-10-12T00:00:00Z',completed_at:'2026-10-12T00:00:01Z',result_ref:'result.json',authority_created:false,Product_effect_created:false,observation};
   writeFileSync(join(source,'result.json'),JSON.stringify(result));writeFileSync(join(source,'receipt.json'),JSON.stringify(receipt));
   const parent=git(checkout,'rev-parse','HEAD');
-  const request={contract:'ts-ee-native-transport-publication/v0-experimental',transport_checkout:checkout, result_dir:source,expected_head:parent,expected_remote_url:bare,branch:'experiment',package_path:'results/NATIVE-TEST-001',artifacts:['logs/native.log'],...options};
+  const request={contract:'ts-ee-native-transport-publication/v0-experimental',transport_checkout:checkout, result_dir:source,expected_head:parent,expected_remote_url:bare,experimental_local:true,branch:'experiment',package_path:'results/NATIVE-TEST-001',artifacts:['logs/native.log'],...options};
   const config=join(root,'request.json');writeFileSync(config,JSON.stringify(request));
   return {root,bare,checkout,source,parent,config,request,result,receipt};
 }
@@ -56,4 +56,10 @@ test('push failure preserves exact local commit for reconciliation',()=>{
  const r=invoke(f);assert.equal(r.status,1);assert.equal(r.body.status,'PUBLICATION_UNKNOWN');assert.match(r.body.local_commit,/^[0-9a-f]{40}$/);assert.equal(r.body.retry_authorized,false);
  assert.equal(git(f.checkout,'rev-parse','HEAD'),r.body.local_commit);
  assert.equal(git(f.checkout,'ls-remote','origin','refs/heads/experiment').split(/\s+/)[0],f.parent);
+});
+
+test('remote Product repository forbidden even with opt-in',()=>{
+ const f=fixture();f.request.expected_remote_url='https://github.com/mauedgar/tecnotron-ai.git';writeFileSync(f.config,JSON.stringify(f.request));
+ const r=invoke(f);assert.equal(r.status,1);assert.equal(r.body.reason,'UNAUTHORIZED_TRANSPORT_REMOTE');
+ assert.equal(existsSync(join(f.checkout,'results')),false);
 });
