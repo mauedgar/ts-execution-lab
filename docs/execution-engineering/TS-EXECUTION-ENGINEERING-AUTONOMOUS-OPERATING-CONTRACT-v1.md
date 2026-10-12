@@ -353,6 +353,25 @@ freeze interface
 
 Avoid simultaneous writers in the same worktree.
 
+### Deferred Execution Coordination (DEC) — horizontal method nomenclature
+
+**Declared technical name:** `DEFERRED_EXECUTION_COORDINATION` (DEC; *Coordinación de Ejecución Diferida*). DEC is the **existing ChatGPT Web-controlled Execution Engineering operating method**, not a new component, scheduler, Product orchestrator, Recipe, authority, TaskCycle gate or independent reviewer binding. It composes §6 duration-aware waiting/diagnosis, §9 dependency/concurrency boundaries and §11 exact `ExecutionAttempt` correlation. The A+B+C experiments are fixtures; DEC can coordinate **N bounded, independently authorized operations** respecting dependencies, execution surfaces, write owners and qualified capacities. It does not imply independent concurrent LLM inference threads within one chat.
+
+**Stable technical vocabulary (operation phases/patterns, not new lifecycle gates):**
+
+| Term | Meaning / competence |
+| --- | --- |
+| `SINGLE_DISPATCH` | Dispatch an authorized bounded operation once, preserving request, `ExecutionAttempt`, subject and expected result identity. |
+| `INDEPENDENT_WORK_OVERLAP` | Advance independently authorized nonconflicting work while external attempts run; individual results may unlock dependent work without waiting for all peers. |
+| `PYTHON_BOUNDED_WAIT` | When independently useful work is exhausted and an attempt remains live, wait with actual bounded Python `time.sleep()` within the **same active ChatGPT Web turn**. Neither Commander nor reviewer launchers wait, and no automatic wake of an ended chat is claimed. |
+| `DEFERRED_DURABLE_JOIN` | At the relevant dependency boundary, retrieve the exact GitHub/Transport/provider-native receipt and reconcile the original attempt. |
+| `OVERRUN_DIAGNOSIS` | For material evidence-backed overrun/native alert, perform bounded exact-state diagnosis distinguishing healthy slowdown, suspected stall, confirmed error and effect ambiguity. |
+| `EFFECT_RECONCILIATION` | Reconcile identities and side effects before any downstream mutation, retry, acceptance, integration or closure; publication or review PASS never confers Developer acceptance. |
+
+**Operational loop:** `SINGLE_DISPATCH → INDEPENDENT_WORK_OVERLAP → (PYTHON_BOUNDED_WAIT when idle) → DEFERRED_DURABLE_JOIN → EFFECT_RECONCILIATION`. If evidence warrants, branch to `OVERRUN_DIAGNOSIS`, then return to a justified wait, verified terminal result or explicit bounded blocker. For N operations, run the same dependency-aware loop for each exact attempt rather than serializing every worker or creating a central queue.
+
+**Evidence ceiling:** the synthetic overlap experiment `TS-EE-MULTIGATE-OVERLAP-20261012-003` and in-turn Python wait `TS-EE-PYTHON-BOUNDED-WAIT-20261012-003` qualify the measured happy-path behavior. The §6 overtime exceptions are method-defined, not yet a successful real-provider stall recovery. Naming DEC does not establish a live Product Beta Run, `WEB_INLINE` Product adoption or unattended cross-turn continuation.
+
 ### Deferred durable join — reuse of existing execution mechanics
 
 This is a **ChatGPT Web execution-order choice**, not a new scheduler, TaskCycle gate, Recipe, Primitive, background wakeup or Product authorization. Apply the existing correlation envelope (section 11), duration-aware observation (section 6), and Product lifecycle unchanged:
