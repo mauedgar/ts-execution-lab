@@ -191,39 +191,39 @@ Do not emit a signal for every tool call. The goal is observability and interrup
 
 ChatGPT Web owns execution coordination, completion-time estimates, observation and reconciliation. Commander runs previously determined mechanical operations and returns results; it does not own background vigilance or polling.
 
-\`\`\`text
+```text
 one authorized dispatch, exact ExecutionAttempt/subject/result target
 → continue authorized independent gates without conflicting writes
 → at the dependency boundary, take one meaningful exact durable observation
 → reconcile the original attempt and terminal receipt
 → continue only gates enabled by competent Product authority
-\`\`\`
+```
 
-**No independent gates left:** prioritize continuing the same responsibility through a genuinely available and qualified wait/continuation mechanism until the next evidence-based observation, then join the result. The ETA determines **when an observation is meaningful**; a numeric elapsed-time estimate is **not** itself an executable clock, a sleep or automatic wakeup. Never invent an idle delay, a wake event or a resumed turn. If the current environment cannot genuinely maintain/resume the execution, return \`PENDING_EXTERNAL_RESULT\` and exact references rather than substituting Commander polling, a fabricated waiting operation or an unrelated scheduled reminder. A separately scheduled reviewer task does not automatically wake the original Control chat. \`PENDING_EXTERNAL_RESULT\` is an execution observation, never a new Product lifecycle status or successful completion.
+**No independent gates left:** prioritize continuing the same responsibility through a genuinely available and qualified wait/continuation mechanism until the next evidence-based observation, then join the result. The ETA determines **when an observation is meaningful**; a numeric elapsed-time estimate is **not** itself an executable clock, a sleep or automatic wakeup. Never invent an idle delay, a wake event or a resumed turn. If the current environment cannot genuinely maintain/resume the execution, return `PENDING_EXTERNAL_RESULT` and exact references rather than substituting Commander polling, a fabricated waiting operation or an unrelated scheduled reminder. A separately scheduled reviewer task does not automatically wake the original Control chat. `PENDING_EXTERNAL_RESULT` is an execution observation, never a new Product lifecycle status or successful completion.
 
 **Evidence classes:**
-- \`VERIFIED_DEFERRED_JOIN\`: \`TS-EE-MULTIGATE-OVERLAP-20261012-003\` launched A once, overlapped independent gates B/C and consumed one exact terminal result with zero polling.
-- \`VERIFIED_DURATION_AWARE_OBSERVATION\`: Runner v0.2 recorded actual 14 s and 19 s terminal jobs with meaningful observations, not a universal idle wake capability.
-- \`USER_OBSERVED_HISTORICAL_COUNTDOWN\`: Library \`libfile_d56855281ca881919a9085ee54fe7110\` records the original one-line countdown observation; exact chat, runtime implementation and automatic wakeup are \`UNKNOWN\`. Do not silently downgrade that user observation or upgrade it to an independently qualified host capability.
-- \`WAIT_POLICY_NOT_RUNTIME_MECHANISM\`: October 4 wait/ETA plan, Library \`libfile_0c624008fe5481919d400bc2e917fd85\`, records dispatch/estimate/\`first_check_at\`/no-polling/accounting, not a proven wake primitive.
-- \`NOT_VERIFIED_IDLE_AUTO_RESUME\`: neither the cited overlap experiment nor any cited capsule verifies automatic idle same-turn continuation after a separately scheduled operation finishes.
+- `VERIFIED_DEFERRED_JOIN`: `TS-EE-MULTIGATE-OVERLAP-20261012-003` launched A once, overlapped independent gates B/C and consumed one exact terminal result with zero polling.
+- `VERIFIED_DURATION_AWARE_OBSERVATION`: Runner v0.2 recorded actual 14 s and 19 s terminal jobs with meaningful observations, not a universal idle wake capability.
+- `USER_OBSERVED_HISTORICAL_COUNTDOWN`: Library `libfile_d56855281ca881919a9085ee54fe7110` records the original one-line countdown observation; exact chat, runtime implementation and automatic wakeup are `UNKNOWN`. Do not silently downgrade that user observation or upgrade it to an independently qualified host capability.
+- `WAIT_POLICY_NOT_RUNTIME_MECHANISM`: October 4 wait/ETA plan, Library `libfile_0c624008fe5481919d400bc2e917fd85`, records dispatch/estimate/`first_check_at`/no-polling/accounting, not a proven wake primitive.
+- `NOT_VERIFIED_IDLE_AUTO_RESUME`: neither the cited overlap experiment nor any cited capsule verifies automatic idle same-turn continuation after a separately scheduled operation finishes.
 
 ### Duration-aware implementation
 
 1. **Immediate:** one coarse guarded operation; consume the terminal response if returned. Remote Commander generally permits only about 3 seconds of synchronous wait.
-2. **Short asynchronous:** preserve the original PID/\`ExecutionAttempt\` and expected result. Choose one meaningful observation near the estimated terminal window. Where no durable provider result exists, one targeted local \`read_process_output\` after an actually elapsed interval is result retrieval; repeated short calls are polling.
-3. **Long/external:** dispatch once with owner, identity, immutable input, result target and receipt; advance only independent gates. At a dependency join observe GitHub Actions, Transport, or provider-native results. Do not hide multi-minute \`WaitForExit\`, polling loops, sleeps or kill-on-timeout in the launcher.
-4. **Still RUNNING:** revise the ETA from current provider/queue state and comparable durations; choose a new evidence-based observation. Never pretend that time elapsed or that a wakeup happened. If waiting is not executable in the current session, preserve refs as \`PENDING_EXTERNAL_RESULT\`. On subsequent continuation, **observe the exact original attempt first**.
-5. **\`UNKNOWN\`:** no blind relaunch, kill, cleanup, acceptance, merge or terminal effect without exact reconciliation. Missing local files do not prove no remote effect.
+2. **Short asynchronous:** preserve the original PID/`ExecutionAttempt` and expected result. Choose one meaningful observation near the estimated terminal window. Where no durable provider result exists, one targeted local `read_process_output` after an actually elapsed interval is result retrieval; repeated short calls are polling.
+3. **Long/external:** dispatch once with owner, identity, immutable input, result target and receipt; advance only independent gates. At a dependency join observe GitHub Actions, Transport, or provider-native results. Do not hide multi-minute `WaitForExit`, polling loops, sleeps or kill-on-timeout in the launcher.
+4. **Still RUNNING:** revise the ETA from current provider/queue state and comparable durations; choose a new evidence-based observation. Never pretend that time elapsed or that a wakeup happened. If waiting is not executable in the current session, preserve refs as `PENDING_EXTERNAL_RESULT`. On subsequent continuation, **observe the exact original attempt first**.
+5. **`UNKNOWN`:** no blind relaunch, kill, cleanup, acceptance, merge or terminal effect without exact reconciliation. Missing local files do not prove no remote effect.
 
 Use per-operation cohorts. Small-sample P50/P90 are descriptive, never calibrated ETA. The historical 40-second bounded local-observation allowance was specific to its run, not a general polling policy. Record actual top-level/nested tool calls when measurable, elapsed wall time, source of estimated duration, informative/empty observations, retries and gates unblocked; do not confuse subprocess count with tool count.
 
 ### States / exceptional local diagnosis
 
-\`\`\`text
+```text
 RUNNING_EXPECTED → RUNNING_OVERTIME → SUSPECTED_STALL → DIAGNOSIS
                                                        ↘ TERMINAL
-\`\`\`
+```
 
 No fixed repeated observations. One local Commander liveness diagnosis is permitted only if material overtime and missing durable state warrant it; substantive interpretation belongs to ChatGPT Web.
 
