@@ -1,0 +1,53 @@
+name: ts-ee-v2-reviewer-preflight-20261011-001
+on:
+  push:
+    branches:
+      - ee/ts-ee-v2-reviewer-preflight-20261011-001
+    paths:
+      - .github/workflows/ts-ee-v2-reviewer-preflight-20261011-001.yml
+permissions:
+  contents: read
+jobs:
+  native-six-case:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Stage pinned OpenCode v2 Windows binary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = 'C:\Tools\opencode-v2\2.0.26'
+          New-Item -ItemType Directory -Path $prefix -Force | Out-Null
+          & npm.cmd install --prefix $prefix --no-audit --no-fund '@opencode/cli@2.0.26'
+          if ($LASTEXITCODE -ne 0) { throw 'NPM_NATIVE_CLI_INSTALL_FAILED' }
+          $exe = Join-Path $prefix 'node_modules\@opencode\cli\bin\opencode.exe'
+          if (-not [IO.File]::Exists($exe)) { throw 'V2_EXE_NOT_INSTALLED_AT_EXPECTED_PATH' }
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          if ($hash -ne 'E13E57A7F6B7ABDDEC887E0B2D912D22484077C50DFF5BED4F3199BCF63B6088') {
+            throw ('BINARY_SHA256_DIFFERS_FROM_PINNED_HOST_NO_REQUALIFICATION:' + $hash)
+          }
+          $version = (& $exe --version | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '2\.0\.26') { throw ('NATIVE_V2_VERSION_MISMATCH:' + $version) }
+          Write-Output ('STAGED_NATIVE_V2_PINNED_MATCH:SHA256=' + $hash + ':VERSION=' + $version)
+      - name: Execute pinned six-case PowerShell preflight
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'test/qualified-v2-reviewer-preflight.qualification.ps1'
+          $exit = $LASTEXITCODE
+          if ($exit -ne 0) { throw ('SIX_CASE_NATIVE_PREFLIGHT_EXIT_' + $exit) }
+          Write-Output 'NATIVE_SIX_CASE_RUN_TERMINATED_EXIT_0'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ts-ee-v2-preflight-sixcase-20261011-001
+          if-no-files-found: warn
+          path: C:\Temp\TS-EE-V2-REVIEWER-PREFLIGHT-QUALIFICATION-20261011-001\QUALIFICATION_RESULT.json
