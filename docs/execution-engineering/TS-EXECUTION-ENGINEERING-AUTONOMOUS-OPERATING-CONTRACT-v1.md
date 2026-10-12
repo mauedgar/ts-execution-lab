@@ -187,89 +187,45 @@ Do not emit a signal for every tool call. The goal is observability and interrup
 
 ## 6. Wait / observation contract
 
-### Fundamental rule
+### Source-verified behavioral rule
 
-```text
-ChatGPT Web owns waiting.
-Commander does not own polling.
-```
+ChatGPT Web owns execution coordination, completion-time estimates, observation and reconciliation. Commander runs previously determined mechanical operations and returns results; it does not own background vigilance or polling.
 
-For asynchronous/long-running work:
+\`\`\`text
+one authorized dispatch, exact ExecutionAttempt/subject/result target
+→ continue authorized independent gates without conflicting writes
+→ at the dependency boundary, take one meaningful exact durable observation
+→ reconcile the original attempt and terminal receipt
+→ continue only gates enabled by competent Product authority
+\`\`\`
 
-```text
-estimate expected duration
-→ wait in ChatGPT Web (prefer the native ChatGPT Timer when available)
-→ query durable/provider-native state once
-→ classify information gain
-→ recalculate next wait
-```
+**No independent gates left:** prioritize continuing the same responsibility through a genuinely available and qualified wait/continuation mechanism until the next evidence-based observation, then join the result. The ETA determines **when an observation is meaningful**; a numeric elapsed-time estimate is **not** itself an executable clock, a sleep or automatic wakeup. Never invent an idle delay, a wake event or a resumed turn. If the current environment cannot genuinely maintain/resume the execution, return \`PENDING_EXTERNAL_RESULT\` and exact references rather than substituting Commander polling, a fabricated waiting operation or an unrelated scheduled reminder. A separately scheduled reviewer task does not automatically wake the original Control chat. \`PENDING_EXTERNAL_RESULT\` is an execution observation, never a new Product lifecycle status or successful completion.
 
-**Native ChatGPT Timer / adaptive wait.** When exposed in the active ChatGPT session, use the Timer for Web-owned waiting. Choose and revise its duration using expected execution time, available P50/P90, queue/provider state, and information gain from the previous observation. Durations can be seconds or minutes; there is no fixed polling cadence or arbitrary maximum count. After the wait, inspect one durable/provider-native state and decide whether another wait is justified.
+**Evidence classes:**
+- \`VERIFIED_DEFERRED_JOIN\`: \`TS-EE-MULTIGATE-OVERLAP-20261012-003\` launched A once, overlapped independent gates B/C and consumed one exact terminal result with zero polling.
+- \`VERIFIED_DURATION_AWARE_OBSERVATION\`: Runner v0.2 recorded actual 14 s and 19 s terminal jobs with meaningful observations, not a universal idle wake capability.
+- \`USER_OBSERVED_HISTORICAL_COUNTDOWN\`: Library \`libfile_d56855281ca881919a9085ee54fe7110\` records the original one-line countdown observation; exact chat, runtime implementation and automatic wakeup are \`UNKNOWN\`. Do not silently downgrade that user observation or upgrade it to an independently qualified host capability.
+- \`WAIT_POLICY_NOT_RUNTIME_MECHANISM\`: October 4 wait/ETA plan, Library \`libfile_0c624008fe5481919d400bc2e917fd85\`, records dispatch/estimate/\`first_check_at\`/no-polling/accounting, not a proven wake primitive.
+- \`NOT_VERIFIED_IDLE_AUTO_RESUME\`: neither the cited overlap experiment nor any cited capsule verifies automatic idle same-turn continuation after a separately scheduled operation finishes.
 
-If the Timer is not available in this session, **do not claim it ran** or substitute repeated Commander `read_process_output`, invented sleeps, or unrelated scheduled reminders. Continue independent work or return `PENDING` for later continuation. The Timer does not attest completion, provider-visible bytes, or autonomous wakeup after the turn ends.
+### Duration-aware implementation
 
-A long-running Commander-launched script's internal multi-minute `WaitForExit` or kill-on-timeout is not a substitute for Web-owned waiting. Any native execution deadline is separate from observation; preserve `UNKNOWN` and reconcile before kill/relaunch effects.
+1. **Immediate:** one coarse guarded operation; consume the terminal response if returned. Remote Commander generally permits only about 3 seconds of synchronous wait.
+2. **Short asynchronous:** preserve the original PID/\`ExecutionAttempt\` and expected result. Choose one meaningful observation near the estimated terminal window. Where no durable provider result exists, one targeted local \`read_process_output\` after an actually elapsed interval is result retrieval; repeated short calls are polling.
+3. **Long/external:** dispatch once with owner, identity, immutable input, result target and receipt; advance only independent gates. At a dependency join observe GitHub Actions, Transport, or provider-native results. Do not hide multi-minute \`WaitForExit\`, polling loops, sleeps or kill-on-timeout in the launcher.
+4. **Still RUNNING:** revise the ETA from current provider/queue state and comparable durations; choose a new evidence-based observation. Never pretend that time elapsed or that a wakeup happened. If waiting is not executable in the current session, preserve refs as \`PENDING_EXTERNAL_RESULT\`. On subsequent continuation, **observe the exact original attempt first**.
+5. **\`UNKNOWN\`:** no blind relaunch, kill, cleanup, acceptance, merge or terminal effect without exact reconciliation. Missing local files do not prove no remote effect.
 
-Preferred observation surfaces:
+Use per-operation cohorts. Small-sample P50/P90 are descriptive, never calibrated ETA. The historical 40-second bounded local-observation allowance was specific to its run, not a general polling policy. Record actual top-level/nested tool calls when measurable, elapsed wall time, source of estimated duration, informative/empty observations, retries and gates unblocked; do not confuse subprocess count with tool count.
 
-- GitHub branch/ref state for repository effects;
-- GitHub Actions run/job/artifact state for remote execution;
-- transport repository for durable returned evidence;
-- provider-native durable state for other providers.
+### States / exceptional local diagnosis
 
-Commander MUST NOT be used for repeated polling of remote work or short-interval observation of a locally launched asynchronous process. A bounded reviewer CLI launch is not Commander performing semantic Independent Review; the reviewer and post-run interpretation remain separate.
+\`\`\`text
+RUNNING_EXPECTED → RUNNING_OVERTIME → SUSPECTED_STALL → DIAGNOSIS
+                                                       ↘ TERMINAL
+\`\`\`
 
-### Duration-aware execution and observation profile
-
-This is the normative operating profile for **how** bounded processes are dispatched and observed. It reconciles the earlier short-run bounded-observation feedback with the later Web-owned adaptive-wait qualification; it does not create Product authority.
-
-1. **Already-determined near-immediate command:** prefer one coarse-grained guarded invocation. For Remote Desktop Commander, the remote connector's synchronous response window is at most ~3 seconds even when `timeout_ms` is larger. If it returns a complete terminal result, consume that same result without another status/read call.
-2. **Short process that outlives the launch response:** preserve its PID/ExecutionAttempt. First prefer its promised native/durable receipt. If completion is reasonably expected after a short interval, use the **native ChatGPT Timer** (when exposed in this session) for one evidence-based wait, then make **one** targeted native status/result observation. For a local process lacking a durable provider result, a single expected terminal `read_process_output` after the waiting window is allowed as *result retrieval*, not repeated polling. If still RUNNING, do not repeat immediate reads: schedule a new evidence-based Web wait or return PENDING.
-3. **Long-running worker / OpenCode / Orca / Actions:** dispatch once with exact identity and durable output/receipt plan; do not put a multi-minute `WaitForExit`, a timeout `taskkill`, or an internal polling loop inside the launcher. Use Timer-mediated Web waiting and observe GitHub/transport/provider-native state. Commander is reserved for an exceptional bounded local liveness diagnosis if materially overdue with insufficient durable evidence.
-4. **Ambiguous completion / UNKNOWN:** no new launch, cleanup, forced termination or retry without reconciliation. A connector timeout, missing local stdout, or silence is not proof of no effect.
-
-Timer means **ChatGPT's own native Timer**, never a Commander timer, a PowerShell sleep, a Commander read loop, or a scheduled reminder. Its prior reported successful use is an operational input; do not assert a Timer invocation was technically verified in a particular run without a native invocation receipt. If the current session does not expose a usable native Timer, continue independent work or return PENDING rather than fabricating waiting.
-
-For initial wait sizing, use operation-specific observations and queue/provider state (P50/P90 when sample size is sufficient), not a universal fixed delay. Runner v0.2 witnessed 14s and 19s terminal runs with zero no-information observations after adaptive durable checks; those figures are experimental examples **not** a new SLO. The historical Round-2 40-second bounded local polling allowance was run-scoped and does **not** authorize repetitive Commander polling here.
-
-Operational receipt/feedback should capture: execution and provider identity, predicted duration basis, native launch state, Timer availability/invocation evidence if present, observation source/time/state, no-information observations, exceptional local diagnoses, native terminal result and effect classification. Never infer tool-call count from `subprocess_count` or equate process count with actual MCP calls. Reuse existing evidence and transport schema before inventing another telemetry system.
-
-### Wait states
-
-```text
-RUNNING_EXPECTED
-RUNNING_OVERTIME
-SUSPECTED_STALL
-DIAGNOSIS
-TERMINAL
-```
-
-Inside a plausible duration:
-
-```text
-RUNNING_EXPECTED
-→ Web wait
-```
-
-Materially beyond expected duration:
-
-```text
-RUNNING_OVERTIME
-→ one bounded diagnosis
-```
-
-No short fixed polling loops.
-No arbitrary maximum poll count.
-
-### Commander diagnosis exception
-
-Commander may perform one bounded local liveness/launch diagnosis only when:
-
-- durable state is insufficient;
-- elapsed time materially exceeds expectation;
-- a local worker/process may have failed to launch or stalled.
-
-After diagnosis, return to durable observation or terminal handling.
+No fixed repeated observations. One local Commander liveness diagnosis is permitted only if material overtime and missing durable state warrant it; substantive interpretation belongs to ChatGPT Web.
 
 ## 7. Commander contract
 
@@ -336,7 +292,7 @@ For **new** TS Execution Engineering reviewer launches, select the **least costl
 
 **Pre-dispatch technical invariant — no new Product gate:** for an already-authorized reviewer attempt, require the existing `scripts/parse-check.ps1` in `-ReviewerDispatch` mode against the **exact pinned launcher Git blob**, a qualified GPT medium/high model binding, native v2 binary/version/hash, and source-declared `ExecutionAttempt` plus `START_RECEIPT.json`. A launcher containing `WaitForExit()`, bounded `WaitForExit(timeout)` as its external wait, synchronous output joins, `Wait-Process`, `Start-Process -Wait`, local sleep, kill-on-timeout or a legacy/low model hardcode is **not dispatchable**. The opt-in preflight's ordinary syntax-only mode remains backward compatible. A positive preflight is **not** sufficient for reviewer authorization: separately verify genuinely bounded immediate launcher return, durable native start/result receipts, complete-enough immutable input, fresh model credential qualification and Product's competent review gate before model invocation. The preflight is a narrow safeguard, not an AST-complete security policy, universal harness qualification or new scheduler/Recipe/Primitive.
 
-Keep ChatGPT Web as wait owner (§6). When the intended external reviewer is still executing, perform the exact durable/provider-native join after independently useful work or a real native ChatGPT Timer. If unavailable, use `PENDING_EXTERNAL_RESULT` as Execution Engineering observation, never compensate with Commander polling or a blocking launcher. Continue independent authorized Product work without interpreting REVIEW-PASS or the receipt as Developer acceptance.
+Keep ChatGPT Web as wait/observation owner (§6). Complete useful independent gates first; then join the exact original reviewer receipt at a meaningful evidence-based observation. ETA is not a waiting mechanism. If idle continuation is unavailable, preserve exact refs and return `PENDING_EXTERNAL_RESULT` rather than polling Commander or blocking a launcher. REVIEW PASS is not Developer acceptance.
 
 ## 9. Parallel execution
 
@@ -370,8 +326,8 @@ This is a **ChatGPT Web execution-order choice**, not a new scheduler, TaskCycle
 1. **Dispatch once.** For an already-authorized bounded action, retain its Product operation, exact request identity, ExecutionAttempt, Git subject and write owner, provider-native run/PID, expected result/receipt location, dependencies, and no-replay constraint. Multiple workers may overlap only within the existing frozen-interface, disjoint-write and provider/device qualification limits above; no assumed global concurrency capacity.
 2. **Use the overlap.** While that external result is pending, advance only other independently authorized gates whose prerequisites do not depend on it. Neither an open issue nor a published artifact grants readiness, acceptance or execution authority. Do not insert a per-wait checkpoint or re-dispatch a terminal or unknown effect.
 3. **Join at the dependency boundary.** When a dependent gate becomes relevant, or no independent work remains, query the exact GitHub Actions/Transport/provider-native result once. Bind request/attempt, Product, candidate commit/tree, provider run, result/receipt identity and terminal effect state; a changed branch ref or publication alone is insufficient. A verified terminal result unlocks only the transitions permitted by competent Product authority.
-4. **Adapt rather than poll.** For a still-running attempt, estimate remaining time from elapsed time, native state and comparable operation-specific durations; stratify runner/provider/version and label small-sample P50/P90 *descriptive, not predictive*. Prefer a **real** native ChatGPT Timer when exposed; otherwise continue independent work, or return a portable `PENDING_EXTERNAL_RESULT` observation with exact refs. That label is execution observation only, **not a new Product lifecycle status**. No Commander polling, fabricated timers or automatic restart.
-5. **Reconcile exceptional effects.** Missing, late, failed, blocked or `UNKNOWN` results are assessed through existing exact-effect reconciliation before any repeat, repair, acceptance or integration. Record actual tool calls, launch/read counts, elapsed times, informative versus empty durable observations, Timer invocation evidence and gates unblocked; never infer tool calls from `subprocess_count`.
+4. **Adapt rather than poll.** For a still-running attempt, estimate remaining time from elapsed time, native state and comparable operation-specific durations; stratify runner/provider/version and label small-sample P50/P90 *descriptive, not predictive*. A real wait interval may be used only if actually supported and observed; otherwise continue independent work or preserve a portable `PENDING_EXTERNAL_RESULT` with exact refs. That label is execution observation only, **not a new Product lifecycle status**. No Commander polling, fabricated wait or automatic restart.
+5. **Reconcile exceptional effects.** Missing, late, failed, blocked or `UNKNOWN` results are assessed through existing exact-effect reconciliation before any repeat, repair, acceptance or integration. Record actual tool calls, launch/read counts, elapsed times, informative versus empty durable observations, actual observed wait interval when supported and gates unblocked; never infer tool calls from `subprocess_count`.
 
 The delayed GitHub Transport receipt precedent and observability pilot qualify this as **bounded reuse**, not a throughput guarantee: benign overlapping attempts do not establish production concurrency limits, and mixed-version timing samples do not calibrate P50/P90.
 
@@ -392,11 +348,11 @@ Measured observations, **not** predictive service levels:
 | C overlapped with A | 29.320042 s | C continued after A was already terminal; only this portion overlapped |
 | Terminal join of A | 1 observation, 0 no-information reads | Original receipt and identity recovered without polling |
 
-This demonstrates **one ChatGPT Web control stream alternating independent work while one external operation remained active**, followed by a single exact join. It does not demonstrate parallel LLM inference, native timer wakeup, an independently qualified real Product TaskCycle, or measured causal speedup.
+This demonstrates **one ChatGPT Web control stream alternating independent work while one external operation remained active**, followed by a single exact join. It does not demonstrate parallel LLM inference, automatic idle wakeup, an independently qualified real Product TaskCycle, or measured causal speedup.
 
 For subsequent authorized consumers, retain per-operation `started_utc`, `completed_utc`, elapsed wall seconds, operation/binding/provider version, result and receipt identity, and when appropriate separate external process time from ChatGPT stage-wall time and individual tool duration. Record elapsed overlap from exact intervals, actual top-level and nested tool calls **when available**, no-information observations, retries, errors, manual interventions, and the point of dependency join. Never convert `subprocess_count` into tool-call counts or invent a total when it was not measured. The experiment's reported subset was one A dispatch, one A terminal join, B 3 top-level calls with 2 nested GitHub fetches, C 3 top-level calls, zero polling; the entire chat tool count was **NOT_ACCOUNTED**. One staging permission error occurred before A dispatch and was not a duplicate A execution.
 
-Duration samples are kept in **separate cohorts**. Synthetic external waits `[20, 75, 85.000339]` seconds give descriptive nearest-rank P50 `75` s and P90 `85.000339` s at `n=3`. B and C each provide `n=1` chat-stage samples. These figures must **not** calibrate ETA for independent reviews, GitHub Actions or other providers. Use measured, operation-specific comparable cohorts as future real receipts accumulate. A visual countdown or native Timer is never a prerequisite for §9 overlap; waiting remains Web-owned, and the existing `PENDING_EXTERNAL_RESULT` path applies when there is no qualified wait and no independent work.
+Duration samples are kept in **separate cohorts**. Synthetic external waits `[20, 75, 85.000339]` seconds give descriptive nearest-rank P50 `75` s and P90 `85.000339` s at `n=3`. B and C each provide `n=1` chat-stage samples. These figures must **not** calibrate ETA for independent reviews, GitHub Actions or other providers. Use measured, operation-specific comparable cohorts as future real receipts accumulate. A visual countdown or automatic wakeup is never a prerequisite for §9 overlap; waiting remains Web-owned, and the existing `PENDING_EXTERNAL_RESULT` path applies when there is no qualified wait and no independent work.
 
 **Next qualification only when a real consumer exists:** repeat the already-defined §9 method with two independently authorized, non-conflicting Product TaskCycles, preserving their exact authorities, dependency/ownership guards, frozen subjects and separate receipts. No Product work or rollout is selected by this evidence.
 
