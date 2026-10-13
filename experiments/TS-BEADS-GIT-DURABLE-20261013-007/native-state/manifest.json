@@ -1,0 +1,39 @@
+{
+  "contract": "ts-beads-crossrun-native-backup/v0-experimental",
+  "pilot": "TS-BEADS-CROSSRUN-CONTINUITY-20261013-006",
+  "authority": "NONE_PRODUCT",
+  "mode": "produce",
+  "producer_run_id": "38484553116",
+  "producer_commit": "02f30a7f98fcdf60e86859a8cb6b80146c2d8215",
+  "issued_utc": "2026-10-13T23:29:50.0121576Z",
+  "binary_release": "v1.3.1",
+  "binary_archive_sha256": "48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76",
+  "source_ref": "test://TS-BEADS-CROSSRUN-CONTINUITY-20261013-006/ORIGIN-A@CHECKPOINT-02",
+  "origin_id": "ts-execution-lab-6c0a11aa",
+  "dependency_id": "ts-execution-lab-6c0b22bb",
+  "resume_id": "ts-execution-lab-6c0c33cc",
+  "independent_id": "ts-execution-lab-6c0d44dd",
+  "backup_type": "native_bd_backup_sync_full_dolt",
+  "file_count": 3,
+  "file_entries": [
+    {
+      "sha256": "299fc19269403c742d743c136d9dc0df50d86cbb24a577d964e26575399387a4",
+      "size": 459330,
+      "path": "j4cgljst9b2v3tujhf86nb4jlgg7pg6f.darc"
+    },
+    {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "path": "LOCK"
+    },
+    {
+      "sha256": "5d9e5508913a2c50e744107f1ce3551ddc48de3801fd27bf785c7ac890439632",
+      "size": 146,
+      "path": "manifest"
+    }
+  ],
+  "initial_ready": [
+    "ts-execution-lab-6c0b22bb",
+    "ts-execution-lab-6c0d44dd"
+  ]
+}
