@@ -133,7 +133,8 @@ jobs:
             $externalSuccess=@($externalResults|Where-Object {$_.exit -eq 0}).Count
             Write-Output ('TS_EXTERNAL_REF_NATIVE_RESULTS='+$externalSuccess+'_SUCCESSES_'+$externalRows.Count+'_ROWS')
             if($externalSuccess -gt 0 -and $externalRows.Count -ge 1 -and $externalRows.Count -le 2){
-              Write-Output ('TS_EXTERNAL_REF_NATIVE_CLASS='+(if($externalRows.Count -eq 1){'SINGLE_ROW_OBSERVED'}else{'DUPLICATES_OBSERVED'}))
+              $nativeClass=if($externalRows.Count -eq 1){'SINGLE_ROW_OBSERVED'}else{'DUPLICATES_OBSERVED'}
+              Write-Output ('TS_EXTERNAL_REF_NATIVE_CLASS='+$nativeClass)
             }else{
               Write-Output 'TS_EXTERNAL_REF_NATIVE_CLASS=UNQUALIFIED_OR_REJECTED'
             }
