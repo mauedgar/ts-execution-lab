@@ -1,0 +1,145 @@
+name: TS Beads native DAG molecules formula gates
+on:
+  push:
+    branches:
+      - experiment/beads-claim-flow-20261013-005
+    paths:
+      - .github/workflows/ts-beads-native-graph-formula.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-flow:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [graph, formula]
+    steps:
+      - name: Qualify Beads native graph and formula independently
+        env:
+          SCENARIO: ${'${{ matrix.scenario }}'}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-flow-005-'+$env:SCENARIO'
+          if(Test-Path -LiteralPath $root){throw 'EXPERIMENT_DIR_ALREADY_EXISTS'}
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $server=$null
+          function VerifiedArchive([string]$Url,[string]$Hex,[string]$Name){
+            $archive=Join-Path $root ($Name+'.zip')
+            Invoke-WebRequest -Uri $Url -OutFile $archive
+            $got=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if($got -cne $Hex){throw ('ASSET_SHA256_MISMATCH_'+$Name)}
+            $dest=Join-Path $root $Name
+            Expand-Archive -LiteralPath $archive -DestinationPath $dest -Force
+            Write-Host ('PINNED_ARCHIVE_OK_'+$Name+'='+$got)
+            return $dest
+          }
+          try {
+            $doltDir=VerifiedArchive 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6' 'dolt-2.2.0'
+            $beadsDir=VerifiedArchive 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76' 'beads-1.3.1'
+            $doltExe=Get-ChildItem -LiteralPath $doltDir -Recurse -File -Filter dolt.exe | Select-Object -First 1 -ExpandProperty FullName
+            $bdExe=Get-ChildItem -LiteralPath $beadsDir -Recurse -File -Filter bd.exe | Select-Object -First 1 -ExpandProperty FullName
+            if(-not $doltExe -or -not $bdExe){throw 'BINARIES_NOT_FOUND_IN_PINNED_ARCHIVES'}
+            & $doltExe version
+            if($LASTEXITCODE -ne 0){throw 'DOLT_VERSION_EXIT_NONZERO'}
+            & $bdExe version
+            if($LASTEXITCODE -ne 0){throw 'BEADS_VERSION_EXIT_NONZERO'}
+            $serverRoot=Join-Path $root 'sql-server'
+            New-Item -ItemType Directory $serverRoot | Out-Null
+            $port='33473'
+            $server=Start-Process -FilePath $doltExe -ArgumentList @('sql-server','--port',$port) -WorkingDirectory $serverRoot -PassThru -RedirectStandardOutput (Join-Path $root 'server-stdout.log') -RedirectStandardError (Join-Path $root 'server-stderr.log') -WindowStyle Hidden
+            Start-Sleep -Seconds 3
+            if($server.HasExited){throw ('DOLT_SERVER_TERMINATED_'+$server.ExitCode)}
+            $env:BEADS_DOLT_SERVER_MODE='1'
+            $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+            $env:BEADS_DOLT_SERVER_PORT=$port
+            New-Item -ItemType Directory -Path (Join-Path $root 'client') | Out-Null
+            $env:BEADS_DIR=Join-Path $root 'client\.beads'
+            & $bdExe init --server --quiet --stealth
+            if($LASTEXITCODE -ne 0){throw 'BEADS_SERVER_INIT_FAILED'}
+            function JsonBd([string[]]$Items) {
+              $raw=(& $bdExe @Items 2>&1|Out-String).Trim()
+              if($LASTEXITCODE -ne 0){throw ('BD_FAIL_'+($Items -join '_')+':'+$raw)}
+              $match=[regex]::Match($raw,'(?m)^[ \t]*(?:\[|\{)')
+              if(-not $match.Success){throw ('BD_JSON_MISSING_'+$raw)}
+              return ($raw.Substring($match.Index)|ConvertFrom-Json)
+            }
+            function Check([bool]$Condition,[string]$Label){
+              if(-not $Condition){throw ('FAILED_ASSERT_'+$Label)}
+            }
+            if($env:SCENARIO -eq 'graph'){
+              $rootIssue=@(JsonBd @('create','Synthetic molecule root','--type','epic','--json'))[0]
+              $epic=[string]$rootIssue.id
+              Check ([bool]$epic) 'EPIC_ID'
+              $left=@(JsonBd @('create','Synthetic independent left','--parent',$epic,'--json'))[0]
+              $right=@(JsonBd @('create','Synthetic independent right','--parent',$epic,'--json'))[0]
+              $join=@(JsonBd @('create','Synthetic join dependency','--parent',$epic,'--json'))[0]
+              foreach($parent in @($left.id,$right.id)){
+                & $bdExe dep add ([string]$join.id) ([string]$parent)
+                if($LASTEXITCODE -ne 0){throw 'DEPENDENCY_LINK_FAILED'}
+              }
+              $readyBefore=@(JsonBd @('ready','--mol',$epic,'--json'))
+              $beforeIds=@($readyBefore|ForEach-Object {[string]$_.id})
+              Check ($beforeIds -contains [string]$left.id -and $beforeIds -contains [string]$right.id -and $beforeIds -notcontains [string]$join.id) 'PARALLEL_FRONTIER'
+              Write-Output ('TS_NATIVE_MOL_FRONTIER='+($beforeIds -join ','))
+              & $bdExe gate create --type=human --blocks ([string]$join.id) --reason 'Synthetic manual checkpoint; no Product decision'
+              if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_GATE_CREATE_FAILED'}
+              $all=@(JsonBd @('list','--all','--include-gates','--json','--limit','100'))
+              $gates=@($all|Where-Object {$_.issue_type -eq 'gate'})
+              Check ($gates.Count -eq 1) 'SINGLE_SYNTHETIC_GATE'
+              $gateId=[string]$gates[0].id
+              foreach($part in @($left.id,$right.id)){
+                & $bdExe close ([string]$part) --reason 'Synthetic independent part completed'
+                if($LASTEXITCODE -ne 0){throw 'PART_CLOSE_FAILED'}
+              }
+              $readyMid=@(JsonBd @('ready','--mol',$epic,'--json'))
+              Check (@($readyMid|Where-Object {$_.id -eq [string]$join.id}).Count -eq 0) 'GATE_HOLDS_JOIN'
+              & $bdExe gate resolve $gateId --reason 'Synthetic local gate resolution; no Product approval'
+              if($LASTEXITCODE -ne 0){throw 'GATE_RESOLVE_FAILED'}
+              $readyAfter=@(JsonBd @('ready','--mol',$epic,'--json'))
+              Check (@($readyAfter|Where-Object {$_.id -eq [string]$join.id}).Count -eq 1) 'GATE_RELEASES_JOIN'
+              $molShow=& $bdExe mol show $epic
+              if($LASTEXITCODE -ne 0){throw 'MOL_SHOW_FAILED'}
+              Write-Output ('TS_MOL_GRAPH_IDENTITIES='+($epic+','+$left.id+','+$right.id+','+$join.id+','+$gateId))
+              Write-Output 'TS_NATIVE_GRAPH_GATE=PASS_FANOUT_FANIN_AND_SYNTHETIC_HUMAN_GATE'
+            }elseif($env:SCENARIO -eq 'formula'){
+              $formdir=Join-Path $env:BEADS_DIR 'formulas'
+              New-Item -ItemType Directory -Path $formdir -Force | Out-Null
+              $formula=@{
+                formula='ts-native-parallel-template'
+                description='Experiment only: reusable parallel then join'
+                version=1
+                type='workflow'
+                steps=@(
+                  @{id='left';title='Prototype left';type='task'},
+                  @{id='right';title='Prototype right';type='task'},
+                  @{id='join';title='Prototype join';type='task';needs=@('left','right')}
+                )
+              }
+              $file=Join-Path $formdir 'ts-native-parallel-template.formula.json'
+              $formula|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $file -Encoding utf8
+              $compiled=& $bdExe cook $file --mode=compile 2>&1|Out-String
+              if($LASTEXITCODE -ne 0){throw ('FORMULA_COOK_FAILED:'+ $compiled)}
+              Write-Output 'TS_NATIVE_FORMULA_COMPILE=PASS'
+              $dry=& $bdExe mol pour ts-native-parallel-template --dry-run 2>&1|Out-String
+              if($LASTEXITCODE -ne 0){throw ('FORMULA_POUR_DRY_RUN_FAILED:'+ $dry)}
+              Write-Output 'TS_NATIVE_FORMULA_POUR_DRYRUN=PASS'
+              $poured=& $bdExe mol pour ts-native-parallel-template 2>&1|Out-String
+              if($LASTEXITCODE -ne 0){throw ('FORMULA_POUR_FAILED:'+ $poured)}
+              Write-Output ('TS_NATIVE_FORMULA_POUR_RESPONSE='+$poured.Trim().Replace("`r",'').Replace("`n",'|').Substring(0,[Math]::Min($poured.Trim().Length,350)))
+              $all=@(JsonBd @('list','--all','--json','--limit','100'))
+              Write-Output ('TS_NATIVE_FORMULA_RECORDS='+$all.Count)
+              Check ($all.Count -ge 4) 'MOL_POUR_CREATED_CHILDREN'
+              Write-Output 'TS_NATIVE_FORMULA=PASS_COMPILE_DRYRUN_POUR'
+            }else{throw 'UNKNOWN_SCENARIO'}
+          } finally {
+            if($null -ne $server -and -not $server.HasExited){
+              Stop-Process -Id $server.Id -ErrorAction Stop
+            }
+          }
