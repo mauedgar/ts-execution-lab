@@ -1,0 +1,56 @@
+name: TS Beads 007 independent reconciled state audit
+on:
+  push:
+    branches: [experiment/beads-git-durable-20261013-007]
+    paths: [.github/workflows/ts-beads-007-independent-audit.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: f9c6111f749af3ca9afed158cd32d9d7031e4108
+          path: snapshot
+      - name: Verify complete restored Dolt state, original and reconciled obligations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $snapshot=(Resolve-Path ./snapshot).Path
+          $commit=(& git -C $snapshot rev-parse HEAD|Out-String).Trim()
+          if($commit -cne 'f9c6111f749af3ca9afed158cd32d9d7031e4108'){throw 'SNAPSHOT_SHA_MISMATCH'}
+          $native=Join-Path $snapshot 'experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state'
+          $m=Get-Content -LiteralPath (Join-Path $native 'manifest.json') -Raw|ConvertFrom-Json
+          if($m.contract -cne 'ts-beads-git-reconciled-snapshot/v0-experimental' -or $m.authority -cne 'NONE_PRODUCT' -or $m.parent_git_sha -cne 'bca6155824edc0c44f207d218337ef3c8e23f43d' -or $m.winner_issue -cne 'ts-execution-lab-6d0a55aa' -or $m.reconciled_issue -cne 'ts-execution-lab-6d0b66bb'){throw 'MANIFEST_ORIGINS_MISMATCH'}
+          $backup=Join-Path $native 'backup'
+          foreach($e in $m.file_entries) {
+            $f=Join-Path $backup ($e.path.Replace('/','\'))
+            if(-not(Test-Path $f) -or ((Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()) -cne $e.sha256){throw ('SHA_MISMATCH_'+$e.path)}
+          }
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-independent-audit007'
+          New-Item -ItemType Directory $root|Out-Null
+          $archive=Join-Path $root 'bd.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BIN_PIN_FAILED'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $db=Join-Path $root 'db'
+          New-Item -ItemType Directory $db|Out-Null
+          $env:BEADS_DIR=Join-Path $db '.beads'
+          & $bd init --quiet --stealth
+          if($LASTEXITCODE -ne 0){throw 'FRESH_DB_INIT_FAILED'}
+          & $bd backup restore --force $backup
+          if($LASTEXITCODE -ne 0){throw 'FRESH_DB_RESTORE_FAILED'}
+          $all=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or @($all).Count -ne 6){throw 'RESTORED_CARDINALITY_NOT_SIX'}
+          $ids=@($all|ForEach-Object {[string]$_.id})
+          $need=@('ts-execution-lab-6c0a11aa','ts-execution-lab-6c0b22bb','ts-execution-lab-6c0c33cc','ts-execution-lab-6c0d44dd','ts-execution-lab-6d0a55aa','ts-execution-lab-6d0b66bb')
+          foreach($id in $need){if(@($ids|Where-Object {$_ -ceq $id}).Count -ne 1){throw ('ID_MISSING_OR_DUPLICATE_'+$id)}}
+          $a=(& $bd show ts-execution-lab-6d0a55aa --json|Out-String).Trim()|ConvertFrom-Json
+          $b=(& $bd show ts-execution-lab-6d0b66bb --json|Out-String).Trim()|ConvertFrom-Json
+          if(-not ([string]$a[0].description).Contains('SOURCE_REF=test://TS-BEADS-GIT-007/WRITER-A') -or -not ([string]$b[0].description).Contains('SOURCE_REF=test://TS-BEADS-GIT-007/WRITER-B')){throw 'SOURCE_REF_MISMATCH'}
+          Write-Output ('TS_GIT_RECONCILED_INDEPENDENT_AUDIT=PASS;state_commit='+$commit+';total=6;writer_a=1;writer_b=1;native_backup_sha_verified=YES')
