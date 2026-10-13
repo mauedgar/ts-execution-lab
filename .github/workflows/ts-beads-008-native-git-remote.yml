@@ -68,6 +68,8 @@ jobs:
           $fresh=Join-Path $root 'fresh-checkout'
           & git clone $bare $fresh
           if($LASTEXITCODE -ne 0){throw 'SECOND_CLONE_FAILED'}
+          & git -C $fresh remote set-url origin ('file:///'+($bare.Replace('\','/')))
+          if($LASTEXITCODE -ne 0){throw 'EXPLICIT_GIT_FILE_URL_BINDING_FAILED'}
           Push-Location $fresh
           try{
             $env:BEADS_DIR=Join-Path $fresh '.beads'
