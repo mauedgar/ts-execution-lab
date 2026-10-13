@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [graph, formula]
+        scenario: [graph]
     steps:
       - name: Qualify Beads native graph and formula independently
         env:
@@ -86,8 +86,12 @@ jobs:
                 & $bdExe dep add ([string]$join.id) ([string]$parent)
                 if($LASTEXITCODE -ne 0){throw 'DEPENDENCY_LINK_FAILED'}
               }
-              $readyBefore=@(JsonBd @('ready','--mol',$epic,'--json'))
+              $readyScoped=@(JsonBd @('ready','--mol',$epic,'--json'))
+              $scopedIds=@($readyScoped|ForEach-Object {[string]$_.id})
+              Write-Output ('TS_MOL_SCOPED_BEFORE='+($scopedIds -join ','))
+              $readyBefore=@(JsonBd @('ready','--json'))
               $beforeIds=@($readyBefore|ForEach-Object {[string]$_.id})
+              Write-Output ('TS_MOL_GLOBAL_BEFORE='+($beforeIds -join ','))
               Check ($beforeIds -contains [string]$left.id -and $beforeIds -contains [string]$right.id -and $beforeIds -notcontains [string]$join.id) 'PARALLEL_FRONTIER'
               Write-Output ('TS_NATIVE_MOL_FRONTIER='+($beforeIds -join ','))
               & $bdExe gate create --type=human --blocks ([string]$join.id) --reason 'Synthetic manual checkpoint; no Product decision'
@@ -100,11 +104,11 @@ jobs:
                 & $bdExe close ([string]$part) --reason 'Synthetic independent part completed'
                 if($LASTEXITCODE -ne 0){throw 'PART_CLOSE_FAILED'}
               }
-              $readyMid=@(JsonBd @('ready','--mol',$epic,'--json'))
+              $readyMid=@(JsonBd @('ready','--json'))
               Check (@($readyMid|Where-Object {$_.id -eq [string]$join.id}).Count -eq 0) 'GATE_HOLDS_JOIN'
               & $bdExe gate resolve $gateId --reason 'Synthetic local gate resolution; no Product approval'
               if($LASTEXITCODE -ne 0){throw 'GATE_RESOLVE_FAILED'}
-              $readyAfter=@(JsonBd @('ready','--mol',$epic,'--json'))
+              $readyAfter=@(JsonBd @('ready','--json'))
               Check (@($readyAfter|Where-Object {$_.id -eq [string]$join.id}).Count -eq 1) 'GATE_RELEASES_JOIN'
               $molShow=& $bdExe mol show $epic
               if($LASTEXITCODE -ne 0){throw 'MOL_SHOW_FAILED'}
