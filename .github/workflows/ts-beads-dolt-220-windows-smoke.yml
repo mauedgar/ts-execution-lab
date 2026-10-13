@@ -53,6 +53,7 @@ jobs:
             $env:BEADS_DOLT_SERVER_MODE='1'
             $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
             $env:BEADS_DOLT_SERVER_PORT=$port
+            New-Item -ItemType Directory -Path (Join-Path $root 'client') | Out-Null
             $env:BEADS_DIR=Join-Path $root 'client\.beads'
             & $bdExe init --server --quiet --stealth
             if($LASTEXITCODE -ne 0){throw 'BEADS_SERVER_INIT_FAILED'}
