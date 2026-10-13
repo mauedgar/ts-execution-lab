@@ -9,16 +9,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $env:BEADS_DIR = $BeadsDir
-function GetBdJson([string[]]$Args) {
- $v = & $BdPath @Args 2>&1
+function GetBdJson([string[]]$BdArgs) {
+ $v = & $BdPath @BdArgs 2>&1
  if ($LASTEXITCODE -ne 0) { throw ("bd failed: " + ($v -join ' ')) }
  return (($v | Out-String).Trim() | ConvertFrom-Json)
 }
 try {
- $active = @(GetBdJson -Args @('show',$ActiveId,'--json'))[0]
- $handoff = @(GetBdJson -Args @('show',$HandoffId,'--json'))[0]
- $listing = @(GetBdJson -Args @('list','--json','--limit','100'))
- $ready = @(GetBdJson -Args @('ready','--json'))
+ $active = @(GetBdJson -BdArgs @('show',$ActiveId,'--json'))[0]
+ $handoff = @(GetBdJson -BdArgs @('show',$HandoffId,'--json'))[0]
+ $listing = @(GetBdJson -BdArgs @('list','--json','--limit','100'))
+ $ready = @(GetBdJson -BdArgs @('ready','--json'))
  $count = @($listing | Where-Object { $_.id -eq $HandoffId }).Count
  $valid = ($active.status -eq 'closed' -and $handoff.status -eq 'open' -and ($ready | Where-Object { $_.id -eq $HandoffId }).Count -ge 1)
  [ordered]@{recovered=[bool]$valid;active_status=$active.status;handoff_status=$handoff.status;handoff_count=$count;handoff_ready=[bool](($ready | Where-Object {$_.id -eq $HandoffId}).Count -ge 1);second_process_pid=$PID} | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $OutputPath -Encoding utf8
