@@ -134,7 +134,7 @@ jobs:
               Write-Output 'TS_NATIVE_FORMULA_POUR_DRYRUN=PASS'
               $poured=& $bdExe mol pour ts-native-parallel-template 2>&1|Out-String
               if($LASTEXITCODE -ne 0){throw ('FORMULA_POUR_FAILED:'+ $poured)}
-              Write-Output ('TS_NATIVE_FORMULA_POUR_RESPONSE='+$poured.Trim().Replace("`r",'').Replace("`n",'|').Substring(0,[Math]::Min($poured.Trim().Length,350)))
+              Write-Output 'TS_NATIVE_FORMULA_POUR=SUCCEEDED'
               $all=@(JsonBd @('list','--all','--json','--limit','100'))
               Write-Output ('TS_NATIVE_FORMULA_RECORDS='+$all.Count)
               Check ($all.Count -ge 4) 'MOL_POUR_CREATED_CHILDREN'
