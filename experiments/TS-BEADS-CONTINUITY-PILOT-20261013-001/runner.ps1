@@ -8,7 +8,7 @@ $Dir = Join-Path $env:LOCALAPPDATA "TS-Experiments\$PilotId"
 $Out = Join-Path $Dir 'result.json'
 $StartedUtc = (Get-Date).ToUniversalTime().ToString('o')
 $Stage = 'PREFLIGHT'
-$Receipt = [ordered]@{contract='ts-beads-pilot-result/v0-experimental'; pilot=$PilotId; status='UNKNOWN'; phase=$Stage; started_utc=$StartedUtc; host=$env:COMPUTERNAME; product_authority='NONE'; local_dir=$Dir; release='v1.3.1'; checks=@(); issue_ids=@{}; error=$null; limitations=@('No automatic ChatGPT task-completion signal','No web MCP connector qualified','Git Transport host publication not established')}
+$Receipt = [ordered]@{execution_attempt='BEADS-LOCAL-TRIAL-20261013-002';contract='ts-beads-pilot-result/v0-experimental'; pilot=$PilotId; status='UNKNOWN'; phase=$Stage; started_utc=$StartedUtc; host=$env:COMPUTERNAME; product_authority='NONE'; local_dir=$Dir; release='v1.3.1'; checks=@(); issue_ids=@{}; error=$null; limitations=@('No automatic ChatGPT task-completion signal','No web MCP connector qualified','Git Transport host publication not established')}
 function Check([string]$Key,[bool]$Valid,[string]$Detail) {
   $Receipt.checks += [ordered]@{key=$Key;pass=$Valid;detail=$Detail}
   if (-not $Valid) { throw "PRECONDITION_OR_ASSERTION:${Key}:${Detail}" }
@@ -33,6 +33,7 @@ try {
   $m = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
   $thisSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
   Check 'RUNNER_INTEGRITY' ($thisSha -eq $m.runner_sha256) 'Manifest-pinned runner bytes'
+  Check 'ATTEMPT_ID' ($m.attempt -eq $Receipt.execution_attempt) 'Original blocked attempt 001 is not reused'
   $readbackHash = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'verify-readback.ps1') -Algorithm SHA256).Hash.ToLowerInvariant()
   Check 'READBACK_INTEGRITY' ($readbackHash -eq $m.readback_sha256) 'Manifest-pinned readback script'
   Check 'RELEASE_PIN' ($m.release_version -eq 'v1.3.1' -and $m.archive_sha256 -eq '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76') 'Pinned verified upstream archive'
