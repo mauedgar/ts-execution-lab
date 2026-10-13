@@ -1,0 +1,46 @@
+name: TS Beads crossrun native restore consumer
+on:
+  push:
+    branches: [experiment/beads-crossrun-backup-20261013-006]
+    paths:
+      - .github/workflows/ts-beads-crossrun-consumer.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  restore:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact prior-run backup artifact and verify GitHub digest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $producerRun='38456981903'
+          $producerCommit='ff33b2a2dd9a7619721143b20eb520108ad6e554'
+          $artifactID='11842247379'
+          $expectedDigest='sha256:e50ff240d65b6e58cad955524855ff79f4dec4218cb125f2e84fed76549c8493'
+          $a=& gh api ('repos/'+$env:GITHUB_REPOSITORY+'/actions/artifacts/'+$artifactID) 2>&1
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_ARTIFACT_LOOKUP_FAILED'}
+          $metadata=($a|Out-String)|ConvertFrom-Json
+          if($metadata.name -cne 'ts-beads-crossrun006-native-fullbackup' -or $metadata.digest -cne $expectedDigest -or $metadata.workflow_run.id -ne [int64]$producerRun -or $metadata.workflow_run.head_sha -cne $producerCommit -or $metadata.expired){throw 'ORIGINAL_ARTIFACT_IDENTITY_MISMATCH'}
+          $out=Join-Path $env:RUNNER_TEMP 'incoming'
+          New-Item -ItemType Directory -Path $out|Out-Null
+          & gh run download $producerRun --name 'ts-beads-crossrun006-native-fullbackup' --dir $out --repo $env:GITHUB_REPOSITORY
+          if($LASTEXITCODE -ne 0){throw 'ARTIFACT_DOWNLOAD_FAILED'}
+          Write-Output ('TS_CROSSRUN_ORIGINAL_ARTIFACT_VERIFIED='+$artifactID+';digest='+$metadata.digest+';source_run='+$producerRun)
+      - name: Restore native full Dolt backup and reconcile independent continuation
+        shell: pwsh
+        run: |
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./experiments/TS-BEADS-CROSSRUN-CONTINUITY-20261013-006/run.ps1 -Mode consume -SourceRun 38456981903 -SourceCommit ff33b2a2dd9a7619721143b20eb520108ad6e554
+          if($LASTEXITCODE -ne 0){throw 'CROSSRUN_CONSUMER_FAILED'}
+      - name: Persist terminal independent result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-crossrun006-consumer-result
+          path: ${{ runner.temp }}/ts-beads-crossrun006-consume/transport/result.json
+          if-no-files-found: error
+          retention-days: 7
