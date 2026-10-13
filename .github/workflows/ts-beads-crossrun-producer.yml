@@ -1,0 +1,27 @@
+name: TS Beads crossrun native backup producer
+on:
+  push:
+    branches: [experiment/beads-crossrun-backup-20261013-006]
+    paths:
+      - .github/workflows/ts-beads-crossrun-producer.yml
+permissions:
+  contents: read
+jobs:
+  produce:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Produce isolated source and native full Dolt backup
+        shell: pwsh
+        run: |
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./experiments/TS-BEADS-CROSSRUN-CONTINUITY-20261013-006/run.ps1 -Mode produce
+          if($LASTEXITCODE -ne 0){throw 'CROSSRUN_PRODUCER_FAILED'}
+      - name: Export full native backup and exact identity manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-crossrun006-native-fullbackup
+          path: ${{ runner.temp }}/ts-beads-crossrun006-produce/transport/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
