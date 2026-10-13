@@ -1,0 +1,116 @@
+name: TS Beads native claim race (isolated)
+on:
+  push:
+    branches:
+      - experiment/beads-claim-flow-20261013-005
+    paths:
+      - .github/workflows/ts-beads-native-claim-race.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  claim-race:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Test native claim atomicity in Dolt isolated server
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-claim-native-005'
+          if(Test-Path -LiteralPath $root){throw 'EXPERIMENT_DIR_ALREADY_EXISTS'}
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $server=$null
+          function VerifiedArchive([string]$Url,[string]$Hex,[string]$Name){
+            $archive=Join-Path $root ($Name+'.zip')
+            Invoke-WebRequest -Uri $Url -OutFile $archive
+            $got=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+            if($got -cne $Hex){throw ('ASSET_SHA256_MISMATCH_'+$Name)}
+            $dest=Join-Path $root $Name
+            Expand-Archive -LiteralPath $archive -DestinationPath $dest -Force
+            Write-Host ('PINNED_ARCHIVE_OK_'+$Name+'='+$got)
+            return $dest
+          }
+          try {
+            $doltDir=VerifiedArchive 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6' 'dolt-2.2.0'
+            $beadsDir=VerifiedArchive 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76' 'beads-1.3.1'
+            $doltExe=Get-ChildItem -LiteralPath $doltDir -Recurse -File -Filter dolt.exe | Select-Object -First 1 -ExpandProperty FullName
+            $bdExe=Get-ChildItem -LiteralPath $beadsDir -Recurse -File -Filter bd.exe | Select-Object -First 1 -ExpandProperty FullName
+            if(-not $doltExe -or -not $bdExe){throw 'BINARIES_NOT_FOUND_IN_PINNED_ARCHIVES'}
+            & $doltExe version
+            if($LASTEXITCODE -ne 0){throw 'DOLT_VERSION_EXIT_NONZERO'}
+            & $bdExe version
+            if($LASTEXITCODE -ne 0){throw 'BEADS_VERSION_EXIT_NONZERO'}
+            $serverRoot=Join-Path $root 'sql-server'
+            New-Item -ItemType Directory $serverRoot | Out-Null
+            $port='33473'
+            $server=Start-Process -FilePath $doltExe -ArgumentList @('sql-server','--port',$port) -WorkingDirectory $serverRoot -PassThru -RedirectStandardOutput (Join-Path $root 'server-stdout.log') -RedirectStandardError (Join-Path $root 'server-stderr.log') -WindowStyle Hidden
+            Start-Sleep -Seconds 3
+            if($server.HasExited){throw ('DOLT_SERVER_TERMINATED_'+$server.ExitCode)}
+            $env:BEADS_DOLT_SERVER_MODE='1'
+            $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+            $env:BEADS_DOLT_SERVER_PORT=$port
+            New-Item -ItemType Directory -Path (Join-Path $root 'client') | Out-Null
+            $env:BEADS_DIR=Join-Path $root 'client\.beads'
+            & $bdExe init --server --quiet --stealth
+            if($LASTEXITCODE -ne 0){throw 'BEADS_SERVER_INIT_FAILED'}
+            $id='ts-execution-lab-a9c31ab5'
+            $record=(& $bdExe create 'Single ready obligation claim test' --id $id --description 'Synthetic claim race; NONE_PRODUCT' --type task --json | Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'TARGET_CREATE_FAILED'}
+            $dir=Join-Path $root 'barrier'
+            New-Item -ItemType Directory $dir | Out-Null
+            $jobs=@()
+            foreach($slot in @('A','B')){
+              $jobs+=Start-Job -ArgumentList @($bdExe,$env:BEADS_DIR,$port,$dir,$slot,$id) -ScriptBlock {
+                param($Bin,$Store,$Port,$Gate,$Who,$Id)
+                $env:BEADS_DIR=$Store
+                $env:BEADS_DOLT_SERVER_MODE='1'
+                $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+                $env:BEADS_DOLT_SERVER_PORT=$Port
+                $env:BEADS_ACTOR=('claim-worker-'+$Who)
+                [IO.File]::WriteAllText((Join-Path $Gate ('ready-'+$Who)),$PID.ToString())
+                $timer=[Diagnostics.Stopwatch]::StartNew()
+                while(-not(Test-Path (Join-Path $Gate 'go'))){
+                  if($timer.Elapsed.TotalSeconds -gt 15){throw 'CLAIM_START_TIMEOUT'}
+                  Start-Sleep -Milliseconds 80
+                }
+                $start=[DateTime]::UtcNow.ToString('o')
+                $out=(& $Bin update $Id --claim --json 2>&1|Out-String).Trim()
+                $code=$LASTEXITCODE
+                $end=[DateTime]::UtcNow.ToString('o')
+                [pscustomobject]@{who=$Who;pid=$PID;actor=$env:BEADS_ACTOR;start=$start;end=$end;exit=$code;output=$out}
+              }
+            }
+            $timer=[Diagnostics.Stopwatch]::StartNew()
+            while(-not ((Test-Path (Join-Path $dir 'ready-A')) -and (Test-Path (Join-Path $dir 'ready-B')))){
+              if($timer.Elapsed.TotalSeconds -gt 16){throw 'CLAIM_RENDEZVOUS_TIMEOUT'}
+              Start-Sleep -Milliseconds 80
+            }
+            [IO.File]::WriteAllText((Join-Path $dir 'go'),'GO')
+            $complete=@($jobs|Wait-Job -Timeout 35)
+            if($complete.Count -ne 2 -or @($jobs|Where-Object {$_.State -ne 'Completed'}).Count -ne 0){throw 'WORKER_STATUS_INCOMPLETE'}
+            $r=@($jobs|Receive-Job)
+            foreach($x in $r){Write-Host ('TS_CLAIM_WORKER='+($x|ConvertTo-Json -Compress -Depth 4))}
+            if($r.Count -ne 2){throw 'CLAIM_RECEIPT_MISSING'}
+            $overlap=([datetime]$r[0].start -le [datetime]$r[1].end -and [datetime]$r[1].start -le [datetime]$r[0].end)
+            if(-not $overlap){throw 'CLAIM_NOT_OVERLAPPED'}
+            $done=@($r|Where-Object {$_.exit -eq 0})
+            $lost=@($r|Where-Object {$_.exit -ne 0})
+            Write-Output ('TS_CLAIM_COUNTS=SUCCESS_'+$done.Count+'_REJECTED_'+$lost.Count)
+            $env:BEADS_ACTOR='independent-verifier'
+            $shown=& $bdExe show $id --json
+            if($LASTEXITCODE -ne 0){throw 'CLAIM_FINAL_READ_FAILURE'}
+            $obj=@($shown|ConvertFrom-Json)[0]
+            Write-Output ('TS_CLAIM_FINAL='+($obj|ConvertTo-Json -Compress -Depth 5))
+            if($done.Count -ne 1 -or $lost.Count -ne 1){throw 'NOT_ATOMIC_CLAIM_ONE_WINNER'}
+            if([string]$obj.status -ne 'in_progress'){throw 'CLAIM_STATUS_WRONG'}
+            if([string]$obj.assignee -ne [string]$done[0].actor){throw 'CLAIM_ASSIGNEE_MISMATCH'}
+            Write-Output 'TS_NATIVE_CLAIM=PASS_ONE_WINNER_TWO_OVERLAPPING_PROCESSES'
+          } finally {
+            if($null -ne $server -and -not $server.HasExited){
+              Stop-Process -Id $server.Id -ErrorAction Stop
+            }
+          }
