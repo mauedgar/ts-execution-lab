@@ -66,13 +66,13 @@ jobs:
             $issues=@($raw|ConvertFrom-Json)
             if($issues.Count -ne 2){throw ('UNEXPECTED_ISSUE_COUNT_'+$issues.Count)}
             Write-Output 'TS_DOLT_SERVER_SMOKE=PASS_NONPRODUCT_SYNTHETIC_SINGLE_WRITER_CLIENT'
-            function RunConcurrentCreate([string]$Scenario,[string]$SharedRef) {
+            function RunConcurrentCreate([string]$Scenario,[string]$SharedRef,[string]$ExplicitId='',[string]$PassExternal='no',[string]$AllowFailed='no') {
               $barrier=Join-Path $root ('barrier-'+$Scenario)
               New-Item -ItemType Directory $barrier | Out-Null
               $jobHandles=@()
               foreach($slot in @('A','B')) {
-                $jobHandles+=Start-Job -ArgumentList @($bdExe,$env:BEADS_DIR,$port,$barrier,$Scenario,$slot,$SharedRef) -ScriptBlock {
-                  param([string]$Exe,[string]$BeadsStore,[string]$ServerPort,[string]$Gate,[string]$Case,[string]$Worker,[string]$Ref)
+                $jobHandles+=Start-Job -ArgumentList @($bdExe,$env:BEADS_DIR,$port,$barrier,$Scenario,$slot,$SharedRef,$ExplicitId,$PassExternal) -ScriptBlock {
+                  param([string]$Exe,[string]$BeadsStore,[string]$ServerPort,[string]$Gate,[string]$Case,[string]$Worker,[string]$Ref,[string]$Id,[string]$External)
                   $env:BEADS_DIR=$BeadsStore
                   $env:BEADS_DOLT_SERVER_MODE='1'
                   $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
@@ -84,7 +84,10 @@ jobs:
                     Start-Sleep -Milliseconds 100
                   }
                   $start=[DateTime]::UtcNow.ToString('o')
-                  $output=(& $Exe create ('Scenario '+$Case+' '+$Worker) --description ('SOURCE_REF='+$Ref) --type task --json 2>&1 | Out-String).Trim()
+                  $argv=@('create',('Scenario '+$Case+' '+$Worker),'--description',('SOURCE_REF='+$Ref),'--type','task','--json')
+                  if($Id){$argv+=@('--id',$Id)}
+                  if($External -eq 'yes'){$argv+=@('--external-ref',$Ref)}
+                  $output=(& $Exe @argv 2>&1 | Out-String).Trim()
                   $exit=$LASTEXITCODE
                   $end=[DateTime]::UtcNow.ToString('o')
                   [pscustomobject]@{scenario=$Case;slot=$Worker;pid=$PID;exit=$exit;start_utc=$start;end_utc=$end;output=$output}
@@ -103,7 +106,7 @@ jobs:
               $overlap=([DateTime]$out[0].start_utc -le [DateTime]$out[1].end_utc -and [DateTime]$out[1].start_utc -le [DateTime]$out[0].end_utc)
               foreach($entry in $out){Write-Host ('TS_RACE_WORKER='+($entry|ConvertTo-Json -Compress -Depth 3))}
               if(-not $overlap){throw ('OPERATION_INTERVALS_DID_NOT_OVERLAP_'+$Scenario)}
-              if(@($out|Where-Object {$_.exit -ne 0}).Count -ne 0){throw ('CONCURRENT_WRITER_EXIT_FAILURE_'+$Scenario)}
+              if($AllowFailed -ne 'yes' -and @($out|Where-Object {$_.exit -ne 0}).Count -ne 0){throw ('CONCURRENT_WRITER_EXIT_FAILURE_'+$Scenario)}
               Write-Host ('TS_RACE_OVERLAP_'+$Scenario+'=PASS')
               return $out
             }
@@ -123,6 +126,31 @@ jobs:
             elseif($sourceRows.Count -eq 1){Write-Output 'TS_SEMANTIC_SOURCE_DEDUP=SINGLE_ROW_OBSERVED_NOT_GENERAL_GUARANTEE'}
             else{throw ('UNEXPECTED_ORIGIN_CARDINALITY_'+$sourceRows.Count)}
             Write-Output 'TS_MULTIWRITER_DISJOINT_AND_ORIGIN_RACE=PASS_OBSERVED_SYNTHETIC'
+            $externalMarker='test://BEADS-SERVER-RACE/EXTERNAL-REF-001'
+            $externalResults=@(RunConcurrentCreate 'EXTERNAL_REF' $externalMarker '' 'yes' 'yes')
+            $externalRows=@((& $bdExe list --all --desc-contains ('SOURCE_REF='+$externalMarker) --json)|ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0){throw 'EXTERNAL_REF_QUERY_FAILED'}
+            $externalSuccess=@($externalResults|Where-Object {$_.exit -eq 0}).Count
+            Write-Output ('TS_EXTERNAL_REF_NATIVE_RESULTS='+$externalSuccess+'_SUCCESSES_'+$externalRows.Count+'_ROWS')
+            if($externalSuccess -gt 0 -and $externalRows.Count -ge 1 -and $externalRows.Count -le 2){
+              Write-Output ('TS_EXTERNAL_REF_NATIVE_CLASS='+(if($externalRows.Count -eq 1){'SINGLE_ROW_OBSERVED'}else{'DUPLICATES_OBSERVED'}))
+            }else{
+              Write-Output 'TS_EXTERNAL_REF_NATIVE_CLASS=UNQUALIFIED_OR_REJECTED'
+            }
+            $explicitMarker='test://BEADS-SERVER-RACE/EXPLICIT-ID-001'
+            $explicitIssueId='ts-execution-lab-de7a6f3c'
+            $idResults=@(RunConcurrentCreate 'EXPLICIT_ID' $explicitMarker $explicitIssueId 'no' 'yes')
+            $explicitRows=@((& $bdExe list --all --desc-contains ('SOURCE_REF='+$explicitMarker) --json)|ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0){throw 'EXPLICIT_ID_QUERY_FAILED'}
+            $ids=@($explicitRows|ForEach-Object {[string]$_.id})
+            $explicitSuccess=@($idResults|Where-Object {$_.exit -eq 0}).Count
+            Write-Output ('TS_EXPLICIT_ID_NATIVE_RESULTS='+$explicitSuccess+'_SUCCESSES_'+$explicitRows.Count+'_ROWS')
+            Write-Output ('TS_EXPLICIT_ID_NATIVE_IDS='+($ids -join ','))
+            if($explicitSuccess -gt 0 -and $explicitRows.Count -eq 1 -and $ids[0] -ceq $explicitIssueId){
+              Write-Output 'TS_EXPLICIT_ID_SOURCE_MAPPING=ONE_RECORD_OBSERVED_WITH_CONCURRENT_CLIENTS'
+            }else{
+              Write-Output 'TS_EXPLICIT_ID_SOURCE_MAPPING=NOT_QUALIFIED'
+            }
           } finally {
             if($null -ne $server -and -not $server.HasExited){
               Stop-Process -Id $server.Id -ErrorAction Stop
