@@ -1,0 +1,79 @@
+name: TS Beads 008 Dolt native Git remote isolation
+on:
+  push:
+    branches: [experiment/beads-native-git-remote-20261013-008]
+    paths: [.github/workflows/ts-beads-008-native-git-remote.yml]
+permissions:
+  contents: read
+jobs:
+  native-git:
+    runs-on: windows-2022
+    timeout-minutes: 9
+    steps:
+      - name: Qualify native Beads Dolt git remote to independent disposable bare Git store
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-native-git008'
+          if(Test-Path $root){throw 'ROOT_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          function Pinned([string]$Url,[string]$Expected,[string]$Name){
+            $f=Join-Path $root ($Name+'.zip')
+            Invoke-WebRequest -Uri $Url -OutFile $f
+            if(((Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()) -cne $Expected){throw ('PIN_MISMATCH_'+$Name)}
+            $dir=Join-Path $root $Name
+            Expand-Archive -LiteralPath $f -DestinationPath $dir
+            return $dir
+          }
+          $doltPath=Pinned 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6' 'dolt220'
+          $beadsPath=Pinned 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76' 'beads131'
+          $dolt=Get-ChildItem -LiteralPath $doltPath -Recurse -File -Filter dolt.exe|Select-Object -First 1 -ExpandProperty FullName
+          $bd=Get-ChildItem -LiteralPath $beadsPath -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $dolt -or -not $bd){throw 'PINNED_BINARY_NOT_FOUND'}
+          $env:PATH=(Split-Path -Parent $dolt)+';'+$env:PATH
+          $bare=Join-Path $root 'git-origin.git'
+          & git init --bare $bare
+          if($LASTEXITCODE -ne 0){throw 'BARE_REPO_INIT_FAILED'}
+          & git -C $bare symbolic-ref HEAD refs/heads/main
+          if($LASTEXITCODE -ne 0){throw 'BARE_HEAD_FAILED'}
+          $src=Join-Path $root 'producer'
+          & git init --initial-branch=main $src
+          if($LASTEXITCODE -ne 0){throw 'GIT_SOURCE_INIT_FAILED'}
+          & git -C $src config user.name 'ts-beads-native-git-experiment'
+          & git -C $src config user.email 'ts-beads-native-git-experiment@users.noreply.github.com'
+          'isolated synthetic only; no Product' | Set-Content -LiteralPath (Join-Path $src 'seed.txt')
+          & git -C $src add seed.txt
+          & git -C $src commit -m 'experimental Git remote initialized'
+          if($LASTEXITCODE -ne 0){throw 'SEED_COMMIT_FAILED'}
+          & git -C $src remote add origin $bare
+          & git -C $src push --set-upstream origin main
+          if($LASTEXITCODE -ne 0){throw 'SEED_PUSH_FAILED'}
+          $env:BEADS_DIR=Join-Path $src '.beads'
+          Push-Location $src
+          try {
+            & $bd init --quiet --stealth
+            if($LASTEXITCODE -ne 0){throw 'BD_INIT_FAILED'}
+            & $bd create 'Native Git remote durable issue' --id ts-execution-lab-8a5a55aa --description 'SOURCE_REF=test://TS-BEADS-NATIVE-GIT-008/ORIGIN-001' --type task --json
+            if($LASTEXITCODE -ne 0){throw 'BD_ISSUE_CREATE_FAILED'}
+            $url='git+file:///'+($bare.Replace('\','/'))
+            & $bd dolt remote add pilotgit $url
+            if($LASTEXITCODE -ne 0){throw 'BD_NATIVE_GIT_REMOTE_ADD_FAILED'}
+            & $bd dolt push --remote pilotgit
+            if($LASTEXITCODE -ne 0){throw 'BD_NATIVE_GIT_PUSH_FAILED'}
+          }finally{Pop-Location}
+          $refResult=(& git ls-remote $bare refs/dolt/data | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or -not $refResult){throw 'NATIVE_GIT_REF_NOT_PUBLISHED'}
+          Write-Output ('TS_DOLT_NATIVE_GIT_REF='+$refResult)
+          $fresh=Join-Path $root 'fresh-checkout'
+          & git clone $bare $fresh
+          if($LASTEXITCODE -ne 0){throw 'SECOND_CLONE_FAILED'}
+          Push-Location $fresh
+          try{
+            $env:BEADS_DIR=Join-Path $fresh '.beads'
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'BEADS_BOOTSTRAP_FROM_NATIVE_REF_FAILED'}
+            $issue=(& $bd show ts-execution-lab-8a5a55aa --json | Out-String).Trim()
+            if($LASTEXITCODE -ne 0 -or -not $issue.Contains('ts-execution-lab-8a5a55aa')){throw 'FRESH_BEADS_ISSUE_MISSING'}
+            Write-Output 'TS_BEADS_NATIVE_GIT_REMOTE=PASS_PUSH_REF_AND_FRESH_BOOTSTRAP'
+          }finally{Pop-Location}
