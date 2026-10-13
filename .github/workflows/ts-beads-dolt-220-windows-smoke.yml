@@ -66,6 +66,51 @@ jobs:
             $issues=@($raw|ConvertFrom-Json)
             if($issues.Count -ne 2){throw ('UNEXPECTED_ISSUE_COUNT_'+$issues.Count)}
             Write-Output 'TS_DOLT_SERVER_SMOKE=PASS_NONPRODUCT_SYNTHETIC_SINGLE_WRITER_CLIENT'
+            function RunConcurrentCreate([string]$Scenario,[string]$SharedRef) {
+              $barrier=Join-Path $root ('barrier-'+$Scenario)
+              New-Item -ItemType Directory $barrier | Out-Null
+              $jobHandles=@()
+              foreach($slot in @('A','B')) {
+                $jobHandles+=Start-Job -ArgumentList @($bdExe,$env:BEADS_DIR,$port,$barrier,$Scenario,$slot,$SharedRef) -ScriptBlock {
+                  param([string]$Exe,[string]$BeadsStore,[string]$ServerPort,[string]$Gate,[string]$Case,[string]$Worker,[string]$Ref)
+                  $env:BEADS_DIR=$BeadsStore
+                  $env:BEADS_DOLT_SERVER_MODE='1'
+                  $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+                  $env:BEADS_DOLT_SERVER_PORT=$ServerPort
+                  [System.IO.File]::WriteAllText((Join-Path $Gate ('ready-'+$Worker)),[string]$PID)
+                  $watch=[System.Diagnostics.Stopwatch]::StartNew()
+                  while(-not(Test-Path (Join-Path $Gate 'release'))) {
+                    if($watch.Elapsed.TotalSeconds -gt 15){throw 'BARRIER_TIMEOUT'}
+                    Start-Sleep -Milliseconds 100
+                  }
+                  $start=[DateTime]::UtcNow.ToString('o')
+                  $output=(& $Exe create ('Scenario '+$Case+' '+$Worker) --description ('SOURCE_REF='+$Ref) --type task --json 2>&1 | Out-String).Trim()
+                  $exit=$LASTEXITCODE
+                  $end=[DateTime]::UtcNow.ToString('o')
+                  [pscustomobject]@{scenario=$Case;slot=$Worker;pid=$PID;exit=$exit;start_utc=$start;end_utc=$end;output=$output}
+                }
+              }
+              $clock=[System.Diagnostics.Stopwatch]::StartNew()
+              while(-not ((Test-Path (Join-Path $barrier 'ready-A')) -and (Test-Path (Join-Path $barrier 'ready-B')))){
+                if($clock.Elapsed.TotalSeconds -gt 18){throw ('START_BARRIER_TIMEOUT_'+$Scenario)}
+                Start-Sleep -Milliseconds 100
+              }
+              [System.IO.File]::WriteAllText((Join-Path $barrier 'release'),'GO')
+              $jobHandles|Wait-Job -Timeout 40|Out-Null
+              if(@($jobHandles|Where-Object {$_.State -ne 'Completed'}).Count -gt 0){throw ('WRITERS_NOT_TERMINAL_'+$Scenario)}
+              $out=@($jobHandles|Receive-Job)
+              if($out.Count -ne 2){throw ('MISSING_WRITER_RECEIPT_'+$Scenario)}
+              $overlap=([DateTime]$out[0].start_utc -le [DateTime]$out[1].end_utc -and [DateTime]$out[1].start_utc -le [DateTime]$out[0].end_utc)
+              foreach($entry in $out){Write-Output ('TS_RACE_WORKER='+($entry|ConvertTo-Json -Compress -Depth 3))}
+              if(-not $overlap){throw ('OPERATION_INTERVALS_DID_NOT_OVERLAP_'+$Scenario)}
+              if(@($out|Where-Object {$_.exit -ne 0}).Count -ne 0){throw ('CONCURRENT_WRITER_EXIT_FAILURE_'+$Scenario)}
+              Write-Output ('TS_RACE_OVERLAP_'+$Scenario+'=PASS')
+              return $out
+            }
+            $disjointResults=@(RunConcurrentCreate 'DISJOINT' 'test://BEADS-SERVER-RACE/DISJOINT-A-B')
+            $allAfter=@((& $bdExe list --all --json)|ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0 -or $allAfter.Count -ne 4){throw ('DISJOINT_RESULT_CARDINALITY_'+$allAfter.Count)}
+            Write-Output 'TS_DOLT_SERVER_CONCURRENT_DISJOINT=PASS_NONPRODUCT_SYNTHETIC'
           } finally {
             if($null -ne $server -and -not $server.HasExited){
               Stop-Process -Id $server.Id -ErrorAction Stop
