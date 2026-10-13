@@ -32,3 +32,19 @@ Existing Pilot 003 attempt BEADS-CONCURRENCY-LOCAL-20261013-001: NOT_EXECUTED; r
 The separate Pilot 004 has a terminal local `PASS_SYNTHETIC_CONTINUITY`: dependency B was registered while A was in progress, independent C remained ready, and a new process resumed A only after B was synthetically closed, with independent third-process readback. See `mauedgar/ts-execution-lab@f154204574fe24e0ea75cfcf3f9b6d994528f817:experiments/TS-BEADS-DEPENDENCY-RECOVERY-20261013-004/PILOT-RESULT-20261013-004.md`.
 
 No version on PATH or GitHub release metadata proves an installed local server. No attempt or receipt for concurrent multiwriter execution was created in this qualification.
+
+## Hosted Windows qualification — exact original runs (separate from host-native installation)
+
+**Surface:** ephemeral GitHub Actions `windows-2022`, no user device or Product repo modifications.
+
+- Run `38444968673`, commit `b314d4e84613688ad2101d368b3fead0af34cce6`: terminal **FAIL** due to PowerShell output accidentally concatenated with archive path; archive download did not qualify a running server.
+- Run `38445114291`, commit `b209a01bb6c4e76eee71fa438e53095a18e9b70d`: terminal **FAIL** at `bd init --server` because new client workspace parent did not exist. Before that, Dolt/Beads archived binary SHA-256, `dolt version 2.2.0` and `bd version 1.3.1` were independently observed; no synthetic Beads issues were created in this attempt. Windows runner was ephemeral.
+- Run `38445293168`, commit `6822ae0d55e244dd1f5c1aa1bd1b0ae3a5a11aec`: terminal **SUCCESS**, job ID `115461958870`, log shows both original release SHA256 values, both runtime versions, a running isolated local Dolt server, `bd init --server`, creation of synthetic task A and task B and `TS_DOLT_SERVER_SMOKE=PASS_NONPRODUCT_SYNTHETIC_SINGLE_WRITER_CLIENT`. This qualifies a **single-client server-mode smoke in hosted Windows**, not concurrent writers, not the user's Windows host.
+- New separately identifiable concurrent disjoint writer attempt is represented by workflow commit `905be5ed8da7c5c24040a63ed68217115bd61dfc`. Its result must be consumed from its **own** original GitHub run before any disposition; do not infer an outcome from the earlier server smoke or re-dispatch another job.
+
+Exact Actions original links:
+- https://github.com/mauedgar/ts-execution-lab/actions/runs/38444968673
+- https://github.com/mauedgar/ts-execution-lab/actions/runs/38445114291
+- https://github.com/mauedgar/ts-execution-lab/actions/runs/38445293168
+
+**Host-native binding remains PENDING**: the experimental Dolt 2.2.0 binary has not been transferred to or installed on DESKTOP-3LJ0E54. Do not promote GH Actions ephemeral success into local multiwriter qualification or authorize Pilot 003's originally blocked runner.
