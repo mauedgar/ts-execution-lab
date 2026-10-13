@@ -1,0 +1,106 @@
+name: TS Beads 007 reconcile rejected writer against winner
+on:
+  push:
+    branches: [experiment/beads-git-durable-20261013-007]
+    paths: [.github/workflows/ts-beads-007-reconcile-loser.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  reconcile:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: bca6155824edc0c44f207d218337ef3c8e23f43d
+          path: isolated-store
+          persist-credentials: true
+      - name: Consume and verify exact original conflict B receipt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $out=Join-Path $env:RUNNER_TEMP 'rejected-input'
+          New-Item -ItemType Directory $out|Out-Null
+          $info=(& gh api repos/mauedgar/ts-execution-lab/actions/artifacts/11859076363|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $info.name -cne 'ts-beads-git007-writer-B' -or $info.digest -cne 'sha256:b8def6c185d030e21ad9ecba1977c0f3f60edcf83092de59043d153f2744491f' -or $info.workflow_run.id -ne 38484908944 -or $info.expired){throw 'ORIGINAL_WRITER_B_ARTIFACT_IDENTITY_FAILED'}
+          & gh run download 38484908944 --name ts-beads-git007-writer-B --dir $out --repo mauedgar/ts-execution-lab
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_B_RECEIPT_DOWNLOAD_FAILED'}
+          $r=Get-Content -Raw (Join-Path $out 'writer-result.json')|ConvertFrom-Json
+          if($r.slot -cne 'B' -or $r.status -cne 'CONFLICT_NOT_PUBLISHED' -or $r.candidate -cne '6ae973de750a42d99593034ced91a40423664c81' -or $r.source_base -cne '090d59190f48e42f90e7811ee93a48341b83b1c1' -or $r.remote_after -cne 'bca6155824edc0c44f207d218337ef3c8e23f43d' -or $r.added_issue_id -cne 'ts-execution-lab-6d0b66bb' -or $r.source_ref -cne 'test://TS-BEADS-GIT-007/WRITER-B' -or $r.run_id -cne '38484908944'){throw 'ORIGINAL_B_RECEIPT_CONTRACT_MISMATCH'}
+          Write-Output ('TS_ORIGINAL_REJECTED_WRITER_VERIFIED='+$r.candidate+';source='+$r.source_ref)
+      - name: Reconcile absent obligation then publish amended native Dolt snapshot
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $store=(Resolve-Path ./isolated-store).Path
+          $parent='bca6155824edc0c44f207d218337ef3c8e23f43d'
+          $ref='refs/heads/experiment/beads-git-store-20261013-007'
+          $head=(& git -C $store rev-parse HEAD|Out-String).Trim()
+          $line=(& git -C $store ls-remote origin $ref|Out-String).Trim()
+          $current=$line.Split([char]9)[0]
+          if($head -cne $parent -or $current -cne $parent){throw 'WINNER_REF_DRIFT_BEFORE_RECONCILIATION'}
+          $state=Join-Path $store 'experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state'
+          $meta=Get-Content -Raw (Join-Path $state 'manifest.json')|ConvertFrom-Json
+          if($meta.contract -cne 'ts-beads-git-snapshot/v0-experimental' -or $meta.authority -cne 'NONE_PRODUCT' -or $meta.slot -cne 'A' -or $meta.added_issue -cne 'ts-execution-lab-6d0a55aa'){throw 'WINNER_SNAPSHOT_IDENTITY_BAD'}
+          foreach($entry in $meta.file_entries){
+            $f=Join-Path (Join-Path $state 'backup') ($entry.path.Replace('/','\'))
+            if(-not(Test-Path -LiteralPath $f) -or ((Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()) -cne $entry.sha256){throw 'WINNER_BACKUP_SHA_MISMATCH'}
+          }
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-reconcile007'
+          New-Item -ItemType Directory $root|Out-Null
+          $archive=Join-Path $root 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BD_SHA_WRONG'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $work=Join-Path $root 'workspace'
+          New-Item -ItemType Directory $work|Out-Null
+          $env:BEADS_DIR=Join-Path $work '.beads'
+          & $bd init --quiet --stealth
+          if($LASTEXITCODE -ne 0){throw 'DB_INIT_FAILED'}
+          & $bd backup restore --force (Join-Path $state 'backup')
+          if($LASTEXITCODE -ne 0){throw 'DB_RESTORE_FAILED'}
+          $items=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or @($items).Count -ne 5){throw 'WINNER_DATA_COUNT_BAD'}
+          if(@($items|Where-Object {$_.id -ceq 'ts-execution-lab-6d0b66bb'}).Count -ne 0){throw 'B_ALREADY_PRESENT_DONT_REPLAY'}
+          if(@($items|Where-Object {$_.id -ceq 'ts-execution-lab-6d0a55aa'}).Count -ne 1){throw 'A_NOT_PRESERVED'}
+          $source=Get-Content -Raw (Join-Path $env:RUNNER_TEMP 'rejected-input/writer-result.json')|ConvertFrom-Json
+          & $bd create 'Reconciled writer B obligation' --id ([string]$source.added_issue_id) --description ('SOURCE_REF='+$source.source_ref) --type task --json
+          if($LASTEXITCODE -ne 0){throw 'B_RECONCILIATION_CREATE_FAILED'}
+          $after=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or @($after).Count -ne 6 -or @($after|Where-Object {$_.id -ceq 'ts-execution-lab-6d0b66bb'}).Count -ne 1){throw 'B_RECONCILIATION_CARDINALITY_BAD'}
+          $nextBackup=Join-Path $root 'native-backup'
+          & $bd backup init $nextBackup
+          if($LASTEXITCODE -ne 0){throw 'BACKUP_INIT_FAILED'}
+          & $bd backup sync
+          if($LASTEXITCODE -ne 0){throw 'BACKUP_SYNC_FAILED'}
+          $target=Join-Path $state 'backup'
+          Remove-Item -LiteralPath $target -Recurse -Force
+          Copy-Item -LiteralPath $nextBackup -Destination $target -Recurse
+          $files=@(Get-ChildItem -LiteralPath $target -Recurse -File -Force)
+          $entries=@()
+          foreach($f in $files){
+            $entries+=@{path=$f.FullName.Substring($target.Length+1).Replace('\','/');sha256=(Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant();size=$f.Length}
+          }
+          $updated=[ordered]@{contract='ts-beads-git-reconciled-snapshot/v0-experimental';authority='NONE_PRODUCT';parent_git_sha=$parent;winner_issue='ts-execution-lab-6d0a55aa';reconciled_issue='ts-execution-lab-6d0b66bb';reconciled_source='test://TS-BEADS-GIT-007/WRITER-B';original_conflict_run='38484908944';original_conflict_candidate='6ae973de750a42d99593034ced91a40423664c81';file_count=$entries.Count;file_entries=@($entries|Sort-Object path)}
+          $updated|ConvertTo-Json -Depth 9|Set-Content -LiteralPath (Join-Path $state 'manifest.json') -Encoding utf8
+          & git -C $store config user.name 'ts-beads-reconciler'
+          & git -C $store config user.email 'ts-beads-reconciler@users.noreply.github.com'
+          & git -C $store add -- experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state
+          if($LASTEXITCODE -ne 0){throw 'GIT_STAGE_FAILED'}
+          & git -C $store commit -m 'experiment(beads): reconcile originally rejected writer B by exact origin'
+          if($LASTEXITCODE -ne 0){throw 'GIT_COMMIT_FAILED'}
+          $candidate=(& git -C $store rev-parse HEAD|Out-String).Trim()
+          & git -C $store push origin ('HEAD:'+$ref)
+          $pushCode=$LASTEXITCODE
+          $line=(& git -C $store ls-remote origin $ref|Out-String).Trim()
+          if($LASTEXITCODE -ne 0){throw 'REMOTE_CONFIRMATION_FAILED'}
+          $remote=$line.Split([char]9)[0]
+          if($remote -cne $candidate){throw ('UNPUBLISHED_RECONCILIATION_EFFECT='+$candidate+';remote='+$remote+';push_exit='+$pushCode)}
+          Write-Output ('TS_GIT_RECONCILIATION=PASS;original_conflict=6ae973de750a42d99593034ced91a40423664c81;winner_parent='+$parent+';reconciled_sha='+$remote+';issues=6')
