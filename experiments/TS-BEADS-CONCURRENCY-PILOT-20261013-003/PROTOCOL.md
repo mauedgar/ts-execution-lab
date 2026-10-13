@@ -1,6 +1,6 @@
 # TS — Beads Pilot 003 | Concurrent ingress qualification
 Date: 2026-10-13
-Status: EXPERIMENT_PROTOCOL_FROZEN; NOT_EXECUTED
+Status: SOURCE_MATERIALIZED_BUT_DISPATCH_BLOCKED; NOT_EXECUTED
 Authority: NONE_PRODUCT
 Experiment: TS-BEADS-CONCURRENCY-PILOT-20261013-003
 Planned attempt: BEADS-CONCURRENCY-LOCAL-20261013-001
@@ -23,11 +23,14 @@ Work only with synthetic records in a **new, unique** local Beads database under
    - `BLOCKED_PRECONDITION` / `UNKNOWN`: fail-closed before execution or uncertain effects.
 6. Distinct source with same title is a separate control, covered by Pilot 002. It may be repeated here only if it adds evidence and must not be confused with the racing identical-origin case.
 
-## Execution design (not yet materialized)
-Use a single complete, reviewed, pinned PowerShell runner plus manifest in this experiment branch. Runner validates parser and identities, launches two isolated worker processes with a bounded test-specific rendezvous, records their raw outcomes, runs the read-only third process and writes a compact terminal receipt. No new generic scheduler, daemon, background wakeup or Product gate. Transport the already-built artifacts by the established Git/file mechanism; **Commander must not construct or upload scripts** and may only execute the already-materialized bounded command. Do not dispatch until the complete runner/manifest and local file binding are verified.
+## Execution design (initial runner/manifest staged; dispatch intentionally blocked)
+A candidate pinned PowerShell runner plus manifest is staged in this experiment branch, but has a **hard preflight stop** until the multiwriter backend is separately qualified. The current candidate still initializes the single-writer default and is **not safe to dispatch** as the definitive multiwriter test. Server topology and its dependencies must be verified and the candidate adapted/pinned afresh before dispatch. Runner validates parser and identities, launches two isolated worker processes with a bounded test-specific rendezvous, records their raw outcomes, runs the read-only third process and writes a compact terminal receipt. No new generic scheduler, daemon, background wakeup or Product gate. Transport the already-built artifacts by the established Git/file mechanism; **Commander must not construct or upload scripts** and may only execute the already-materialized bounded command. Do not dispatch until the complete runner/manifest and local file binding are verified.
 
 ## Acceptance for this pilot
 A reconciled, immutable original terminal receipt, demonstrable process independence, actual write interval overlap (or explicit inconclusive classification), separate responsibilities, exact source cardinality, reliable independent readback, and clear attribution of what Beads itself guarantees versus what consumer policy must enforce. **Duplicates or contention are valid research findings**, not a reason to repeat Product work. Evidence must be portable and explicitly state whether host-native Git Transport publication has been qualified (not established in pilots 001/002).
 
 ## Result interpretation
 This tests a storage-race edge case, not two full AI agents and not safe multi-TaskCycle Product coordination. Findings inform a later synthetic interrupted-pipeline scenario and the capability/subsystem replacement assessment. Product adoption, State Kernel replacement and removal of existing code remain separately conditioned decisions.
+
+## New version-specific architecture finding (2026-10-13)
+Beads **v1.3.1** documentation says `bd init` defaults to an embedded Dolt store with **single-writer** access, and recommends `bd init --server` and a running Dolt server when several processes must write concurrently. Direct concurrent writes against embedded mode risk file-lock contention or corruption and **cannot** establish the tool's supported multiagent concurrency capacity. Source: https://github.com/gastownhall/beads/blob/v1.3.1/docs/reference/faq.md (see 'Embedded mode or server mode?' and 'Can multiple agents work on the same repo?'); https://github.com/gastownhall/beads/blob/v1.3.1/README.md ('Storage Modes'). A server is a new host dependency/binding and remains experimental/noncanonical. The manifest explicitly sets `dispatch_authorized=false`; the runner checks `storage_mode=QUALIFIED_MULTIWRITER_SERVER` before any data write. The experiment is **not executed** and no FAIL/PASS is inferred. Next independent work: assess Beads capacity and optional representative sequential interruption/resumption scenario while the qualified local server binding is unresolved.
