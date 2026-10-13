@@ -1,0 +1,103 @@
+name: TS Beads 007 Git native competing snapshots
+on:
+  push:
+    branches: [experiment/beads-git-durable-20261013-007]
+    paths: [.github/workflows/ts-beads-007-git-write-conflict.yml]
+permissions:
+  contents: write
+jobs:
+  competing-state-write:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [A, B]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 090d59190f48e42f90e7811ee93a48341b83b1c1
+          path: isolated-store
+          persist-credentials: true
+      - name: Build separate native Dolt snapshots and attempt non-forced Git push
+        shell: pwsh
+        env:
+          SLOT: ${{ matrix.slot }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $store=(Resolve-Path ./isolated-store).Path
+          $base='090d59190f48e42f90e7811ee93a48341b83b1c1'
+          $ref='refs/heads/experiment/beads-git-store-20261013-007'
+          $actual=(& git -C $store rev-parse HEAD | Out-String).Trim()
+          if($actual -cne $base){throw 'BASE_IDENTITY_MISMATCH'}
+          $source=Join-Path $store 'experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state'
+          $meta=Get-Content -Raw (Join-Path $source 'manifest.json')|ConvertFrom-Json
+          if($meta.producer_run_id -cne '38484553116' -or $meta.authority -cne 'NONE_PRODUCT' -or $meta.file_count -ne 3){throw 'SOURCE_MANIFEST_BAD'}
+          foreach($entry in $meta.file_entries){
+            $f=Join-Path (Join-Path $source 'backup') ($entry.path.Replace('/','\'))
+            if(-not(Test-Path $f)){throw 'BACKUP_FILE_MISSING'}
+            if(((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant()) -cne $entry.sha256){throw 'BACKUP_SHA_WRONG'}
+          }
+          $root=Join-Path $env:RUNNER_TEMP ('ts-beads-writer007-'+$env:SLOT)
+          New-Item -ItemType Directory $root|Out-Null
+          $archive=Join-Path $root 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BINARY_HASH_WRONG'}
+          $bdDir=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $bdDir
+          $bd=Get-ChildItem -LiteralPath $bdDir -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $workspace=Join-Path $root 'workspace'
+          New-Item -ItemType Directory $workspace|Out-Null
+          $env:BEADS_DIR=Join-Path $workspace '.beads'
+          & $bd init --quiet --stealth
+          if($LASTEXITCODE -ne 0){throw 'DB_INIT_FAILED'}
+          & $bd backup restore --force (Join-Path $source 'backup')
+          if($LASTEXITCODE -ne 0){throw 'DB_RESTORE_FAILED'}
+          $id=if($env:SLOT -eq 'A'){'ts-execution-lab-6d0a55aa'}else{'ts-execution-lab-6d0b66bb'}
+          $marker='test://TS-BEADS-GIT-007/WRITER-'+$env:SLOT
+          & $bd create ('Writer '+$env:SLOT+' synthetic obligation') --id $id --description ('SOURCE_REF='+$marker) --type task --json
+          if($LASTEXITCODE -ne 0){throw 'INDEPENDENT_CREATE_FAILED'}
+          $issues=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or @($issues).Count -ne 5){throw 'ISSUE_COUNT_WRONG'}
+          $backupNew=Join-Path $root 'newbackup'
+          & $bd backup init $backupNew
+          if($LASTEXITCODE -ne 0){throw 'BACKUP_INIT_FAILED'}
+          & $bd backup sync
+          if($LASTEXITCODE -ne 0){throw 'BACKUP_SYNC_FAILED'}
+          $old=Join-Path $source 'backup'
+          Remove-Item -LiteralPath $old -Recurse -Force
+          Copy-Item -LiteralPath $backupNew -Destination $old -Recurse
+          $newFiles=@(Get-ChildItem -LiteralPath $old -File -Recurse -Force)
+          $entries=@()
+          foreach($f in $newFiles){
+            $entries+=@{path=$f.FullName.Substring($old.Length+1).Replace('\','/');sha256=(Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant();size=$f.Length}
+          }
+          $new=[ordered]@{contract='ts-beads-git-snapshot/v0-experimental';authority='NONE_PRODUCT';base_git_sha=$base;source_run='38484553116';source_commit='02f30a7f98fcdf60e86859a8cb6b80146c2d8215';slot=$env:SLOT;added_issue=$id;source_ref=$marker;file_count=$entries.Count;file_entries=@($entries|Sort-Object path)}
+          $new|ConvertTo-Json -Depth 9|Set-Content (Join-Path $source 'manifest.json') -Encoding utf8
+          & git -C $store config user.name 'ts-beads-experiment-writer'
+          & git -C $store config user.email 'ts-beads-experiment-writer@users.noreply.github.com'
+          & git -C $store add -- experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state
+          if($LASTEXITCODE -ne 0){throw 'GIT_STAGE_FAILED'}
+          & git -C $store commit -m ('experiment(beads): competing snapshot '+$env:SLOT)
+          if($LASTEXITCODE -ne 0){throw 'GIT_COMMIT_FAILED'}
+          $candidate=(& git -C $store rev-parse HEAD|Out-String).Trim()
+          & git -C $store push origin ('HEAD:'+$ref)
+          $pushCode=$LASTEXITCODE
+          $line=(& git -C $store ls-remote origin $ref|Out-String).Trim()
+          if($LASTEXITCODE -ne 0){throw 'REMOTE_READ_FAILED'}
+          $remote=$line.Split([char]9)[0]
+          $status=if($remote -ceq $candidate){'PUBLISHED_CONFIRMED'}elseif($remote -cne $base){'CONFLICT_NOT_PUBLISHED'}else{'UNKNOWN_RECONCILIATION_REQUIRED'}
+          $receipt=[ordered]@{contract='ts-beads-git-write-conflict/v0-experimental';authority='NONE_PRODUCT';slot=$env:SLOT;status=$status;source_base=$base;candidate=$candidate;remote_after=$remote;push_code=$pushCode;added_issue_id=$id;source_ref=$marker;run_id=[string]$env:GITHUB_RUN_ID;utc=[DateTime]::UtcNow.ToString('o')}
+          $receipt|ConvertTo-Json -Depth 7|Set-Content -LiteralPath (Join-Path $root 'writer-result.json') -Encoding utf8
+          Write-Output ('TS_WRITER_RESULT='+($receipt|ConvertTo-Json -Compress -Depth 5))
+          if($status -eq 'UNKNOWN_RECONCILIATION_REQUIRED'){throw 'UNKNOWN_NO_RETRY'}
+      - name: Retain exact independent attempt receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-git007-writer-${{ matrix.slot }}
+          path: ${{ runner.temp }}/ts-beads-writer007-${{ matrix.slot }}/writer-result.json
+          if-no-files-found: warn
+          retention-days: 7
