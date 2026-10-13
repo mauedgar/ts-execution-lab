@@ -54,7 +54,7 @@ jobs:
           try {
             & $bd init --quiet --stealth
             if($LASTEXITCODE -ne 0){throw 'BD_INIT_FAILED'}
-            & $bd create 'Native Git remote durable issue' --id ts-execution-lab-8a5a55aa --description 'SOURCE_REF=test://TS-BEADS-NATIVE-GIT-008/ORIGIN-001' --type task --json
+            & $bd create 'Native Git remote durable issue' --id producer-8a5a55aa --description 'SOURCE_REF=test://TS-BEADS-NATIVE-GIT-008/ORIGIN-001' --type task --json
             if($LASTEXITCODE -ne 0){throw 'BD_ISSUE_CREATE_FAILED'}
             $url='git+file:///'+($bare.Replace('\','/'))
             & $bd dolt remote add pilotgit $url
@@ -73,7 +73,7 @@ jobs:
             $env:BEADS_DIR=Join-Path $fresh '.beads'
             & $bd bootstrap
             if($LASTEXITCODE -ne 0){throw 'BEADS_BOOTSTRAP_FROM_NATIVE_REF_FAILED'}
-            $issue=(& $bd show ts-execution-lab-8a5a55aa --json | Out-String).Trim()
-            if($LASTEXITCODE -ne 0 -or -not $issue.Contains('ts-execution-lab-8a5a55aa')){throw 'FRESH_BEADS_ISSUE_MISSING'}
+            $issue=(& $bd show producer-8a5a55aa --json | Out-String).Trim()
+            if($LASTEXITCODE -ne 0 -or -not $issue.Contains('producer-8a5a55aa')){throw 'FRESH_BEADS_ISSUE_MISSING'}
             Write-Output 'TS_BEADS_NATIVE_GIT_REMOTE=PASS_PUSH_REF_AND_FRESH_BOOTSTRAP'
           }finally{Pop-Location}
