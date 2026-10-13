@@ -1,0 +1,3 @@
+# ExecutionAttempt 001 — BLOCKED_PRECONDITION
+
+Host: DESKTOP-3LJ0E54. Source carrier `fa51f34dfd3333e7d36bffec61952f3b672c9327`. Clone PID 19600 PASS exit 0; execution PID 16072 terminal exit 1 at 0.71s. Error: `PRECONDITION_OR_ASSERTION:RUNNER_INTEGRITY:Manifest-pinned runner bytes`. Stage: PREFLIGHT; `INSTALL_ISOLATED` never entered; no Beads download or database initialization in this attempt. Most plausible mechanism is CRLF normalization by Git on Windows. No automatic retry or acceptance implied. Added `.gitattributes` with LF eol on this experimental branch as a new transport candidate; all other changes deferred until exact readback.
