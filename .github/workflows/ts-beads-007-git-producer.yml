@@ -1,0 +1,59 @@
+name: TS Beads 007 persistent Git snapshot producer
+on:
+  push:
+    branches: [experiment/beads-git-durable-20261013-007]
+    paths: [.github/workflows/ts-beads-007-git-producer.yml]
+permissions:
+  contents: write
+jobs:
+  produce:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Verify experiment-only store reference before writing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ref='refs/heads/experiment/beads-git-store-20261013-007'
+          $head=(& git ls-remote origin $ref | Out-String).Trim().Split("`t")[0]
+          if($LASTEXITCODE -ne 0 -or $head -cne '82180caffa06dca1bca334df1e9401118bd57b7f'){throw ('UNEXPECTED_STORE_HEAD='+$head)}
+          Write-Output ('TS_STORE_EXPECTED_HEAD='+$head)
+      - name: Produce native full Dolt backup with frozen synthetic continuity graph
+        shell: pwsh
+        run: |
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./experiments/TS-BEADS-CROSSRUN-CONTINUITY-20261013-006/run.ps1 -Mode produce
+          if($LASTEXITCODE -ne 0){throw 'NATIVE_BACKUP_PRODUCER_FAILED'}
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/beads-git-store-20261013-007
+          path: isolated-store
+          persist-credentials: true
+      - name: Commit exact native backup to isolated experimental Git branch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $checkout=(Resolve-Path ./isolated-store).Path
+          $start=(& git -C $checkout rev-parse HEAD | Out-String).Trim()
+          if($start -cne '82180caffa06dca1bca334df1e9401118bd57b7f'){throw ('STORE_BASE_MOVED='+$start)}
+          $src=Join-Path $env:RUNNER_TEMP 'ts-beads-crossrun006-produce/transport'
+          if(-not(Test-Path (Join-Path $src 'manifest.json')) -or -not(Test-Path (Join-Path $src 'backup'))){throw 'PRODUCER_BACKUP_MISSING'}
+          $meta=Get-Content -Raw (Join-Path $src 'manifest.json') | ConvertFrom-Json
+          if($meta.authority -cne 'NONE_PRODUCT' -or $meta.producer_run_id -cne [string]$env:GITHUB_RUN_ID -or $meta.producer_commit -cne [string]$env:GITHUB_SHA -or $meta.file_count -ne 3){throw 'SOURCE_MANIFEST_MISMATCH'}
+          $target=Join-Path $checkout 'experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state'
+          if(Test-Path $target){throw 'STORE_ALREADY_CONTAINS_NATIVE_STATE'}
+          New-Item -ItemType Directory $target -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $src 'backup') -Destination $target -Recurse
+          Copy-Item -LiteralPath (Join-Path $src 'manifest.json') -Destination (Join-Path $target 'manifest.json')
+          & git -C $checkout config user.name 'ts-beads-pilot-actions'
+          & git -C $checkout config user.email 'ts-beads-pilot-actions@users.noreply.github.com'
+          & git -C $checkout add -- experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state
+          if($LASTEXITCODE -ne 0){throw 'GIT_STAGE_FAILED'}
+          & git -C $checkout commit -m 'experiment(beads): persist isolated native Dolt backup for cross-run restore'
+          if($LASTEXITCODE -ne 0){throw 'GIT_COMMIT_FAILED'}
+          $new=(& git -C $checkout rev-parse HEAD | Out-String).Trim()
+          & git -C $checkout push origin HEAD:refs/heads/experiment/beads-git-store-20261013-007
+          if($LASTEXITCODE -ne 0){throw ('GIT_OPTIMISTIC_PUSH_REJECTED_RECONCILE='+$new)}
+          Write-Output ('TS_BEADS_GIT_STORE_COMMIT='+$new+';source_run='+$env:GITHUB_RUN_ID+';source_commit='+$env:GITHUB_SHA+';native_files=3')
