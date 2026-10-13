@@ -1,0 +1,12 @@
+{
+  "contract": "ts-beads-inbox-readback-manifest/v0-experimental",
+  "pilot": "TS-BEADS-INBOX-DEDUP-PILOT-20261013-002",
+  "execution_attempt": "BEADS-INBOX-READBACK-20261013-003",
+  "source_terminal_attempt": "BEADS-INBOX-LOCAL-20261013-002",
+  "source_terminal_state": "FAIL:CLOSE_AT_CHECKPOINT_AND_FRESH_READBACK",
+  "authority": "NONE_PRODUCT",
+  "host_connector_device": "DESKTOP-3LJ0E54",
+  "runner_blob_sha": "7f5eb666e4aec03f6f0397ba48e15b4626c86872",
+  "expected_output": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-INBOX-DEDUP-PILOT-20261013-002/readback-003.json",
+  "effect_ceiling": "read-only verification of preserved Beads store; one new receipt"
+}
