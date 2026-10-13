@@ -101,16 +101,28 @@ jobs:
               $out=@($jobHandles|Receive-Job)
               if($out.Count -ne 2){throw ('MISSING_WRITER_RECEIPT_'+$Scenario)}
               $overlap=([DateTime]$out[0].start_utc -le [DateTime]$out[1].end_utc -and [DateTime]$out[1].start_utc -le [DateTime]$out[0].end_utc)
-              foreach($entry in $out){Write-Output ('TS_RACE_WORKER='+($entry|ConvertTo-Json -Compress -Depth 3))}
+              foreach($entry in $out){Write-Host ('TS_RACE_WORKER='+($entry|ConvertTo-Json -Compress -Depth 3))}
               if(-not $overlap){throw ('OPERATION_INTERVALS_DID_NOT_OVERLAP_'+$Scenario)}
               if(@($out|Where-Object {$_.exit -ne 0}).Count -ne 0){throw ('CONCURRENT_WRITER_EXIT_FAILURE_'+$Scenario)}
-              Write-Output ('TS_RACE_OVERLAP_'+$Scenario+'=PASS')
+              Write-Host ('TS_RACE_OVERLAP_'+$Scenario+'=PASS')
               return $out
             }
             $disjointResults=@(RunConcurrentCreate 'DISJOINT' 'test://BEADS-SERVER-RACE/DISJOINT-A-B')
             $allAfter=@((& $bdExe list --all --json)|ConvertFrom-Json)
             if($LASTEXITCODE -ne 0 -or $allAfter.Count -ne 4){throw ('DISJOINT_RESULT_CARDINALITY_'+$allAfter.Count)}
             Write-Output 'TS_DOLT_SERVER_CONCURRENT_DISJOINT=PASS_NONPRODUCT_SYNTHETIC'
+            $sameOrigin='test://BEADS-SERVER-RACE/SAME-ORIGIN-001'
+            $sameOriginWriters=@(RunConcurrentCreate 'SAME_SOURCE' $sameOrigin)
+            $sourceRows=@((& $bdExe list --all --desc-contains ('SOURCE_REF='+$sameOrigin) --json)|ConvertFrom-Json)
+            if($LASTEXITCODE -ne 0){throw 'SOURCE_REF_QUERY_FAILED'}
+            $issueIds=@($sourceRows|ForEach-Object {[string]$_.id})
+            if(@($issueIds|Select-Object -Unique).Count -ne $issueIds.Count){throw 'SAME_ID_MULTIPLE_RECORDS'}
+            Write-Output ('TS_SAME_ORIGIN_RECORDS='+$sourceRows.Count)
+            Write-Output ('TS_SAME_ORIGIN_IDS='+($issueIds -join ','))
+            if($sourceRows.Count -eq 2){Write-Output 'TS_SEMANTIC_SOURCE_DEDUP=NOT_NATIVE_TWO_RECORDS'}
+            elseif($sourceRows.Count -eq 1){Write-Output 'TS_SEMANTIC_SOURCE_DEDUP=SINGLE_ROW_OBSERVED_NOT_GENERAL_GUARANTEE'}
+            else{throw ('UNEXPECTED_ORIGIN_CARDINALITY_'+$sourceRows.Count)}
+            Write-Output 'TS_MULTIWRITER_DISJOINT_AND_ORIGIN_RACE=PASS_OBSERVED_SYNTHETIC'
           } finally {
             if($null -ne $server -and -not $server.HasExited){
               Stop-Process -Id $server.Id -ErrorAction Stop
