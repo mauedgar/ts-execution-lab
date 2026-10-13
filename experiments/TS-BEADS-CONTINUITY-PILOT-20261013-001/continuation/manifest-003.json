@@ -1,0 +1,12 @@
+{
+  "contract": "ts-beads-continuation-manifest/v0-experimental",
+  "pilot": "TS-BEADS-CONTINUITY-PILOT-20261013-001",
+  "attempt": "BEADS-LOCAL-TRIAL-20261013-003",
+  "source_failed_attempt": "BEADS-LOCAL-TRIAL-20261013-002",
+  "subject": "dist-bra",
+  "runner_sha256": "20dcbf123a6b753b81eba9e07adfee46a9c4d65b67cc2f16a07be5df74d94792",
+  "verify_sha256": "cb1103b57280ea0f36c1a30abcfd71e69fad0d19a874e2c7576a701553211193",
+  "expected_output": "continuation-003-result.json",
+  "authority": "NONE_PRODUCT",
+  "effect_ceiling": "Only synthetic Beads workspace, no reinstall, no Product repo writes"
+}
