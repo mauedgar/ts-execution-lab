@@ -26,7 +26,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $ProgressPreference='SilentlyContinue'
-          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-flow-005-'+$env:SCENARIO'
+          $root=Join-Path $env:RUNNER_TEMP ('ts-beads-flow-005-'+$env:SCENARIO)
           if(Test-Path -LiteralPath $root){throw 'EXPERIMENT_DIR_ALREADY_EXISTS'}
           New-Item -ItemType Directory -Path $root | Out-Null
           $server=$null
