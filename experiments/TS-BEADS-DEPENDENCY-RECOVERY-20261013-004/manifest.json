@@ -1,0 +1,13 @@
+{
+  "contract": "ts-beads-continuity-resume/v0-experimental",
+  "pilot": "TS-BEADS-DEPENDENCY-RECOVERY-20261013-004",
+  "execution_attempt": "BEADS-DEPENDENCY-RECOVERY-20261013-001",
+  "authority": "NONE_PRODUCT",
+  "host": "DESKTOP-3LJ0E54",
+  "runner_git_blob": "a6cbe7156ce9e081ca76ce540fdcc7e8a673a8f6",
+  "runner_path": "experiments/TS-BEADS-DEPENDENCY-RECOVERY-20261013-004/runner.ps1",
+  "expected_result": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-DEPENDENCY-RECOVERY-20261013-004/result.json",
+  "effect_ceiling": "isolated synthetic local Beads store; no Product effect",
+  "source_ref": "cb43dcdeab9abfc66283f590bd1f92fe081dbf86",
+  "runner_policy": "single bounded attempt; do not retry uncertain writes"
+}
