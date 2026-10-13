@@ -1,0 +1,15 @@
+{
+  "contract": "ts-beads-inbox-dedup-manifest/v0-experimental",
+  "pilot": "TS-BEADS-INBOX-DEDUP-PILOT-20261013-002",
+  "execution_attempt": "BEADS-INBOX-LOCAL-20261013-002",
+  "prior_terminal_attempt": "BEADS-INBOX-LOCAL-20261013-001",
+  "prior_terminal_result": "BLOCKED_PRECONDITION (exit 1, no workspace created)",
+  "authority": "NONE_PRODUCT",
+  "host_connector_device": "DESKTOP-3LJ0E54",
+  "tool_release": "v1.3.1",
+  "runner_blob_sha": "715afe6e7b1f085971b04651fc51dcfc842279fa",
+  "verify_blob_sha": "e7a0bd0183088ea3717016c494754296d3383c80",
+  "expected_result": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-INBOX-DEDUP-PILOT-20261013-002/result.json",
+  "effect_ceiling": "new isolated synthetic Beads store only",
+  "runner_policy": "preserve prior attempt and no blind retry"
+}
