@@ -6,8 +6,8 @@
   "host": "DESKTOP-3LJ0E54",
   "tool_release": "v1.3.1",
   "source_repository": "mauedgar/ts-execution-lab",
-  "source_commit": "00da1d775f055703866c6da61865b382f89436d8",
-  "runner_git_blob": "afbea74f4983b64e9316f85699875aee84dcae29",
+  "source_commit": "42eb6c1fe9e1fc7bcd18935e6b6b92b7b72cc64f",
+  "runner_git_blob": "7a56e30595b6e55f95980575bf44e82748144fec",
   "runner_path": "experiments/TS-BEADS-CONCURRENCY-PILOT-20261013-003/runner.ps1",
   "expected_receipt": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-CONCURRENCY-PILOT-20261013-003/result.json",
   "expected_readback": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-CONCURRENCY-PILOT-20261013-003/readback.json",
@@ -18,5 +18,8 @@
     "No blind retry",
     "Post-transport Git blob equality required before execution",
     "Commander execution/result only; materialize via existing transport or separate file"
-  ]
+  ],
+  "storage_mode": "NOT_QUALIFIED",
+  "dispatch_authorized": false,
+  "blocker": "Beads v1.3.1 embedded mode is single-writer; multiwriter server mode and isolated Dolt binding must be established before any concurrent write test."
 }
