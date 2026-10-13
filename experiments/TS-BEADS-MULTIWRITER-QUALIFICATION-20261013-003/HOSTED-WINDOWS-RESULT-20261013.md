@@ -43,3 +43,33 @@ This is a verified negative result for **automatic semantic deduplication of a m
 - Warning `beads.role not configured` arose on the ephemeral GitHub checkout, but synthetic writes succeeded (exit 0). It does not grant any Product role.
 - Reuse-before-build next probe: native `--external-ref` semantics or explicit deterministic `--id` on the **same qualified temporary server surface**, rather than immediately authoring a new custom lock or dedup service.
 - Local host `DESKTOP-3LJ0E54`: `dolt version` not available on PATH; transfer/pin the v2.2.0 archive through a qualified **non-Commander materialization** surface before performing a native-local qualification. Until then `HOST_BINDING_PENDING`. Pilot 003's original blocked runner remains **NOT_DISPATCHED**.
+
+## Subsequent native identity alternatives — terminal empirical results
+
+Version and isolated hosted Windows server surface identical to the above. No change to user host or Product.
+
+- Run [38446455739](https://github.com/mauedgar/ts-execution-lab/actions/runs/38446455739), commit `f629c7c623b995c0b39948de002a06f5758aabcf`: **terminal FAIL** after obtaining two successful, overlapping `--external-ref` creates with same exact value and two distinct Beads records. A PowerShell report expression failed *after* these writes, before the intended explicit-ID test; do not claim the latter ran in this attempt. The two-record observation is preserved.
+- Run [38446617378](https://github.com/mauedgar/ts-execution-lab/actions/runs/38446617378), commit `58d766d3c89b26b67a9dc77166935291a01a4db5`: **terminal SUCCESS**, job `115466561106`; all non-Product tests ran including two newly compared **native** flags.
+
+### Native `--external-ref` race
+
+Two simultaneous writer processes both used the same exact `--external-ref=test://BEADS-SERVER-RACE/EXTERNAL-REF-001` and also carried that ref in `SOURCE_REF=` description. Both creation calls exited **0**, and third-process readback returned **2 issues**. `TS_EXTERNAL_REF_NATIVE_CLASS=DUPLICATES_OBSERVED`.
+
+**Conclusion:** using `--external-ref` alone did not enforce create-time at-most-once for that source in this version/binding. External references are useful for provenance and integration, but do not substitute a verified concurrency dedup strategy.
+
+### Explicit deterministic `--id` race
+
+Two simultaneous writer processes attempted **the same exact Beads ID** `ts-execution-lab-de7a6f3c` with `SOURCE_REF=test://BEADS-SERVER-RACE/EXPLICIT-ID-001`.
+
+| Writer | PID | Start UTC 2026-10-13 | End UTC | Exit and meaning |
+|---|---:|---|---|---|
+| A | 7896 | 18:25:51.7768216 | 18:25:52.3705504 | **0**, created `ts-execution-lab-de7a6f3c` |
+| B | 8168 | 18:25:51.8000183 | 18:25:52.4605976 | **1**, exact `already exists` conflict; original unchanged |
+
+The test verified overlapping operation intervals, both native process receipts, and a fresh read via `bd list`. It found **1 issue**, exact ID `ts-execution-lab-de7a6f3c`: `TS_EXPLICIT_ID_SOURCE_MAPPING=ONE_RECORD_OBSERVED_WITH_CONCURRENT_CLIENTS`.
+
+**Interpretation:** this is a supported experimental candidate for **at-most-one issue by derived stable ID**, using Beads' own ID collision behavior instead of inventing a global lock/ledger. It is **not** an idempotent `create` API returning the original on duplicate: the second call fails. A bounded consumer should map an exact immutable origin to a stable collision-resistant ID, and on a duplicate error perform an independent readback to verify that the existing object's immutable origin and intended meaning match before reusing it. Failure, hash collision, changed origin content, partial writes, missing receipts or `UNKNOWN` must remain reconciled, not treated as automatic success. A short example test ID does not qualify production collision resistance.
+
+**DoD update:** Continuity under sequential writers and supported hosted Windows Dolt server mode with overlapping writers are now observed. Original `BEADS-CONCURRENCY-LOCAL-20261013-001` on `DESKTOP-3LJ0E54` is **still NOT_DISPATCHED**: a separate host-native server binding is not qualified. GitHub-hosted results do not supply an unattended ChatGPT wakeup or Product authorization.
+
+Adoption assessment next: compare (a) embedded-mode Beads with a single operational writer versus (b) version-pinned Dolt server with concurrent native explicit-ID at-most-once. Choose lower total complexity; neither becomes Product canonical without competent owner/consumer equivalence check. Explore `--claim`, molecules, formulas, wisps, merge-slot and handoffs as **replacement candidates** before writing custom orchestration.
