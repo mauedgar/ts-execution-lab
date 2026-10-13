@@ -1,0 +1,45 @@
+name: TS Beads 007 restore native Dolt from pinned Git commit
+on:
+  push:
+    branches: [experiment/beads-git-durable-20261013-007]
+    paths: [.github/workflows/ts-beads-007-git-consumer.yml]
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 090d59190f48e42f90e7811ee93a48341b83b1c1
+          path: isolated-state
+      - name: Prove pinned Git-backed full Dolt backup identity without temporary artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $original='090d59190f48e42f90e7811ee93a48341b83b1c1'
+          $got=(& git -C ./isolated-state rev-parse HEAD | Out-String).Trim()
+          if($got -cne $original){throw ('PINNED_SNAPSHOT_NOT_CHECKED_OUT='+$got)}
+          $native=(Resolve-Path ./isolated-state/experiments/TS-BEADS-GIT-DURABLE-20261013-007/native-state).Path
+          $meta=Get-Content -LiteralPath (Join-Path $native 'manifest.json') -Raw | ConvertFrom-Json
+          if($meta.producer_run_id -cne '38484553116' -or $meta.producer_commit -cne '02f30a7f98fcdf60e86859a8cb6b80146c2d8215' -or $meta.file_count -ne 3 -or $meta.authority -cne 'NONE_PRODUCT'){throw 'NATIVE_STORE_MANIFEST_WRONG'}
+          $dst=Join-Path $env:RUNNER_TEMP 'incoming'
+          if(Test-Path $dst){throw 'INCOMING_DIR_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $dst|Out-Null
+          Copy-Item -LiteralPath (Join-Path $native 'manifest.json') -Destination $dst
+          Copy-Item -LiteralPath (Join-Path $native 'backup') -Destination $dst -Recurse
+          Write-Output ('TS_GIT_NATIVE_BACKUP_PINNED='+$got+';native_filecount='+$meta.file_count+';source_run='+$meta.producer_run_id)
+      - name: Restore original snapshot and reconcile synthetic interrupted pipeline
+        shell: pwsh
+        run: |
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./experiments/TS-BEADS-CROSSRUN-CONTINUITY-20261013-006/run.ps1 -Mode consume -SourceRun 38484553116 -SourceCommit 02f30a7f98fcdf60e86859a8cb6b80146c2d8215
+          if($LASTEXITCODE -ne 0){throw 'GIT_BACKED_NATIVE_RECOVERY_FAIL'}
+      - name: Publish terminal consumer result for independent evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-git007-restore-result
+          path: ${{ runner.temp }}/ts-beads-crossrun006-consume/transport/result.json
+          if-no-files-found: error
+          retention-days: 7
