@@ -31,7 +31,7 @@ jobs:
             if($got -cne $Hex){throw ('ASSET_SHA256_MISMATCH_'+$Name)}
             $dest=Join-Path $root $Name
             Expand-Archive -LiteralPath $archive -DestinationPath $dest -Force
-            Write-Output ('PINNED_ARCHIVE_OK_'+$Name+'='+$got)
+            Write-Host ('PINNED_ARCHIVE_OK_'+$Name+'='+$got)
             return $dest
           }
           try {
