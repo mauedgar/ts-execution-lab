@@ -4,10 +4,10 @@
   "authority": "NONE_PRODUCT",
   "release_version": "v1.3.1",
   "archive_sha256": "48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76",
-  "runner_sha256": "f686156b0326ea18952a3389996a1f1f5ee9689e048a5cc2f063bcaabd83ec25",
-  "readback_sha256": "264f5665c34589cac1ce6a68ae1024b67b72f10eafc11220e874cae00a5b52f3",
+  "runner_sha256": "9de4d0719d061f52738f3f4a7020e60e2fbbe5f408b5252fc4d1d5002cde39e0",
+  "readback_sha256": "eabeb98ae630e1920140961f7e84051cf3515aaca6b0ac3821ac0f389afe9ccb",
   "local_scope": "%LOCALAPPDATA%/TS-Experiments/TS-BEADS-CONTINUITY-PILOT-20261013-001",
-  "attempt": "BEADS-LOCAL-TRIAL-20261013-001",
+  "attempt": "BEADS-LOCAL-TRIAL-20261013-002",
   "expected_result": "result.json + fresh-process-readback.json",
   "boundaries": "No product repo writes, no global PATH, no MCP, no Docker, no git hook, no automatic retrial. Local state intentionally retained for inspection."
 }
