@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Qualify Beads native graph and formula independently
         env:
-          SCENARIO: ${'${{ matrix.scenario }}'}
+          SCENARIO: ${{ matrix.scenario }}
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
