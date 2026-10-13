@@ -1,33 +1,38 @@
 {
-  "contract": "ts-beads-git-snapshot/v0-experimental",
+  "contract": "ts-beads-git-reconciled-snapshot/v0-experimental",
   "authority": "NONE_PRODUCT",
-  "base_git_sha": "090d59190f48e42f90e7811ee93a48341b83b1c1",
-  "source_run": "38484553116",
-  "source_commit": "02f30a7f98fcdf60e86859a8cb6b80146c2d8215",
-  "slot": "A",
-  "added_issue": "ts-execution-lab-6d0a55aa",
-  "source_ref": "test://TS-BEADS-GIT-007/WRITER-A",
-  "file_count": 4,
+  "parent_git_sha": "bca6155824edc0c44f207d218337ef3c8e23f43d",
+  "winner_issue": "ts-execution-lab-6d0a55aa",
+  "reconciled_issue": "ts-execution-lab-6d0b66bb",
+  "reconciled_source": "test://TS-BEADS-GIT-007/WRITER-B",
+  "original_conflict_run": "38484908944",
+  "original_conflict_candidate": "6ae973de750a42d99593034ced91a40423664c81",
+  "file_count": 5,
   "file_entries": [
     {
       "path": "985ip4dpsgjj42cst96ofrc949rdb5jq.darc",
-      "size": 29152,
-      "sha256": "4eea1f1930d2f7b091589b3202c8dcefb4dabd771eb44ca3fb74b82d5b6ad5a8"
+      "sha256": "4eea1f1930d2f7b091589b3202c8dcefb4dabd771eb44ca3fb74b82d5b6ad5a8",
+      "size": 29152
+    },
+    {
+      "path": "i7cs18u5lnr4rmdg1br867fnqbrlis8c.darc",
+      "sha256": "8f438edc4f9da2dd2b60703d0501d02eb791eae79f7e81720bbb93944b4a18bd",
+      "size": 28397
     },
     {
       "path": "j4cgljst9b2v3tujhf86nb4jlgg7pg6f.darc",
-      "size": 459330,
-      "sha256": "299fc19269403c742d743c136d9dc0df50d86cbb24a577d964e26575399387a4"
+      "sha256": "299fc19269403c742d743c136d9dc0df50d86cbb24a577d964e26575399387a4",
+      "size": 459330
     },
     {
       "path": "LOCK",
-      "size": 0,
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
     },
     {
       "path": "manifest",
-      "size": 182,
-      "sha256": "ee07ee378e8387348392edcec07d4a453350d3689caed17875426d09c099fdab"
+      "sha256": "7aa79773b9335e3600e249a06c0c996db4826c6a1d104306e65c4f19adaf41c0",
+      "size": 218
     }
   ]
 }
