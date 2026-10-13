@@ -82,6 +82,7 @@ try{
   if(Test-Path -LiteralPath $Work){throw 'WORKSPACE_EXISTS_NO_REPLAY'}
   $m=Get-Content (Join-Path $PSScriptRoot 'manifest.json') -Raw|ConvertFrom-Json
   if($m.execution_attempt -cne $Attempt -or $m.host -cne 'DESKTOP-3LJ0E54' -or $m.authority -cne 'NONE_PRODUCT'){throw 'MANIFEST_IDENTITY'}
+  if($m.storage_mode -cne 'QUALIFIED_MULTIWRITER_SERVER' -or $m.dispatch_authorized -ne $true){throw 'MULTIWRITER_SERVER_BINDING_NOT_QUALIFIED_NO_DISPATCH'}
   $sha=((& git hash-object -- $PSCommandPath)|Out-String).Trim()
   if($LASTEXITCODE -ne 0 -or $sha -cne $m.runner_git_blob){throw 'RUNNER_HASH_MISMATCH'}
   $r.source_commit=$m.source_commit
