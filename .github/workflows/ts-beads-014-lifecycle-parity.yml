@@ -1,0 +1,73 @@
+name: TS Beads 014 native lifecycle parity isolated lab
+on:
+  push:
+    branches: [experiment/beads-lifecycle-parity-20261014-014]
+    paths: [.github/workflows/ts-beads-014-lifecycle-parity.yml]
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: windows-2022
+    timeout-minutes: 11
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Pinned no-Product-effect Beads experiment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $product='2a42a1bbda6e9fecccb28c42c9c2dd294b3b1c89'
+          $tree='04e57337ac129bd40774d48cf2cfee041f904cfa'
+          $expectedDolt='1f72d68797114170a97fee27641858f2e55a4571'
+          $actualProduct=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' 'refs/heads/tools'|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $actualProduct -cne $product){throw ('PRODUCT_REF_DRIFT='+$actualProduct)}
+          $commit=(& gh api ('repos/mauedgar/tecnotron-ai/git/commits/'+$product)|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or [string]$commit.tree.sha -cne $tree){throw 'PRODUCT_TREE_DRIFT'}
+          $sot=(& gh api 'repos/mauedgar/tecnotron-ai/contents/docs/current-state.md?ref=tools'|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or [string]$sot.sha -cne 'cac3955f1040e743248f015c974bbc397edb9650'){throw 'PRODUCT_SOT_DRIFT'}
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $dolt=((& git ls-remote $remote 'refs/dolt/data'|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $dolt -cne $expectedDolt){throw ('SHARED_DOLT_REF_DRIFT='+$dolt)}
+          $root=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('bd14'+$env:GITHUB_RUN_ID)
+          if(Test-Path -LiteralPath $root){throw 'ISOLATED_ROOT_EXISTS'}
+          New-Item -ItemType Directory -Path $root|Out-Null
+          $archive=Join-Path $root 'bd.zip'
+          Invoke-WebRequest 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BD_BINARY_HASH_DRIFT'}
+          $binRoot=Join-Path $root 'bin'
+          Expand-Archive $archive -DestinationPath $binRoot
+          $env:BD_BIN=Get-ChildItem $binRoot -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $env:BD_BIN){throw 'BD_EXECUTABLE_MISSING'}
+          $lab=Join-Path $root 'lab'
+          New-Item -ItemType Directory $lab|Out-Null
+          & git -C $lab init -q
+          if($LASTEXITCODE -ne 0){throw 'DISPOSABLE_GIT_INIT_FAILED'}
+          if(((& git -C $lab remote|Out-String).Trim()) -ne ''){throw 'DISPOSABLE_GIT_REMOTE_FORBIDDEN'}
+          $env:SHADOW_ROOT=$lab
+          $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads-014-parity-result.json'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-LIFECYCLE-PARITY-20261014-014/parity014.mjs'
+          & node --check $script
+          if($LASTEXITCODE -ne 0){throw 'SCRIPT_SYNTAX_CHECK_FAILED'}
+          & node $script
+          if($LASTEXITCODE -ne 0){throw ('SCRIPT_EXECUTION_FAILED_'+$LASTEXITCODE)}
+          if(-not(Test-Path $env:RESULT_PATH)){throw 'EXPERIMENT_RESULT_MISSING'}
+          $receipt=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
+          if($receipt.disposition -cne 'PARTIAL_NATIVE_PASS_PARITY_NOT_ESTABLISHED' -or $receipt.results.fail -ne 0 -or $receipt.Product_effect -cne 'NONE'){throw 'EXPERIMENT_RESULT_INVALID'}
+          $after=((& git ls-remote $remote 'refs/dolt/data'|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $after -cne $dolt){throw 'SHARED_DOLT_REF_CHANGED'}
+          $productAfter=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' 'refs/heads/tools'|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $productAfter -cne $product){throw 'PRODUCT_REF_CHANGED'}
+          Write-Output ('TS_BEADS014_PRODUCT_AND_DOLT_UNCHANGED=PASS;product='+$product+';dolt='+$after)
+      - name: Publish experimental receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-014-native-parity-receipt
+          path: ${{ runner.temp }}/beads-014-parity-result.json
+          if-no-files-found: warn
+          retention-days: 7
