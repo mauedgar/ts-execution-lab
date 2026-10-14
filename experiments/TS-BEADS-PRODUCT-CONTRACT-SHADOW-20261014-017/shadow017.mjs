@@ -1,6 +1,7 @@
 // TS-BEADS-017: experimental Beads consumer vs Product-frozen source contract.
 // Never a Product lifecycle implementation, acceptance or migration.
 import assert from 'node:assert/strict';
+import {isDeepStrictEqual} from 'node:util';
 import {createRequire} from 'node:module';
 import {existsSync,mkdirSync,readdirSync,readFileSync,statSync,writeFileSync} from 'node:fs';
 import {join,resolve,extname,relative} from 'node:path';
@@ -146,7 +147,7 @@ try{
  create(names.tc,'Product TaskCycle contract shadow only',{ts017_lifecycle:initial});
  verify('Product_original_aggregate_validated',true,'PRODUCT_CONTRACT_VALIDATION');
  verify('native_metadata_roundtrip_matches_Product_aggregate',
-  JSON.stringify(metadata(names.tc).ts017_lifecycle)===JSON.stringify(initial));
+  isDeepStrictEqual(metadata(names.tc).ts017_lifecycle,initial));
  const port=31800+(Number(process.env.GITHUB_RUN_ID||311)%18000);
  base='http://127.0.0.1:'+port;
  server=spawn(bin,['serve','--addr','127.0.0.1:'+port],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
