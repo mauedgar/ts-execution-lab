@@ -4,7 +4,7 @@ on:
     branches: [experiment/beads-github-native-remote-20261013-009]
     paths: [.github/workflows/ts-beads-009-native-github-race.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   race:
     runs-on: windows-2022
@@ -51,7 +51,7 @@ jobs:
               $receipt=[ordered]@{contract='ts-beads-native-github-race/v0-experimental';authority='NONE_PRODUCT';slot=$Slot;pid=$PID;status='UNKNOWN';base_ref=$Original;issue_id=$null;source_ref=$null;push_exit=$null;push_start_utc=$null;push_end_utc=$null;remote_after=$null;error=$null}
               try{
                 $work=Join-Path $Root ('writer-'+$Slot)
-                & git clone --single-branch --branch experiment/beads-github-native-remote-20261013-009 $Remote $work
+                & git clone --quiet --single-branch --branch experiment/beads-github-native-remote-20261013-009 $Remote $work
                 if($LASTEXITCODE -ne 0){throw 'WORKER_GITHUB_CLONE_FAILED'}
                 Push-Location $work
                 try {
@@ -103,7 +103,7 @@ jobs:
           [IO.File]::WriteAllText((Join-Path $gate 'go'),'NOW')
           $finished=@($jobs|Wait-Job -Timeout 100)
           if($finished.Count -ne 2 -or @($jobs|Where-Object {$_.State -ne 'Completed'}).Count -ne 0){throw 'RACE_WORKER_TERMINAL_RESULT_MISSING'}
-          foreach($job in $jobs){$job|Receive-Job|Out-Host}
+          foreach($job in $jobs){$job|Receive-Job -ErrorAction SilentlyContinue|Out-Host}
           $a=Get-Content -Raw (Join-Path $root 'writer-A.json')|ConvertFrom-Json
           $b=Get-Content -Raw (Join-Path $root 'writer-B.json')|ConvertFrom-Json
           if(-not $a.push_start_utc -or -not $b.push_start_utc -or -not $a.push_end_utc -or -not $b.push_end_utc){throw 'MISSING_PUSH_INTERVALS'}
@@ -111,7 +111,8 @@ jobs:
           if(-not $overlap){throw 'PUSH_INTERVALS_NOT_OVERLAPPING'}
           $current=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
           if($LASTEXITCODE -ne 0 -or -not $current){throw 'POST_RACE_REF_UNKNOWN'}
-          $success=@($a,$b|Where-Object {$_.push_exit -eq 0}).Count
+          $success=0
+          foreach($rec in @($a,$b)){if($rec.push_exit -eq 0){$success++}}
           Write-Output ('TS_NATIVE_GH_RACE=OVERLAP_PROVEN;success_count='+$success+';new_ref='+$current+';initial_ref='+$initial+';INDEPENDENT_READBACK_PENDING')
       - name: Retain original worker receipts
         if: always()
