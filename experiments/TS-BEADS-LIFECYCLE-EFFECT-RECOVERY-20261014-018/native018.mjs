@@ -270,8 +270,7 @@ try{
  ok('Product_semantic_guard_rejects_premature_TC_close',prematureBlocked,'PORT_SUBSET');
  await stop();await start();
  ok('native_Beads_HTTP_restart_recovered_UNKNOWN',
-  (await attemptRead()).state==='UNKNOWN'&&(await typedTC.hasUnreconciledExecution(names.tc),
-   await typedTC.hasUnreconciledExecution(names.tc)),'PORT_SUBSET');
+  (await attemptRead()).state==='UNKNOWN'&&await typedTC.hasUnreconciledExecution(names.tc),'PORT_SUBSET');
  ok('external_provider_receipt_survives_independent_restart',
   providerReobserve(external.receipt),'SYNTHETIC_EXTERNAL_ORACLE');
  // Simulate provider outcome verified by exact identity, but not actual provider authority.
@@ -297,9 +296,11 @@ try{
  const settled=await batch([
   patch(ids.at,{ts018_aggregate:atComplete},freshAt),
   patch(ids.op,{ts018_aggregate:opComplete},freshOp),
+  {kind:'close',close:{target:tRef(ids.at),reason:'SYNTHETIC_ATTEMPT_RECONCILED'}},
+  {kind:'close',close:{target:tRef(ids.op),reason:'SYNTHETIC_OPERATION_FINISHED'}},
  ],'test://TS018/reconcile-exact-receipt-in-one-native-transaction');
  if(!settled.ok)throw Error('NATIVE_NATIVE_TRANSACTION_REFUSED:'+settled.code+':'+settled.raw.slice(0,800));
- ok('native_multi_issue_reconciliation_one_transaction',settled.data?.items?.length===2,'NATIVE');
+ ok('native_multi_issue_reconciliation_one_transaction',settled.data?.items?.length===4,'NATIVE');
  ok('native_recovered_attempt_and_operation_complete',
   (await attemptRead()).state==='COMPLETED'&&(await opRead()).aggregate.state==='COMPLETED');
  ok('native_UNKNOWN_flag_cleared_only_after_exact_receipt',
