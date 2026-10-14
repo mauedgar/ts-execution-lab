@@ -1,0 +1,42 @@
+name: TS Beads 009 native race original receipt reconcile
+on:
+  push:
+    branches: [experiment/beads-github-native-remote-20261013-009]
+    paths: [.github/workflows/ts-beads-009-race-readback.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Read original two writer receipts and unchanged native Dolt ref
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $id=11860627288
+          $run='38488810405'
+          $sha='sha256:0a67cdf4ac0c8ad99e62e23eb7da831c037b9b2050f2a8d31d7449d7392fd122'
+          $meta=(& gh api ('repos/mauedgar/ts-execution-lab/actions/artifacts/'+$id)|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $meta.digest -cne $sha -or $meta.workflow_run.id -ne [long]$run -or $meta.name -cne 'ts-beads-native-gh009-race-receipts' -or $meta.expired){throw 'ORIGINAL_ARTIFACT_IDENTITY_MISMATCH'}
+          $dst=Join-Path $env:RUNNER_TEMP 'ts-beads-race009-original-readback'
+          New-Item -ItemType Directory $dst|Out-Null
+          & gh run download $run --name ts-beads-native-gh009-race-receipts --repo mauedgar/ts-execution-lab --dir $dst
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_ARTIFACT_DOWNLOAD_FAILED'}
+          $records=@()
+          foreach($s in @('A','B')){
+            $f=Join-Path $dst ('writer-'+$s+'.json')
+            if(-not(Test-Path -LiteralPath $f)){throw ('ORIGINAL_WORKER_RECEIPT_MISSING_'+$s)}
+            $r=Get-Content -Raw $f|ConvertFrom-Json
+            if($r.slot -cne $s -or $r.authority -cne 'NONE_PRODUCT' -or $r.base_ref -cne 'cb56a7b2dba9086c8797d69eaffba58155ad9b82' -or $r.contract -cne 'ts-beads-native-github-race/v0-experimental'){throw ('ORIGINAL_WORKER_IDENTITY_MISMATCH_'+$s)}
+            $records+= $r
+            Write-Output ('TS_ORIGINAL_RACE_RECEIPT='+($r|ConvertTo-Json -Compress -Depth 4))
+          }
+          $ref=(& git ls-remote 'https://github.com/mauedgar/ts-execution-lab.git' refs/dolt/data|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0){throw 'REMOTE_REF_LOOKUP_FAILED'}
+          if($ref -cne 'cb56a7b2dba9086c8797d69eaffba58155ad9b82'){throw ('REMOTE_EFFECT_CHANGED_INSPECT_BEFORE_RETRY='+$ref)}
+          if(@($records|Where-Object {$_.push_start_utc -or $_.push_exit -ne $null}).Count -ne 0){throw 'PUSH_MAY_HAVE_STARTED_NEEDS_SEPARATE_RECONCILIATION'}
+          Write-Output ('TS_ORIGINAL_GITHUB_RACE_DISPOSITION=NO_NATIVE_PUSH_ATTEMPT;REMOTE_REF_UNCHANGED;original_artifact='+$id)
