@@ -16,13 +16,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Native Beads 018 bounded lifecycle/UNKNOWN native transaction test
+      - name: Native Beads 018 attempt 2 after PR44 exact SOT reobservation
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $ProgressPreference='SilentlyContinue'
-          $product='1ecce07708a5760c99d7faf55f2344f2eabbc119'
-          $tree='025ce7524d1b8bf1753cfc4af964ee554d3b0977'
+          $product='f40236d24023159bc38aca06b3fa3862ac62608c'
+          $tree='786758a44bd4c0170d864cb1391af934b5cdc75b'
           $shared='1f72d68797114170a97fee27641858f2e55a4571'
           $head=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
           if($LASTEXITCODE -ne 0 -or $head -cne $product){throw ('PRODUCT_IDENTITY_CHANGED='+$head)}
