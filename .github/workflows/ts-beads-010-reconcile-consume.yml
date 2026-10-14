@@ -1,0 +1,152 @@
+name: TS Beads 010 reconcile UNKNOWN and consume deferred Web handoff
+on:
+  push:
+    branches: [experiment/beads-unknown-handoff-20261013-010]
+    paths: [.github/workflows/ts-beads-010-reconcile-consume.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  checkpoint-consumer:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    outputs:
+      native_ref: ${{ steps.consume.outputs.new_ref }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: consume
+        name: Reconcile exact UNKNOWN source and consume only at this fresh authorized synthetic checkpoint
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $ref='refs/dolt/data'
+          $afterUnknown='11a281eac77ebefffbd3fad56772b732179f1b2f'
+          $beforeUnknown='14f63d1e9c5d8630b7b8918245407e1476e23b8b'
+          $origArtifact=11861543503
+          $origRun='38491557670'
+          $expectedDigest='sha256:5baf543f1b58ebb236e73c1785233550b2b4477133a137d4a0eb228aad90787d'
+          $m=(& gh api ('repos/mauedgar/ts-execution-lab/actions/artifacts/'+$origArtifact)|Out-String).Trim()|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $m.digest -cne $expectedDigest -or $m.name -cne 'ts-beads-010-original-unknown-dispatch' -or $m.workflow_run.id -ne [long]$origRun -or $m.workflow_run.head_sha -cne 'ea86cc52751589cffb9aa81a48ac920d21a9f2f0' -or $m.expired){throw 'ORIGINAL_UNKNOWN_RECEIPT_ARTIFACT_IDENTITY_MISMATCH'}
+          $root=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('bd10c'+$env:GITHUB_RUN_ID)
+          if(Test-Path $root){throw 'CONSUMER_WORKSPACE_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          $receipts=Join-Path $root 'original'
+          New-Item -ItemType Directory $receipts|Out-Null
+          & gh run download $origRun --name ts-beads-010-original-unknown-dispatch --repo mauedgar/ts-execution-lab --dir $receipts
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_UNKNOWN_RECEIPT_DOWNLOAD_FAILED'}
+          $original=Get-Content -Raw (Join-Path $receipts 'dispatch.json')|ConvertFrom-Json
+          $source='test://TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010/ORIGIN@001'
+          if($original.contract -cne 'ts-beads-unknown-dispatch/v0-experimental' -or $original.authority -cne 'NONE_PRODUCT' -or $original.attempt_id -cne 'BEADS-NATIVE-GH010-UNKNOWN-PUBLISH-001' -or $original.run -cne $origRun -or $original.pre_dispatch_status -cne 'UNKNOWN_AFTER_DISPATCH' -or $original.source_commit -cne 'fffc1f2cc01e1c104cb2bae9334a9affa2251a47' -or $original.source_blob -cne '8458320411f65239d8232d1ba2bef350f118d5b8' -or $original.source_ref -cne $source -or $original.original_remote_ref -cne $beforeUnknown){throw 'ORIGINAL_ATTEMPT_IDENTITY_MISMATCH'}
+          $carrier=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-UNKNOWN-HANDOFF-20261013-010/HANDOFF.json'
+          $carrierHash=(& git hash-object -- $carrier|Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $carrierHash -cne $original.source_blob){throw 'WEB_SOURCE_CARRIER_SHA_MISMATCH'}
+          $web=Get-Content -Raw $carrier|ConvertFrom-Json
+          if($web.authority -cne 'NONE_PRODUCT' -or $web.source_ref -cne $source -or $web.constraints.do_not_interrupt_active_task -ne $true){throw 'WEB_CARRIER_CONSTRAINT_MISMATCH'}
+          $observed=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $observed -cne $afterUnknown){throw ('NATIVE_REMOTE_REF_CHANGED_BLOCKED='+$observed)}
+          $pack=Join-Path $root 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $pack
+          if(((Get-FileHash $pack -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_BINARY_PIN_FAILED'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $pack -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $work=Join-Path $root 'w'
+          & git clone --quiet --single-branch --branch experiment/beads-unknown-handoff-20261013-010 $remote $work
+          if($LASTEXITCODE -ne 0){throw 'FRESH_CHECKPOINT_CLONE_FAILED'}
+          Push-Location $work
+          try{
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'FRESH_NATIVE_BOOTSTRAP_FAILED'}
+            $items=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+            if($LASTEXITCODE -ne 0 -or @($items).Count -ne 4){throw 'EXPECTED_FOUR_ISSUES_AFTER_ORIGINAL_UNKNOWN'}
+            $matched=@()
+            foreach($entry in $items){
+              $raw=(& $bd show ([string]$entry.id) --json|Out-String).Trim()
+              if($LASTEXITCODE -ne 0){throw 'HANDOFF_READBACK_SHOW_FAILED'}
+              $issue=@($raw|ConvertFrom-Json)[0]
+              if(([string]$issue.description).Contains('SOURCE_REF='+$source)){$matched+= $issue}
+            }
+            if($matched.Count -ne 1 -or [string]$matched[0].id -cne [string]$original.issue_id -or [string]$matched[0].status -cne 'open'){throw 'UNKNOWN_NOT_CONFIRMED_OR_DUPLICATE_ORIGIN'}
+            $desc=[string]$matched[0].description
+            if(-not $desc.Contains('WEB_SOURCE_COMMIT='+$original.source_commit) -or -not $desc.Contains('WEB_SOURCE_BLOB='+$original.source_blob)){throw 'WEB_SOURCE_CONTENT_MISMATCH'}
+            Write-Output ('TS_BDS010_UNKNOWN=RECONCILED_CONFIRMED;original_run='+$origRun+';issue='+$original.issue_id+';count=1;no_retry=YES')
+            $env:BEADS_ACTOR='ts-bds010-checkpoint-consumer'
+            & $bd update ([string]$original.issue_id) --claim --json
+            if($LASTEXITCODE -ne 0){throw 'NATIVE_ATOMIC_CLAIM_FAILED'}
+            & $bd close ([string]$original.issue_id) --reason 'Synthetic durable Web handoff consumed at separately dispatched checkpoint; NONE_PRODUCT.' --json
+            if($LASTEXITCODE -ne 0){throw 'SYNTHETIC_HANDOFF_CLOSE_FAILED'}
+            $prePush=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+            if($LASTEXITCODE -ne 0 -or $prePush -cne $afterUnknown){throw 'REMOTE_DRIFT_BEFORE_CONSUMPTION_PUSH'}
+            & $bd dolt push
+            $pcode=$LASTEXITCODE
+            $newRef=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+            if($LASTEXITCODE -ne 0){throw 'POST_CONSUMPTION_REF_UNKNOWN'}
+            if($pcode -ne 0 -or $newRef -ceq $afterUnknown){throw ('CONSUMPTION_EFFECT_UNCERTAIN_NO_RETRY;ref='+$newRef+';exit='+$pcode)}
+            "new_ref=$newRef"|Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Output ('TS_BDS010_CONSUMPTION=PASS;original_issue='+$original.issue_id+';actor=ts-bds010-checkpoint-consumer;ref='+$newRef+';source='+$source)
+          }finally{Pop-Location}
+  third-party-audit:
+    needs: checkpoint-consumer
+    runs-on: windows-2022
+    timeout-minutes: 9
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      EXPECTED_REF: ${{ needs.checkpoint-consumer.outputs.native_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Independent fresh read of exact recovered origin and consumed status
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $ref='refs/dolt/data'
+          $observed=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or -not $env:EXPECTED_REF -or $observed -cne $env:EXPECTED_REF){throw ('EXPECTED_REF_MISMATCH='+$observed)}
+          $root=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('bd10a'+$env:GITHUB_RUN_ID)
+          New-Item -ItemType Directory -Path $root|Out-Null
+          $f=Join-Path $root 'bd.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $f
+          if(((Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BAD_BEADS_BINARY_HASH'}
+          $dir=Join-Path $root 'b'
+          Expand-Archive -LiteralPath $f -DestinationPath $dir
+          $bd=Get-ChildItem -LiteralPath $dir -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $work=Join-Path $root 'w'
+          & git clone --quiet --single-branch --branch experiment/beads-unknown-handoff-20261013-010 $remote $work
+          if($LASTEXITCODE -ne 0){throw 'FRESH_AUDIT_CLONE_FAILED'}
+          Push-Location $work
+          try{
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'NATIVE_RESTORE_FAILED'}
+            $items=(& $bd list --all --json|Out-String).Trim()|ConvertFrom-Json
+            if($LASTEXITCODE -ne 0 -or @($items).Count -ne 4){throw 'EXACT_FOUR_RECORDS_MISSING'}
+            $obj=@($items|Where-Object {$_.id -ceq 'producer-avr'})
+            if($obj.Count -ne 1){throw 'WEB_HANDOFF_NOT_UNIQUE'}
+            $rec=(& $bd show producer-avr --json|Out-String).Trim()|ConvertFrom-Json
+            $hand=@($rec)[0]
+            if($hand.status -cne 'closed' -or -not ([string]$hand.description).Contains('SOURCE_REF=test://TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010/ORIGIN@001')){throw 'WEB_HANDOFF_NOT_TERMINAL_OR_WRONG_SOURCE'}
+          }finally{Pop-Location}
+          $after=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $after -cne $observed){throw 'REMOTE_DRIFT_AFTER_AUDIT'}
+          Write-Output ('TS_BDS010_CROSS_SURFACE_AUDIT=PASS;state_ref='+$after+';records=4;origin=producer-avr;source_web=VERIFIED;consumption=CONFIRMED;no_original_retry=YES')
