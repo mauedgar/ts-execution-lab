@@ -48,10 +48,10 @@ let shutdownDone=false;
 async function stopServer(){
   if(!server||shutdownDone)return;
   shutdownDone=true;
-  if(server.exitCode===null){server.kill();await Promise.race([
+  if(server.exitCode===null && server.signalCode===null){server.kill();await Promise.race([
     new Promise(resolve=>server.once('exit',resolve)),sleep(8000)
   ]);}
-  if(server.exitCode===null)throw Error('NATIVE_SERVER_NOT_STOPPED');
+  if(server.exitCode===null && server.signalCode===null)throw Error('NATIVE_SERVER_NOT_STOPPED');
 }
 try{
   bd('init','--server','--quiet','--stealth');
@@ -154,6 +154,7 @@ try{
 }catch(err){
   evidence.disposition='FAIL_NEEDED_RECONCILIATION';
   evidence.error=String(err?.stack||err);
+  console.error('TS_BEADS015_DIAGNOSTIC_ERROR='+evidence.error);
   throw err;
 }finally{
   try{await stopServer();}catch(err){evidence.shutdown_error=String(err);}
