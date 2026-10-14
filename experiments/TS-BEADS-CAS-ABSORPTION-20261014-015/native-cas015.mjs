@@ -56,10 +56,10 @@ async function stopServer(){
 try{
   bd('init','--quiet','--stealth');
   check('native_disposable_store_initialized',existsSync(join(root,'.beads')));
-  const created=bdjson('create','Synthetic CAS target','--id',id,'--type','task',
+  const created=bdjson('create','Synthetic CAS target','--id',id,'--force','--type','task',
     '--description','SOURCE_REF='+reference+';PRODUCT_AUTHORITY=NONE');
   check('native_exact_id',created.id===id);
-  const duplicate=spawnSync(bin,['create','Duplicate forbidden','--id',id,'--type','task'],{
+  const duplicate=spawnSync(bin,['create','Duplicate forbidden','--id',id,'--force','--type','task'],{
     cwd:root,env,encoding:'utf8',timeout:30000});
   check('native_duplicate_id_rejected',duplicate.status!==0);
   const port=31000+(Number(process.env.GITHUB_RUN_ID||4312)%22000);
