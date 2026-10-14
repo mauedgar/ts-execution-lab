@@ -20,7 +20,7 @@ const mod=createRequire(join(PROD,'package.json'));
 const {validateAggregate,TRANSITIONS}=mod(join(PROD,'src/state-kernel-v0/contracts.js'));
 const {requireExecutionLifecycleCapability,requireTaskCycleLifecycleCapability}=
  mod(join(PROD,'src/operational-spine-v0/taskcycle-lifecycle-capability.js'));
-const PRODUCT_REF='mauedgar/tecnotron-ai:tools@1ecce07708a5760c99d7faf55f2344f2eabbc119';
+const PRODUCT_REF='mauedgar/tecnotron-ai:tools@f40236d24023159bc38aca06b3fa3862ac62608c';
 const ids={tc:'ts018-tc',op:'ts018-op',at:'ts018-at'};
 const names={tc:'TC-018-LAB',op:'OP-018-LAB',at:'AT-018-LAB'};
 const effect={id:'EXECUTION-EFFECT-018-SYNTHETIC',provider:'LOCAL_PROVIDER_FIXTURE_NOT_REAL',
