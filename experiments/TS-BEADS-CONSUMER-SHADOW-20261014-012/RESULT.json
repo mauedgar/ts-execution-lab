@@ -1,0 +1,126 @@
+{
+  "test": "TS-BEADS-CONSUMER-SHADOW-012",
+  "mode": "PURE_READ_ONLY_MODEL",
+  "native_beads_executed": false,
+  "productAnchor": {
+    "repository": "mauedgar/tecnotron-ai",
+    "branch": "tools",
+    "commit": "2a42a1bbda6e9fecccb28c42c9c2dd294b3b1c89",
+    "tree": "04e57337ac129bd40774d48cf2cfee041f904cfa",
+    "taskcycle": "TASKCYCLE-TECNOTRON-RECIPE-KERNEL-DECOUPLING-001",
+    "terminal": "CLOSED_PASS",
+    "source": "docs/current-state.md",
+    "canonical_candidate": "34ab96c00ca5f8c9c87d69a31371d275eeb5f6d9"
+  },
+  "count": 15,
+  "pass": 15,
+  "fail": 0,
+  "Product_effect": "NONE",
+  "results": [
+    {
+      "id": "real_closed_ignores_ready",
+      "evidenceClass": "OBSERVED_PRODUCT_WITH_SYNTHETIC_BEADS",
+      "expected": "CLOSED_SUBJECT_NO_REOPEN",
+      "observed": "CLOSED_SUBJECT_NO_REOPEN",
+      "PASS": true
+    },
+    {
+      "id": "postclose_discovery_not_promoted",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "POST_CLOSE_INDEX_ONLY",
+      "observed": "POST_CLOSE_INDEX_ONLY",
+      "PASS": true
+    },
+    {
+      "id": "unmet_dependency",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "DEPENDENCY_NOT_PROVEN",
+      "observed": "DEPENDENCY_NOT_PROVEN",
+      "PASS": true
+    },
+    {
+      "id": "unknown_dependency",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "DEPENDENCY_NOT_PROVEN",
+      "observed": "DEPENDENCY_NOT_PROVEN",
+      "PASS": true
+    },
+    {
+      "id": "independent_authorized_only_considered",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "CANDIDATE_FOR_EXISTING_CONTROL_CHECKPOINT_ONLY",
+      "observed": "CANDIDATE_FOR_EXISTING_CONTROL_CHECKPOINT_ONLY",
+      "PASS": true
+    },
+    {
+      "id": "independent_missing_grant",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "PRODUCT_AUTHORIZATION_NOT_PROVEN",
+      "observed": "PRODUCT_AUTHORIZATION_NOT_PROVEN",
+      "PASS": true
+    },
+    {
+      "id": "interrupted_original_preserved",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "RESUME_ORIGINAL_IDENTITY_ONLY_AFTER_ORIGINAL_GATE",
+      "observed": "RESUME_ORIGINAL_IDENTITY_ONLY_AFTER_ORIGINAL_GATE",
+      "PASS": true
+    },
+    {
+      "id": "same_native_id_repeat",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "DUPLICATE_OBLIGATION_NO_RECREATE",
+      "observed": "DUPLICATE_OBLIGATION_NO_RECREATE",
+      "PASS": true
+    },
+    {
+      "id": "same_origin_different_native_ids",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "ORIGIN_COLLISION_READBACK_REQUIRED",
+      "observed": "ORIGIN_COLLISION_READBACK_REQUIRED",
+      "PASS": true
+    },
+    {
+      "id": "unknown_effect_blocks_claim",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "RECONCILE_ORIGINAL_EFFECT_FIRST",
+      "observed": "RECONCILE_ORIGINAL_EFFECT_FIRST",
+      "PASS": true
+    },
+    {
+      "id": "claim_not_authority",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "BEADS_CLAIM_NOT_DEVELOPER_GRANT",
+      "observed": "BEADS_CLAIM_NOT_DEVELOPER_GRANT",
+      "PASS": true
+    },
+    {
+      "id": "beads_closed_not_product_closed",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "BEADS_CLOSED_NOT_PRODUCT_CLOSED",
+      "observed": "BEADS_CLOSED_NOT_PRODUCT_CLOSED",
+      "PASS": true
+    },
+    {
+      "id": "missing_source_reference",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "EVIDENCE_INCOMPLETE",
+      "observed": "EVIDENCE_INCOMPLETE",
+      "PASS": true
+    },
+    {
+      "id": "duplicate_dependency_record",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "DEPENDENCY_INVENTORY_DUPLICATE",
+      "observed": "DEPENDENCY_INVENTORY_DUPLICATE",
+      "PASS": true
+    },
+    {
+      "id": "unqualified_index_status",
+      "evidenceClass": "SYNTHETIC_COUNTERFACTUAL",
+      "expected": "INDEX_NOT_READY_OR_UNQUALIFIED",
+      "observed": "INDEX_NOT_READY_OR_UNQUALIFIED",
+      "PASS": true
+    }
+  ]
+}
