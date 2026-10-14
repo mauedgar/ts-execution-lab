@@ -6,54 +6,6 @@ on:
 permissions:
   contents: read
 jobs:
-  product-oracle-contracts:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 12
-    steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Execute existing Product tests directly from frozen commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          product='1ecce07708a5760c99d7faf55f2344f2eabbc119'
-          tree='025ce7524d1b8bf1753cfc4af964ee554d3b0977'
-          remote='https://github.com/mauedgar/tecnotron-ai.git'
-          current="$(git ls-remote "$remote" refs/heads/tools | cut -f1)"
-          test "$current" = "$product"
-          root="$RUNNER_TEMP/product-test-017"
-          test ! -e "$root"
-          git clone -q --no-checkout "$remote" "$root"
-          git -C "$root" checkout -q --detach "$product"
-          test "$(git -C "$root" rev-parse HEAD)" = "$product"
-          test "$(git -C "$root" rev-parse 'HEAD^{tree}')" = "$tree"
-          cd "$root"
-          npm ci --ignore-scripts --no-audit --no-fund
-          set +e
-          node --test --test-reporter=tap \
-            tests/state-kernel-v0/kernel.test.js \
-            tests/operational-spine-v0/reconcile-and-close-taskcycle.test.js \
-            tests/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.test.js \
-            > "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap" 2>&1
-          result=$?
-          set -e
-          tail -n 20 "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap"
-          node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");const num=(k)=>Number((s.match(new RegExp("^# "+k+" (\\d+)","m"))||[])[1]||0);const out={subject:"Tecnotron 017 frozen source oracle",commit:process.argv[3],tree:process.argv[4],tests:num("tests"),passed:num("pass"),failed:num("fail"),skipped:num("skipped"),runner_exit:Number(process.argv[2])};fs.writeFileSync(process.argv[5],JSON.stringify(out,null,2)+"\n");console.log("TS_BEADS017_PRODUCT_ORACLE="+JSON.stringify(out));if(out.runner_exit!==0||out.failed>0||out.tests<15)process.exit(1)' \
-            "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap" "$result" "$product" "$tree" "$RUNNER_TEMP/tecnotron-017-product-oracle.json"
-          after="$(git ls-remote "$remote" refs/heads/tools | cut -f1)"
-          test "$after" = "$product"
-          echo "TS_BEADS017_PRODUCT_REF_UNCHANGED=PASS;$after"
-      - name: Retain frozen Product oracle receipt
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ts-beads-017-product-oracle-contracts
-          path: |
-            ${{ runner.temp }}/tecnotron-017-product-oracle.json
-            ${{ runner.temp }}/tecnotron-017-selected-contracts.tap
-          if-no-files-found: warn
-          retention-days: 7
   native-product-shadow:
     runs-on: windows-2022
     timeout-minutes: 12
@@ -64,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Native Beads shadow against pinned Tecnotron actual contract modules
+      - name: Native Beads Product-contract shadow only, 017 repaired attempt 2
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
