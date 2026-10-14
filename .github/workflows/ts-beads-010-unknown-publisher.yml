@@ -1,0 +1,91 @@
+name: TS Beads 010 inject acknowledgement loss after native GitHub publish
+on:
+  push:
+    branches: [experiment/beads-unknown-handoff-20261013-010]
+    paths: [.github/workflows/ts-beads-010-unknown-publisher.yml]
+permissions:
+  contents: write
+jobs:
+  dispatch:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record durable Web-source handoff and inject lost application receipt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $sourceCommit='fffc1f2cc01e1c104cb2bae9334a9affa2251a47'
+          $sourceBlob='8458320411f65239d8232d1ba2bef350f118d5b8'
+          $sourcePath='experiments/TS-BEADS-UNKNOWN-HANDOFF-20261013-010/HANDOFF.json'
+          $sourceFile=Join-Path $env:GITHUB_WORKSPACE $sourcePath
+          if(-not(Test-Path -LiteralPath $sourceFile)){throw 'WEB_HANDOFF_SOURCE_NOT_PRESENT'}
+          $blob=(& git hash-object -- $sourceFile|Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $blob -cne $sourceBlob){throw 'SOURCE_BLOB_MISMATCH'}
+          $source=Get-Content -LiteralPath $sourceFile -Raw|ConvertFrom-Json
+          $marker='test://TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010/ORIGIN@001'
+          if($source.authority -cne 'NONE_PRODUCT' -or $source.source_ref -cne $marker -or $source.id -cne 'TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010'){throw 'WEB_HANDOFF_CONTRACT_MISMATCH'}
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $ref='refs/dolt/data'
+          $before='14f63d1e9c5d8630b7b8918245407e1476e23b8b'
+          $current=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $current -cne $before){throw ('EXPECTED_INITIAL_DOLT_REF_DRIFT='+$current)}
+          $root=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('bd10p'+$env:GITHUB_RUN_ID)
+          if(Test-Path $root){throw 'WORKDIR_ALREADY_EXISTS'}
+          New-Item -ItemType Directory -Path $root|Out-Null
+          $archive=Join-Path $root 'bd.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_ARCHIVE_HASH_MISMATCH'}
+          $bindir=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $bindir
+          $bd=Get-ChildItem -LiteralPath $bindir -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          $work=Join-Path $root 'w'
+          & git clone --quiet --single-branch --branch experiment/beads-unknown-handoff-20261013-010 $remote $work
+          if($LASTEXITCODE -ne 0){throw 'ISOLATED_CHECKOUT_FAILED'}
+          Push-Location $work
+          try{
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'NATIVE_BOOTSTRAP_FAILED'}
+            $items=(& $bd list --all --json | Out-String).Trim()|ConvertFrom-Json
+            if($LASTEXITCODE -ne 0 -or @($items).Count -ne 3){throw 'ORIGINAL_THREE_ISSUES_NOT_FOUND'}
+            foreach($item in $items){
+              $s=(& $bd show ([string]$item.id) --json | Out-String).Trim()
+              if($LASTEXITCODE -ne 0){throw 'ORIGINAL_SHOW_FAILED'}
+              $issue=@($s|ConvertFrom-Json)[0]
+              if(([string]$issue.description).Contains('SOURCE_REF='+$marker)){throw 'WEB_HANDOFF_ALREADY_REGISTERED_NO_REPLAY'}
+            }
+            $descr='SOURCE_REF='+$marker+';WEB_SOURCE_COMMIT='+$sourceCommit+';WEB_SOURCE_BLOB='+$sourceBlob+';checkpoint=deferred'
+            $made=(& $bd create 'WEB sourced TS experimental module handoff' --type task --description $descr --external-ref $marker --json |Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'NEW_HANDOFF_CREATE_FAILED'}
+            $start=$made.IndexOf('{')
+            if($start -lt 0){throw 'NEW_HANDOFF_JSON_MISSING'}
+            $issue=$made.Substring($start)|ConvertFrom-Json
+            $issueId=[string]$issue.id
+            if(-not $issueId){throw 'CREATED_HANDOFF_NO_ID'}
+            $ready=[ordered]@{contract='ts-beads-unknown-dispatch/v0-experimental';authority='NONE_PRODUCT';source_commit=$sourceCommit;source_blob=$sourceBlob;source_ref=$marker;issue_id=$issueId;original_remote_ref=$before;attempt_id='BEADS-NATIVE-GH010-UNKNOWN-PUBLISH-001';pre_dispatch_status='UNKNOWN_AFTER_DISPATCH';mode='INJECTED_APPLICATION_ACK_LOSS';run=[string]$env:GITHUB_RUN_ID}
+            $ready|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $root 'dispatch.json') -Encoding utf8
+            Write-Output ('TS_BDS010_PRE_DISPATCH='+($ready|ConvertTo-Json -Compress -Depth 6))
+            & $bd dolt push
+            # Intentionally lose the application-level receipt after the provider operation.
+            # This is a fault-injection simulation, not proof of genuinely unobservable provider completion.
+            throw 'INJECTED_APPLICATION_ACK_LOSS_AFTER_NATIVE_PUSH_NO_AUTOMATIC_RETRY'
+          }finally{Pop-Location}
+      - name: Preserve original pre-dispatch identity even after deliberate terminal failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-010-original-unknown-dispatch
+          path: D:/bd10p${{ github.run_id }}/dispatch.json
+          if-no-files-found: warn
+          retention-days: 7
