@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Isolated native CAS in disposable Dolt SQL Server, run 015-3
+      - name: Isolated native CAS in disposable Dolt SQL Server, run 015-4
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
