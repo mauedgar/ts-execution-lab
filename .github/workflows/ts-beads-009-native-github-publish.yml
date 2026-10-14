@@ -61,7 +61,7 @@ jobs:
             $created=($obj.Substring($i)|ConvertFrom-Json)
             if(-not $created.id){throw 'CREATED_ISSUE_NO_ID'}
             Write-Output ('TS_NATIVE_GH_ORIGIN='+$marker+';issue='+$created.id)
-            & $bd dolt remote add gh-experimental ('git+'+$remote)
+            & $bd dolt remote add gh-experimental ('git+'+$remote) --allow-git-origin
             if($LASTEXITCODE -ne 0){throw 'DOLT_REMOTE_ADD_FAILED'}
             $pushSuccess=$false
             try{
