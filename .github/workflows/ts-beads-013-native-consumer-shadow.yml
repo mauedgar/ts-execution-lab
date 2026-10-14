@@ -62,13 +62,13 @@ jobs:
             if(Test-Path -LiteralPath $env:BEADS_DIR){throw 'NOT_A_FRESH_BEADS_CONSUMER'}
             & $bd bootstrap
             if($LASTEXITCODE -ne 0){throw 'BEADS_NATIVE_BOOTSTRAP_FAILED'}
-            function JsonBd([string[]]$Args) {
-              $raw=(& $bd @Args 2>&1|Out-String).Trim()
-              if($LASTEXITCODE -ne 0){throw ('BEADS_READ_FAILED_'+($Args -join '_')+':'+$raw)}
+            function JsonBd([string[]]$Items) {
+              $raw=(& $bd @Items 2>&1|Out-String).Trim()
+              if($LASTEXITCODE -ne 0){throw ('BEADS_READ_FAILED_'+($Items -join '_')+':'+$raw)}
               $found=[regex]::Match($raw,'(?s)(\[\s*\{.*\}\s*\]|\[\s*\])\s*$')
-              if(-not $found.Success){throw ('BEADS_JSON_MISSING_'+($Args -join '_'))}
+              if(-not $found.Success){throw ('BEADS_JSON_MISSING_'+($Items -join '_'))}
               try { return ($found.Groups[1].Value|ConvertFrom-Json -ErrorAction Stop) }
-              catch { throw ('BEADS_JSON_PARSE_FAILED_'+($Args -join '_')+':'+$_.Exception.Message) }
+              catch { throw ('BEADS_JSON_PARSE_FAILED_'+($Items -join '_')+':'+$_.Exception.Message) }
             }
             $all=@(JsonBd @('list','--all','--json','--limit','100'))
             $ready=@(JsonBd @('ready','--json'))
