@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify exact Product and native CAS, repaired synthetic ID prefix 015-2
+      - name: Isolated native CAS in disposable Dolt SQL Server, run 015-3
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -43,6 +43,22 @@ jobs:
           Expand-Archive -LiteralPath $zip -DestinationPath $bin
           $env:BD_BIN=Get-ChildItem -LiteralPath $bin -Recurse -Filter bd.exe -File|Select-Object -First 1 -ExpandProperty FullName
           if(-not $env:BD_BIN){throw 'BEADS_BINARY_MISSING'}
+          $doltArchive=Join-Path $folder 'dolt.zip'
+          Invoke-WebRequest -Uri 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' -OutFile $doltArchive
+          if(((Get-FileHash $doltArchive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6'){throw 'DOLT_BINARY_PIN_FAIL'}
+          $doltUnpacked=Join-Path $folder 'dolt'
+          Expand-Archive -LiteralPath $doltArchive -DestinationPath $doltUnpacked
+          $doltExe=Get-ChildItem -LiteralPath $doltUnpacked -Recurse -File -Filter dolt.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $doltExe){throw 'DOLT_BINARY_MISSING'}
+          $sqlRoot=Join-Path $folder 'sql'
+          New-Item -ItemType Directory $sqlRoot|Out-Null
+          $env:BEADS_DOLT_SERVER_MODE='1'
+          $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+          $env:BEADS_DOLT_SERVER_PORT=[string](34000+([long]$env:GITHUB_RUN_ID%19000))
+          $server=Start-Process -FilePath $doltExe -WorkingDirectory $sqlRoot -ArgumentList @('sql-server','--port',$env:BEADS_DOLT_SERVER_PORT) -PassThru -RedirectStandardOutput (Join-Path $folder 'sql-stdout.log') -RedirectStandardError (Join-Path $folder 'sql-stderr.log') -WindowStyle Hidden
+          Write-Output ('TS_BEADS015_DISPOSABLE_DOLT_SERVER_PID='+$server.Id)
+          Start-Sleep -Seconds 3
+          if($server.HasExited){throw ('DISPOSABLE_DOLT_SERVER_FAILED='+$server.ExitCode)}
           $lab=Join-Path $folder 'lab'
           New-Item -ItemType Directory $lab|Out-Null
           & git -C $lab init -q
