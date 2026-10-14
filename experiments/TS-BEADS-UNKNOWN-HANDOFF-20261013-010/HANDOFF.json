@@ -1,0 +1,27 @@
+{
+  "contract": "ts-beads-cross-surface-handoff/v0-experimental",
+  "id": "TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010",
+  "authority": "NONE_PRODUCT",
+  "created_by": "ChatGPT Web, TS experimental research control",
+  "source_ref": "test://TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010/ORIGIN@001",
+  "payload": {
+    "intent": "Register an obligation discovered while another hypothetical pipeline is in progress. Defer consultation until the recipient reaches its already-authorized checkpoint.",
+    "source_module": "synthetic-module-A",
+    "target_module": "synthetic-module-B",
+    "origin_checkpoint": "synthetic-pipeline-A/checkpoint-02",
+    "action": "Recover and acknowledge this handoff in a fresh independent execution, never automatically create a Product TaskCycle.",
+    "dependency": "none, experiment-only"
+  },
+  "ownership": {
+    "source": "ChatGPT Web authored Git carrier",
+    "recipient": "new isolated GitHub Actions consumer at checkpoint, not an LLM agent",
+    "product_authority": "none"
+  },
+  "constraints": {
+    "do_not_interrupt_active_task": true,
+    "must_verify_exact_origin": true,
+    "no_product_effects": true,
+    "no_retry_on_unknown": true,
+    "no_new_scheduler": true
+  }
+}
