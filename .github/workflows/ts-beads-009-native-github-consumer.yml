@@ -1,0 +1,68 @@
+name: TS Beads 009 native GitHub remote fresh consumer
+on:
+  push:
+    branches: [experiment/beads-github-native-remote-20261013-009]
+    paths: [.github/workflows/ts-beads-009-native-github-consumer.yml]
+permissions:
+  contents: read
+jobs:
+  native-fresh-read:
+    runs-on: windows-2022
+    timeout-minutes: 9
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Restore native Beads Dolt remote from exact pinned GitHub reference
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $ref='refs/dolt/data'
+          $expected='cb56a7b2dba9086c8797d69eaffba58155ad9b82'
+          $line=(& git ls-remote $remote $ref|Out-String).Trim()
+          if($LASTEXITCODE -ne 0){throw 'GITHUB_DOLT_REF_LOOKUP_FAILED'}
+          $observed=$line.Split([char]9)[0]
+          if($observed -cne $expected){throw ('GITHUB_DOLT_REF_DRIFT='+$observed)}
+          Write-Output ('TS_NATIVE_GH_FRESH_READ_PIN='+$observed)
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-native-gh009-consumer'
+          if(Test-Path $root){throw 'CONSUMER_WORKDIR_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          $zip=Join-Path $root 'bd.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $zip
+          if(((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BD_ARCHIVE_HASH_WRONG'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $zip -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $bd){throw 'BD_EXE_MISSING'}
+          $work=Join-Path $root 'fresh-checkout'
+          & git clone --no-tags --single-branch --branch experiment/beads-github-native-remote-20261013-009 $remote $work
+          if($LASTEXITCODE -ne 0){throw 'FRESH_GITHUB_CLONE_FAILED'}
+          Push-Location $work
+          try{
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            if(Test-Path -LiteralPath $env:BEADS_DIR){throw 'FRESH_BD_STORE_ALREADY_PRESENT'}
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'NATIVE_GITHUB_BOOTSTRAP_FAILED'}
+            $raw=(& $bd show producer-1qa --json|Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'ORIGINAL_ISSUE_NOT_RECOVERED'}
+            $start=$raw.IndexOf('[')
+            if($start -lt 0){throw 'BD_SHOW_JSON_UNAVAILABLE'}
+            $issue=@($raw.Substring($start)|ConvertFrom-Json)[0]
+            if([string]$issue.id -cne 'producer-1qa' -or [string]$issue.status -cne 'open' -or -not ([string]$issue.description).Contains('SOURCE_REF=test://TS-BEADS-NATIVE-GITHUB-REMOTE-20261013-009/ORIGIN-A@FROZEN')){throw 'ORIGINAL_SOURCE_IDENTITY_NOT_RETAINED'}
+            $list=(& $bd list --all --json|Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'RECOVERED_LIST_FAILED'}
+            $all=@($list|ConvertFrom-Json)
+            if($all.Count -ne 1){throw ('RECOVERED_CARDINALITY_'+$all.Count)}
+          }finally{Pop-Location}
+          $last=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $last -cne $expected){throw 'CONSUMER_REMOTE_READBACK_DRIFT'}
+          Write-Output ('TS_NATIVE_GH_FRESH_BOOTSTRAP=PASS;ref_sha='+$last+';issue=producer-1qa;count=1;source_verified=YES;read_only_remote=YES')
