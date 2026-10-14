@@ -38,7 +38,7 @@ const evidence={
   experiment:'TS-BEADS-CAS-ABSORPTION-20261014-015',
   authority:'NONE_PRODUCT',product_ref:'mauedgar/tecnotron-ai:tools@1ecce07708a5760c99d7faf55f2344f2eabbc119',
   product_tree:'025ce7524d1b8bf1753cfc4af964ee554d3b0977',
-  observed_native_version:'beads_v1.3.1',native_storage:'DOLT_EMBEDDED_DISPOSABLE',
+  observed_native_version:'beads_v1.3.1',native_storage:'DOLT_SQL_SERVER_DISPOSABLE',
   developer_grant:'NONE',product_effect:'NONE',shared_dolt_push_count:0,
   results, observations:marks, limitations:[]
 };
@@ -54,7 +54,7 @@ async function stopServer(){
   if(server.exitCode===null)throw Error('NATIVE_SERVER_NOT_STOPPED');
 }
 try{
-  bd('init','--quiet','--stealth');
+  bd('init','--server','--quiet','--stealth');
   check('native_disposable_store_initialized',existsSync(join(root,'.beads')));
   const created=bdjson('create','Synthetic CAS target','--id',id,'--force','--type','task',
     '--description','SOURCE_REF='+reference+';PRODUCT_AUTHORITY=NONE');
