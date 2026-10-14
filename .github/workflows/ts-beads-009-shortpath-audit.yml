@@ -1,0 +1,73 @@
+name: TS Beads 009 native GitHub remote independent short-path audit
+on:
+  push:
+    branches: [experiment/beads-github-native-remote-20261013-009]
+    paths: [.github/workflows/ts-beads-009-shortpath-audit.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: windows-2022
+    timeout-minutes: 9
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify exact reconciled remote by fresh short-path native bootstrap
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $target='refs/dolt/data'
+          $expected='14f63d1e9c5d8630b7b8918245407e1476e23b8b'
+          $got=(& git ls-remote $remote $target|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $got -cne $expected){throw ('RECONCILED_GIT_DOLT_REF_DRIFT='+$got)}
+          $root=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('bd9-'+$env:GITHUB_RUN_ID)
+          if(Test-Path $root){throw 'AUDIT_WORKSPACE_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          Write-Output ('TS_NATIVE_GH_SHORT_PATH='+$root)
+          $archive=Join-Path $root 'b.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_BINARY_SHA256_UNEXPECTED'}
+          $binary=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $binary
+          $bd=Get-ChildItem -LiteralPath $binary -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $bd){throw 'BEADS_EXECUTABLE_MISSING'}
+          $work=Join-Path $root 'w'
+          & git clone --quiet --single-branch --branch experiment/beads-github-native-remote-20261013-009 $remote $work
+          if($LASTEXITCODE -ne 0){throw 'INDEPENDENT_GITHUB_CLONE_FAILED'}
+          Push-Location $work
+          try{
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            if(Test-Path -LiteralPath $env:BEADS_DIR){throw 'STORE_NOT_FRESH'}
+            & $bd bootstrap
+            if($LASTEXITCODE -ne 0){throw 'NATIVE_GH_BOOTSTRAP_FAILED'}
+            $s=(& $bd list --all --json|Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'BEADS_LIST_FAILED'}
+            $items=@($s|ConvertFrom-Json)
+            if($items.Count -ne 3){throw ('RECONCILED_COUNT_WRONG_'+$items.Count)}
+            $requirements=@(
+              @{id='producer-1qa';marker='test://TS-BEADS-NATIVE-GITHUB-REMOTE-20261013-009/ORIGIN-A@FROZEN'},
+              @{id='producer-9a71b002';marker='test://TS-BEADS-GITHUB-NATIVE-RACE-009/WRITER-B'},
+              @{id='producer-9a71a001';marker='test://TS-BEADS-GITHUB-NATIVE-RACE-009/WRITER-A'}
+            )
+            foreach($item in $requirements){
+              $found=@($items|Where-Object {$_.id -ceq $item.id})
+              if($found.Count -ne 1){throw ('MISSING_OR_DUPLICATE_'+$item.id)}
+              $raw=(& $bd show ([string]$item.id) --json|Out-String).Trim()
+              if($LASTEXITCODE -ne 0){throw ('SHOW_FAILED_'+$item.id)}
+              $record=@($raw|ConvertFrom-Json)[0]
+              if(-not ([string]$record.description).Contains('SOURCE_REF='+$item.marker)){throw ('SOURCE_REF_MISMATCH_'+$item.id)}
+            }
+          }finally{Pop-Location}
+          $after=(& git ls-remote $remote $target|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $after -cne $expected){throw 'REMOTE_REF_CHANGED_DURING_AUDIT'}
+          Write-Output ('TS_NATIVE_GH_INDEPENDENT_AUDIT=PASS;ref='+$after+';count=3;original=1;writer_A=1;writer_B=1;all_sources_match=YES')
