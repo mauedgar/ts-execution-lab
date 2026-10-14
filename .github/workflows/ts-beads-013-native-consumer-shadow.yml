@@ -65,9 +65,59 @@ jobs:
             function JsonBd([string[]]$Args) {
               $raw=(& $bd @Args 2>&1|Out-String).Trim()
               if($LASTEXITCODE -ne 0){throw ('BEADS_READ_FAILED_'+($Args -join '_')+':'+$raw)}
-              $start=$raw.IndexOf('[')
-              if($start -lt 0){throw ('BEADS_JSON_MISSING_'+($Args -join '_'))}
-              return ,@($raw.Substring($start)|ConvertFrom-Json)
+              $found=[regex]::Match($raw,'(?s)(\[\s*\{.*\}\s*\]|\[\s*\])\s*
+            }
+            $all=@(JsonBd @('list','--all','--json','--limit','100'))
+            $ready=@(JsonBd @('ready','--json'))
+            if($all.Count -ne 4){throw ('PINNED_NATIVE_RECORD_COUNT_DRIFT='+$all.Count)}
+            $ids=@($all|ForEach-Object {[string]$_.id})
+            if(@($ids|Select-Object -Unique).Count -ne $ids.Count){throw 'DUPLICATE_NATIVE_ID'}
+            $readyIds=@($ready|ForEach-Object {[string]$_.id})
+            foreach($item in $ready){
+              if([string]$item.status -cne 'open' -or $ids -notcontains [string]$item.id){throw 'NATIVE_READY_FRONTIER_INVALID'}
+            }
+            $original=@(JsonBd @('show','producer-avr','--json'))[0]
+            if([string]$original.id -cne 'producer-avr' -or [string]$original.status -cne 'closed' -or -not ([string]$original.description).Contains('SOURCE_REF=test://TS-BEADS-CROSS-SURFACE-HANDOFF-20261013-010/ORIGIN@001')){throw 'ORIGINAL_SYNTHETIC_HANDOFF_IDENTITY_MISMATCH'}
+            if($readyIds -contains 'producer-avr'){throw 'CLOSED_NATIVE_ISSUE_REENTERED_READY'}
+            $receipt=[ordered]@{
+              schema='ts-beads-consumer-shadow-013/v1'
+              evidence='NATIVE_READ_GITHUB_ACTIONS'
+              product_ref=$productHead
+              product_tree=$expectedTree
+              product_taskcycle=$taskcycle
+              product_subject_state='CLOSED_PASS'
+              product_authority='SOT_OUTSIDE_BEADS'
+              beads_git_remote_ref=$native
+              beads_version='v1.3.1'
+              native_record_count=$all.Count
+              native_ready_count=$ready.Count
+              native_ready_ids=$readyIds
+              native_closed_synthetic_handoff='producer-avr'
+              Product_effect='NONE'
+              Beads_remote_push_count=0
+              new_TaskCycle_count=0
+              Product_repository_writes=0
+              comparison='CLOSED_PRODUCT_SUBJECT_IS_NOT_REOPENED_BY_NATIVE_BEADS_READY'
+              remaining='LIFECYCLE_EFFECT_PARITY_NOT_PROVEN'
+            }
+            $receipt|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'beads-013-native-shadow.json') -Encoding utf8
+            Write-Output ('TS_BEADS013_NATIVE_SHADOW=PASS;product='+$productHead+';dolt='+$native+';records='+$all.Count+';ready='+$ready.Count+';closed_synthetic=producer-avr;Product_effect=NONE')
+          } finally {Pop-Location}
+          $after=((& git ls-remote $remote $nativeRef|Out-String).Trim() -split "`t")[0]
+          if($LASTEXITCODE -ne 0 -or $after -cne $expectedNative){throw ('BEADS013_UNEXPECTED_REMOTE_REF_CHANGE='+$after)}
+          Write-Output 'TS_BEADS013_REMOTE_UNCHANGED=PASS'
+      - name: Export bounded read-only experimental receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-013-native-shadow-receipt
+          path: ${{ runner.temp }}/beads-013-native-shadow.json
+          if-no-files-found: warn
+          retention-days: 7
+)
+              if(-not $found.Success){throw ('BEADS_JSON_MISSING_'+($Args -join '_'))}
+              try { return ($found.Groups[1].Value|ConvertFrom-Json -ErrorAction Stop) }
+              catch { throw ('BEADS_JSON_PARSE_FAILED_'+($Args -join '_')+':'+$_.Exception.Message) }
             }
             $all=@(JsonBd @('list','--all','--json','--limit','100'))
             $ready=@(JsonBd @('ready','--json'))
