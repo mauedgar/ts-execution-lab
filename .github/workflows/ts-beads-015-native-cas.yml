@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify Product current exact and qualify disposable native CAS
+      - name: Verify exact Product and native CAS, repaired synthetic ID prefix 015-2
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
