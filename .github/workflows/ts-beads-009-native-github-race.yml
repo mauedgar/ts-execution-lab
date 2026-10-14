@@ -1,0 +1,123 @@
+name: TS Beads 009 native GitHub remote concurrent writers
+on:
+  push:
+    branches: [experiment/beads-github-native-remote-20261013-009]
+    paths: [.github/workflows/ts-beads-009-native-github-race.yml]
+permissions:
+  contents: read
+jobs:
+  race:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Race two bounded native Dolt push writers against original pinned GitHub ref
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $ref='refs/dolt/data'
+          $initial='cb56a7b2dba9086c8797d69eaffba58155ad9b82'
+          $line=(& git ls-remote $remote $ref|Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $line.Split([char]9)[0] -cne $initial){throw 'ORIGINAL_GITHUB_REF_DRIFT_STOP'}
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-gh-native-race009'
+          if(Test-Path $root){throw 'EXPERIMENT_WORKSPACE_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          $archive=Join-Path $root 'bd.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $archive
+          if(((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BIN_SHA_MISMATCH'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $archive -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -File -Recurse -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $bd){throw 'BD_BINARY_MISSING'}
+          $gate=Join-Path $root 'gate'
+          New-Item -ItemType Directory $gate|Out-Null
+          $jobs=@()
+          foreach($slot in @('A','B')){
+            $jobs+=Start-Job -ArgumentList @($slot,$root,$gate,$bd,$remote,$ref,$initial) -ScriptBlock {
+              param([string]$Slot,[string]$Root,[string]$Gate,[string]$Bd,[string]$Remote,[string]$Ref,[string]$Original)
+              $ErrorActionPreference='Stop'
+              $ProgressPreference='SilentlyContinue'
+              $receipt=[ordered]@{contract='ts-beads-native-github-race/v0-experimental';authority='NONE_PRODUCT';slot=$Slot;pid=$PID;status='UNKNOWN';base_ref=$Original;issue_id=$null;source_ref=$null;push_exit=$null;push_start_utc=$null;push_end_utc=$null;remote_after=$null;error=$null}
+              try{
+                $work=Join-Path $Root ('writer-'+$Slot)
+                & git clone --single-branch --branch experiment/beads-github-native-remote-20261013-009 $Remote $work
+                if($LASTEXITCODE -ne 0){throw 'WORKER_GITHUB_CLONE_FAILED'}
+                Push-Location $work
+                try {
+                  $env:BEADS_DIR=Join-Path $work '.beads'
+                  & $Bd bootstrap
+                  if($LASTEXITCODE -ne 0){throw 'WORKER_NATIVE_BOOTSTRAP_FAILED'}
+                  $pre=(& git ls-remote $Remote $Ref|Out-String).Trim().Split([char]9)[0]
+                  if($LASTEXITCODE -ne 0 -or $pre -cne $Original){throw 'WORKER_REMOTE_DRIFT_BEFORE_CREATE'}
+                  $id=if($Slot -eq 'A'){'producer-9a71a001'}else{'producer-9a71b002'}
+                  $origin='test://TS-BEADS-GITHUB-NATIVE-RACE-009/WRITER-'+$Slot
+                  & $Bd create ('Independent native writer '+$Slot) --id $id --type task --description ('SOURCE_REF='+$origin) --json
+                  if($LASTEXITCODE -ne 0){throw 'WORKER_ISSUE_CREATE_FAILED'}
+                  $receipt.issue_id=$id
+                  $receipt.source_ref=$origin
+                  [IO.File]::WriteAllText((Join-Path $Gate ('ready-'+$Slot)),[string]$PID)
+                  $watch=[Diagnostics.Stopwatch]::StartNew()
+                  while(-not(Test-Path (Join-Path $Gate 'go'))){
+                    if($watch.Elapsed.TotalSeconds -gt 35){throw 'WORKER_GO_BARRIER_TIMEOUT'}
+                    Start-Sleep -Milliseconds 70
+                  }
+                  $receipt.push_start_utc=[DateTime]::UtcNow.ToString('o')
+                  $raw=(& $Bd dolt push 2>&1|Out-String).Trim()
+                  $exit=$LASTEXITCODE
+                  $receipt.push_end_utc=[DateTime]::UtcNow.ToString('o')
+                  $receipt.push_exit=$exit
+                  if($exit -eq 0){$receipt.status='PUSH_EXIT_ZERO_UNVERIFIED'}else{$receipt.status='PUSH_NONZERO_RECONCILIATION_REQUIRED'}
+                  if($exit -ne 0){$receipt.error=$raw.Substring(0,[Math]::Min($raw.Length,900))}
+                }finally{Pop-Location}
+              }catch{
+                $receipt.status='WORKER_ERROR_EFFECT_NEEDS_RECONCILIATION'
+                $receipt.error=$_.Exception.Message
+              }finally{
+                $after=(& git ls-remote $Remote $Ref|Out-String).Trim()
+                if($LASTEXITCODE -eq 0 -and $after){$receipt.remote_after=$after.Split([char]9)[0]}
+                $receipt.finished_utc=[DateTime]::UtcNow.ToString('o')
+                $p=Join-Path $Root ('writer-'+$Slot+'.json')
+                try{$receipt|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $p -Encoding utf8}catch{}
+                Write-Output ('TS_NATIVE_GH_RACE_WORKER='+($receipt|ConvertTo-Json -Compress -Depth 5))
+              }
+            }
+          }
+          $clock=[Diagnostics.Stopwatch]::StartNew()
+          while(-not ((Test-Path (Join-Path $gate 'ready-A')) -and (Test-Path (Join-Path $gate 'ready-B')))){
+            if($clock.Elapsed.TotalSeconds -gt 95){throw 'BOTH_WRITERS_NOT_READY_NO_PUSH_BARRIER'}
+            Start-Sleep -Milliseconds 120
+          }
+          $latest=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or $latest -cne $initial){throw 'SHARED_REF_CHANGED_BEFORE_RACE'}
+          [IO.File]::WriteAllText((Join-Path $gate 'go'),'NOW')
+          $finished=@($jobs|Wait-Job -Timeout 100)
+          if($finished.Count -ne 2 -or @($jobs|Where-Object {$_.State -ne 'Completed'}).Count -ne 0){throw 'RACE_WORKER_TERMINAL_RESULT_MISSING'}
+          foreach($job in $jobs){$job|Receive-Job|Out-Host}
+          $a=Get-Content -Raw (Join-Path $root 'writer-A.json')|ConvertFrom-Json
+          $b=Get-Content -Raw (Join-Path $root 'writer-B.json')|ConvertFrom-Json
+          if(-not $a.push_start_utc -or -not $b.push_start_utc -or -not $a.push_end_utc -or -not $b.push_end_utc){throw 'MISSING_PUSH_INTERVALS'}
+          $overlap=([DateTime]$a.push_start_utc -le [DateTime]$b.push_end_utc -and [DateTime]$b.push_start_utc -le [DateTime]$a.push_end_utc)
+          if(-not $overlap){throw 'PUSH_INTERVALS_NOT_OVERLAPPING'}
+          $current=(& git ls-remote $remote $ref|Out-String).Trim().Split([char]9)[0]
+          if($LASTEXITCODE -ne 0 -or -not $current){throw 'POST_RACE_REF_UNKNOWN'}
+          $success=@($a,$b|Where-Object {$_.push_exit -eq 0}).Count
+          Write-Output ('TS_NATIVE_GH_RACE=OVERLAP_PROVEN;success_count='+$success+';new_ref='+$current+';initial_ref='+$initial+';INDEPENDENT_READBACK_PENDING')
+      - name: Retain original worker receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-native-gh009-race-receipts
+          path: ${{ runner.temp }}/ts-beads-gh-native-race009/writer-*.json
+          if-no-files-found: warn
+          retention-days: 7
