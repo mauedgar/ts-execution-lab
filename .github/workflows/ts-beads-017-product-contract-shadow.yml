@@ -1,0 +1,145 @@
+name: TS Beads 017 pinned Product contract and native lifecycle shadow
+on:
+  push:
+    branches: [experiment/beads-product-contract-shadow-20261014-017]
+    paths: [.github/workflows/ts-beads-017-product-contract-shadow.yml]
+permissions:
+  contents: read
+jobs:
+  product-oracle-contracts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Execute existing Product tests directly from frozen commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          product='1ecce07708a5760c99d7faf55f2344f2eabbc119'
+          tree='025ce7524d1b8bf1753cfc4af964ee554d3b0977'
+          remote='https://github.com/mauedgar/tecnotron-ai.git'
+          current="$(git ls-remote "$remote" refs/heads/tools | cut -f1)"
+          test "$current" = "$product"
+          root="$RUNNER_TEMP/product-test-017"
+          test ! -e "$root"
+          git clone -q --no-checkout "$remote" "$root"
+          git -C "$root" checkout -q --detach "$product"
+          test "$(git -C "$root" rev-parse HEAD)" = "$product"
+          test "$(git -C "$root" rev-parse 'HEAD^{tree}')" = "$tree"
+          cd "$root"
+          npm ci --ignore-scripts --no-audit --no-fund
+          set +e
+          node --test --test-reporter=tap \
+            tests/state-kernel-v0/kernel.test.js \
+            tests/operational-spine-v0/reconcile-and-close-taskcycle.test.js \
+            tests/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.test.js \
+            > "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap" 2>&1
+          result=$?
+          set -e
+          tail -n 20 "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap"
+          node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");const num=(k)=>Number((s.match(new RegExp("^# "+k+" (\\d+)","m"))||[])[1]||0);const out={subject:"Tecnotron 017 frozen source oracle",commit:process.argv[3],tree:process.argv[4],tests:num("tests"),passed:num("pass"),failed:num("fail"),skipped:num("skipped"),runner_exit:Number(process.argv[2])};fs.writeFileSync(process.argv[5],JSON.stringify(out,null,2)+"\n");console.log("TS_BEADS017_PRODUCT_ORACLE="+JSON.stringify(out));if(out.runner_exit!==0||out.failed>0||out.tests<15)process.exit(1)' \
+            "$RUNNER_TEMP/tecnotron-017-selected-contracts.tap" "$result" "$product" "$tree" "$RUNNER_TEMP/tecnotron-017-product-oracle.json"
+          after="$(git ls-remote "$remote" refs/heads/tools | cut -f1)"
+          test "$after" = "$product"
+          echo "TS_BEADS017_PRODUCT_REF_UNCHANGED=PASS;$after"
+      - name: Retain frozen Product oracle receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-017-product-oracle-contracts
+          path: |
+            ${{ runner.temp }}/tecnotron-017-product-oracle.json
+            ${{ runner.temp }}/tecnotron-017-selected-contracts.tap
+          if-no-files-found: warn
+          retention-days: 7
+  native-product-shadow:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Native Beads shadow against pinned Tecnotron actual contract modules
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $product='1ecce07708a5760c99d7faf55f2344f2eabbc119'
+          $tree='025ce7524d1b8bf1753cfc4af964ee554d3b0977'
+          $shared='1f72d68797114170a97fee27641858f2e55a4571'
+          $head=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $head -cne $product){throw ('PRODUCT_IDENTITY_CHANGED='+$head)}
+          $commit=(& gh api ('repos/mauedgar/tecnotron-ai/git/commits/'+$product)|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or [string]$commit.tree.sha -cne $tree){throw 'PRODUCT_TREE_CHANGED'}
+          $sot=(& gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools'|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $sot.sha -cne 'dd8d34a7e3ef3094805d014f9e59741d2c553957'){throw 'PRODUCT_SOT_BLOB_CHANGED'}
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $observed=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $observed -cne $shared){throw ('SHARED_DOLT_DRIFT='+$observed)}
+          $folder=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('pc17'+$env:GITHUB_RUN_ID)
+          if(Test-Path $folder){throw 'DISPOSABLE_PATH_EXISTS'}
+          New-Item -ItemType Directory $folder|Out-Null
+          $zip=Join-Path $folder 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $zip
+          if(((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_BINARY_PIN_FAIL'}
+          $bin=Join-Path $folder 'bin'
+          Expand-Archive -LiteralPath $zip -DestinationPath $bin
+          $env:BD_BIN=Get-ChildItem -LiteralPath $bin -Recurse -Filter bd.exe -File|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $env:BD_BIN){throw 'BEADS_BINARY_MISSING'}
+          $doltArchive=Join-Path $folder 'dolt.zip'
+          Invoke-WebRequest -Uri 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' -OutFile $doltArchive
+          if(((Get-FileHash $doltArchive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6'){throw 'DOLT_BINARY_PIN_FAIL'}
+          $doltUnpacked=Join-Path $folder 'dolt'
+          Expand-Archive -LiteralPath $doltArchive -DestinationPath $doltUnpacked
+          $doltExe=Get-ChildItem -LiteralPath $doltUnpacked -Recurse -File -Filter dolt.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $doltExe){throw 'DOLT_BINARY_MISSING'}
+          $sqlRoot=Join-Path $folder 'sql'
+          New-Item -ItemType Directory $sqlRoot|Out-Null
+          $env:BEADS_DOLT_SERVER_MODE='1'
+          $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+          $env:BEADS_DOLT_SERVER_PORT=[string](34000+([long]$env:GITHUB_RUN_ID%19000))
+          $server=Start-Process -FilePath $doltExe -WorkingDirectory $sqlRoot -ArgumentList @('sql-server','--port',$env:BEADS_DOLT_SERVER_PORT) -PassThru -RedirectStandardOutput (Join-Path $folder 'sql-stdout.log') -RedirectStandardError (Join-Path $folder 'sql-stderr.log') -WindowStyle Hidden
+          Write-Output ('TS_BEADS017_DISPOSABLE_DOLT_SERVER_PID='+$server.Id)
+          Start-Sleep -Seconds 3
+          if($server.HasExited){throw ('DISPOSABLE_DOLT_SERVER_FAILED='+$server.ExitCode)}
+          $lab=Join-Path $folder 'lab'
+          New-Item -ItemType Directory $lab|Out-Null
+          & git -C $lab init -q
+          if($LASTEXITCODE -ne 0 -or ((& git -C $lab remote|Out-String).Trim()) -ne ''){throw 'LAB_HAS_REMOTE'}
+          $productClone=Join-Path $folder 'product'
+          & git clone -q --no-checkout 'https://github.com/mauedgar/tecnotron-ai.git' $productClone
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_CLONE_FAILED'}
+          & git -C $productClone checkout -q --detach $product
+          if($LASTEXITCODE -ne 0){throw 'EXACT_PRODUCT_COMMIT_CHECKOUT_FAILED'}
+          $actualClone=(& git -C $productClone rev-parse HEAD|Out-String).Trim()
+          $actualTree=(& git -C $productClone rev-parse 'HEAD^{tree}'|Out-String).Trim()
+          if($actualClone -cne $product -or $actualTree -cne $tree){throw 'PRODUCT_CHECKOUT_IDENTITY_MISMATCH'}
+          & npm.cmd --prefix $productClone ci --ignore-scripts --no-audit --no-fund
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_ZOD_DEPENDENCY_INSTALL_FAILED'}
+          $env:PRODUCT_ROOT=$productClone
+          $env:LAB_ROOT=$lab
+          $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads017-product-shadow-result.json'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-PRODUCT-CONTRACT-SHADOW-20261014-017/shadow017.mjs'
+          & node --check $script
+          if($LASTEXITCODE -ne 0){throw 'NODE_SYNTAX_FAIL'}
+          & node $script
+          if($LASTEXITCODE -ne 0){throw ('NATIVE_CAS_SCRIPT_EXIT='+$LASTEXITCODE)}
+          $receipt=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
+          if($receipt.disposition -cne 'PASS_SELECTED_PRODUCT_SHADOW_WITH_LIMITATIONS' -or $receipt.PRODUCT_EFFECT -cne 'NONE' -or $receipt.checks.Count -lt 18){throw 'NATIVE_017_RESULT_IDENTITY_FAIL'}
+          $afterDolt=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          $afterProduct=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $afterDolt -cne $shared -or $afterProduct -cne $product){throw 'PRODUCT_OR_SHARED_DOLT_CHANGED'}
+          Write-Output ('TS_BEADS017_NO_EXTERNAL_EFFECT=PASS;product='+$afterProduct+';dolt='+$afterDolt)
+      - name: Upload exact experimental Product native shadow receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-017-product-native-shadow-receipt
+          path: ${{ runner.temp }}/beads017-product-shadow-result.json
+          if-no-files-found: warn
+          retention-days: 7
