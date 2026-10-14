@@ -1,0 +1,87 @@
+name: TS Beads 009 native Dolt GitHub remote publish
+on:
+  push:
+    branches: [experiment/beads-github-native-remote-20261013-009]
+    paths: [.github/workflows/ts-beads-009-native-github-publish.yml]
+permissions:
+  contents: write
+jobs:
+  native-push:
+    runs-on: windows-2022
+    timeout-minutes: 9
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Publish one synthetic Beads obligation via native Dolt Git remote
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $root=Join-Path $env:RUNNER_TEMP 'ts-beads-native-github009'
+          if(Test-Path $root){throw 'EXPERIMENT_RUN_DIR_ALREADY_EXISTS'}
+          New-Item -ItemType Directory $root|Out-Null
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GIT_CONFIG_COUNT='1'
+          $env:GIT_CONFIG_KEY_0='http.https://github.com/.extraheader'
+          $auth=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(('x-access-token:'+$env:GITHUB_TOKEN)))
+          $env:GIT_CONFIG_VALUE_0='AUTHORIZATION: basic '+$auth
+          $target='refs/dolt/data'
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $pre=(& git ls-remote $remote $target|Out-String).Trim()
+          if($LASTEXITCODE -ne 0){throw 'GIT_REMOTE_PREFLIGHT_LOOKUP_FAILED'}
+          if($pre){throw ('REF_ALREADY_EXISTS_NO_DISPATCH='+$pre)}
+          Write-Output 'TS_NATIVE_GH_PRECONDITION=REF_ABSENT'
+          $zip=Join-Path $root 'bd-131.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $zip
+          $sha=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($sha -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BD_ARCHIVE_SHA_MISMATCH'}
+          $bin=Join-Path $root 'bin'
+          Expand-Archive -LiteralPath $zip -DestinationPath $bin
+          $bd=Get-ChildItem -LiteralPath $bin -Recurse -File -Filter bd.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $bd){throw 'BD_EXE_NOT_FOUND'}
+          $work=Join-Path $root 'producer'
+          New-Item -ItemType Directory $work|Out-Null
+          Push-Location $work
+          try{
+            & git init --initial-branch=main
+            if($LASTEXITCODE -ne 0){throw 'ISOLATED_WORKSPACE_GIT_INIT_FAILED'}
+            & git remote add origin $remote
+            if($LASTEXITCODE -ne 0){throw 'REMOTE_CONFIG_FAILED'}
+            $env:BEADS_DIR=Join-Path $work '.beads'
+            & $bd init --quiet --stealth
+            if($LASTEXITCODE -ne 0){throw 'BD_INIT_FAILED'}
+            $marker='test://TS-BEADS-NATIVE-GITHUB-REMOTE-20261013-009/ORIGIN-A@FROZEN'
+            $obj=(& $bd create 'Experimental GitHub native remote continuity obligation' --type task --description ('SOURCE_REF='+$marker) --json|Out-String).Trim()
+            if($LASTEXITCODE -ne 0){throw 'BD_CREATE_FAILED'}
+            $i=$obj.IndexOf('{')
+            if($i -lt 0){throw 'CREATED_ISSUE_JSON_NOT_FOUND'}
+            $created=($obj.Substring($i)|ConvertFrom-Json)
+            if(-not $created.id){throw 'CREATED_ISSUE_NO_ID'}
+            Write-Output ('TS_NATIVE_GH_ORIGIN='+$marker+';issue='+$created.id)
+            & $bd dolt remote add gh-experimental ('git+'+$remote)
+            if($LASTEXITCODE -ne 0){throw 'DOLT_REMOTE_ADD_FAILED'}
+            $pushSuccess=$false
+            try{
+              & $bd dolt push --remote gh-experimental
+              $pushCode=$LASTEXITCODE
+              $pushSuccess=($pushCode -eq 0)
+            }finally{
+              $after=(& git ls-remote $remote $target|Out-String).Trim()
+              $lsExit=$LASTEXITCODE
+              if($lsExit -eq 0){
+                Write-Output ('TS_NATIVE_GH_REMOTE_REF_POST='+$after)
+                if($after){
+                  $refSha=$after.Split([char]9)[0]
+                  Write-Output ('TS_NATIVE_GH_PUBLISH_EFFECT=REF_PRESENT;ref_sha='+$refSha+';push_ok='+$pushSuccess)
+                }else{
+                  Write-Output ('TS_NATIVE_GH_PUBLISH_EFFECT=REF_ABSENT;push_ok='+$pushSuccess)
+                }
+              }else{Write-Output 'TS_NATIVE_GH_PUBLISH_EFFECT=REMOTE_QUERY_FAILED_UNKNOWN'}
+            }
+            if(-not $pushSuccess){throw 'DOLT_NATIVE_GITHUB_PUSH_FAILED_RECONCILE_REF_BEFORE_RETRY'}
+            if(-not $after){throw 'PUSH_EXIT_ZERO_BUT_REMOTE_REF_ABSENT_UNKNOWN'}
+            Write-Output ('TS_NATIVE_GITHUB_PUBLISH=PASS;source_ref='+$marker+';issue_id='+$created.id+';ref_sha='+$refSha)
+          }finally{Pop-Location}
