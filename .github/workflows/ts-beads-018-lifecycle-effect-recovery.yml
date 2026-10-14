@@ -1,0 +1,98 @@
+name: TS Beads 018 native lifecycle ports and synthetic external effect reconciliation
+on:
+  push:
+    branches: [experiment/beads-lifecycle-effect-recovery-20261014-018]
+    paths: [.github/workflows/ts-beads-018-lifecycle-effect-recovery.yml]
+permissions:
+  contents: read
+jobs:
+  native-lifecycle-shadow:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Native Beads 018 bounded lifecycle/UNKNOWN native transaction test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $product='1ecce07708a5760c99d7faf55f2344f2eabbc119'
+          $tree='025ce7524d1b8bf1753cfc4af964ee554d3b0977'
+          $shared='1f72d68797114170a97fee27641858f2e55a4571'
+          $head=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $head -cne $product){throw ('PRODUCT_IDENTITY_CHANGED='+$head)}
+          $commit=(& gh api ('repos/mauedgar/tecnotron-ai/git/commits/'+$product)|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or [string]$commit.tree.sha -cne $tree){throw 'PRODUCT_TREE_CHANGED'}
+          $sot=(& gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools'|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $sot.sha -cne 'dd8d34a7e3ef3094805d014f9e59741d2c553957'){throw 'PRODUCT_SOT_BLOB_CHANGED'}
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $observed=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $observed -cne $shared){throw ('SHARED_DOLT_DRIFT='+$observed)}
+          $folder=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('er18'+$env:GITHUB_RUN_ID)
+          if(Test-Path $folder){throw 'DISPOSABLE_PATH_EXISTS'}
+          New-Item -ItemType Directory $folder|Out-Null
+          $zip=Join-Path $folder 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $zip
+          if(((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_BINARY_PIN_FAIL'}
+          $bin=Join-Path $folder 'bin'
+          Expand-Archive -LiteralPath $zip -DestinationPath $bin
+          $env:BD_BIN=Get-ChildItem -LiteralPath $bin -Recurse -Filter bd.exe -File|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $env:BD_BIN){throw 'BEADS_BINARY_MISSING'}
+          $doltArchive=Join-Path $folder 'dolt.zip'
+          Invoke-WebRequest -Uri 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' -OutFile $doltArchive
+          if(((Get-FileHash $doltArchive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6'){throw 'DOLT_BINARY_PIN_FAIL'}
+          $doltUnpacked=Join-Path $folder 'dolt'
+          Expand-Archive -LiteralPath $doltArchive -DestinationPath $doltUnpacked
+          $doltExe=Get-ChildItem -LiteralPath $doltUnpacked -Recurse -File -Filter dolt.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $doltExe){throw 'DOLT_BINARY_MISSING'}
+          $sqlRoot=Join-Path $folder 'sql'
+          New-Item -ItemType Directory $sqlRoot|Out-Null
+          $env:BEADS_DOLT_SERVER_MODE='1'
+          $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+          $env:BEADS_DOLT_SERVER_PORT=[string](34000+([long]$env:GITHUB_RUN_ID%19000))
+          $server=Start-Process -FilePath $doltExe -WorkingDirectory $sqlRoot -ArgumentList @('sql-server','--port',$env:BEADS_DOLT_SERVER_PORT) -PassThru -RedirectStandardOutput (Join-Path $folder 'sql-stdout.log') -RedirectStandardError (Join-Path $folder 'sql-stderr.log') -WindowStyle Hidden
+          Write-Output ('TS_BEADS018_DISPOSABLE_DOLT_SERVER_PID='+$server.Id)
+          Start-Sleep -Seconds 3
+          if($server.HasExited){throw ('DISPOSABLE_DOLT_SERVER_FAILED='+$server.ExitCode)}
+          $lab=Join-Path $folder 'lab'
+          New-Item -ItemType Directory $lab|Out-Null
+          & git -C $lab init -q
+          if($LASTEXITCODE -ne 0 -or ((& git -C $lab remote|Out-String).Trim()) -ne ''){throw 'LAB_HAS_REMOTE'}
+          $productClone=Join-Path $folder 'product'
+          & git clone -q --no-checkout 'https://github.com/mauedgar/tecnotron-ai.git' $productClone
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_CLONE_FAILED'}
+          & git -C $productClone checkout -q --detach $product
+          if($LASTEXITCODE -ne 0){throw 'EXACT_PRODUCT_COMMIT_CHECKOUT_FAILED'}
+          $actualClone=(& git -C $productClone rev-parse HEAD|Out-String).Trim()
+          $actualTree=(& git -C $productClone rev-parse 'HEAD^{tree}'|Out-String).Trim()
+          if($actualClone -cne $product -or $actualTree -cne $tree){throw 'PRODUCT_CHECKOUT_IDENTITY_MISMATCH'}
+          & npm.cmd --prefix $productClone ci --ignore-scripts --no-audit --no-fund
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_ZOD_DEPENDENCY_INSTALL_FAILED'}
+          $env:PRODUCT_ROOT=$productClone
+          $env:LAB_ROOT=$lab
+          $env:PROVIDER_ROOT=Join-Path $folder 'isolated-independent-synthetic-provider'
+          $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads018-lifecycle-recovery-result.json'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-LIFECYCLE-EFFECT-RECOVERY-20261014-018/native018.mjs'
+          & node --check $script
+          if($LASTEXITCODE -ne 0){throw 'NODE_SYNTAX_FAIL'}
+          & node $script
+          if($LASTEXITCODE -ne 0){throw ('NATIVE_CAS_SCRIPT_EXIT='+$LASTEXITCODE)}
+          $receipt=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
+          if($receipt.status -cne 'PASS_BOUNDED_LIFECYCLE_SHADOW_WITH_MATERIAL_GAPS' -or $receipt.Product_effect -cne 'NONE' -or $receipt.check.Count -lt 22){throw 'NATIVE_018_RESULT_IDENTITY_FAIL'}
+          $afterDolt=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          $afterProduct=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $afterDolt -cne $shared -or $afterProduct -cne $product){throw 'PRODUCT_OR_SHARED_DOLT_CHANGED'}
+          Write-Output ('TS_BEADS018_NO_EXTERNAL_EFFECT=PASS;product='+$afterProduct+';dolt='+$afterDolt)
+      - name: Upload exact experimental lifecycle and synthetic provider receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-018-lifecycle-effect-recovery-receipt
+          path: ${{ runner.temp }}/beads018-lifecycle-recovery-result.json
+          if-no-files-found: warn
+          retention-days: 7
