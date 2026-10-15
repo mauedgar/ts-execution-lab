@@ -1,0 +1,53 @@
+# NONSECRET local station mapping template. Copy outside Product repositories.
+# This example is NOT a Product policy, credential store, or canonical TaskCycle state.
+schema: ts-devux-station/v0
+host:
+  active_label: NOTEBOOK
+  active_provider: "SELECT_EXACT_COMMANDER_DEVICE_ID_LOCALLY"
+  excluded_for_new_dispatch: ["OTHER_DEVICE_IDS_LOCALLY"]
+  enforcement: "operational_routing_only_not_acl"
+workspaces:
+  ff:
+    repo: mauedgar/FitFlow
+    root_windows: "C:/TS/repos/FitFlow"
+    base_ref: "origin/develop"
+    runtime: "windows_python311"
+  ts:
+    repo: mauedgar/tecnotron-ai
+    root_wsl: "/home/tsops/workspaces/tecnotron-ai"
+    orca_unc_root: '\\wsl.localhost\Ubuntu-24.04\home\tsops\workspaces\tecnotron-ai'
+    base_ref: "origin/tools"
+    runtime: "wsl_linux_node22"
+  lab:
+    repo: mauedgar/ts-execution-lab
+    root_windows: "C:/TS/repos/ts-execution-lab"
+  transport:
+    repo: mauedgar/ts-execution-transport
+    root_windows: "C:/TS/repos/ts-execution-transport"
+orcaworkspaces:
+  ff: "FF | FitFlow"
+  ts_native: "TS | Tecnotron WSL (ejecución)"
+  ts_windows: "TS | Tecnotron Windows (navegación)"
+  neutral: "TS | Infrastructure"
+versions_observed_not_global_upgrade_policy:
+  ubuntu: "24.04"
+  uv: "0.13.1"
+  python_fitflow_minor_fixed: "3.11"
+  python_managed_patch_observed: "3.11.17"
+  node_linux: "22.23.3"
+  npm_linux: "10.9.9"
+dependencies:
+  ff_python: "uv sync --locked --python 3.11 --no-install-project"
+  ff_frontend: "npm ci --ignore-scripts --no-audit --no-fund"
+  ts_linux: "npm ci --no-audit --no-fund"
+security:
+  copy_env_automatically: false
+  auto_run_product_hooks: false
+  share_native_node_modules: false
+  secrets_in_profile: false
+  beads_adopted: false
+validation:
+  required_git_identity: [repo, branch, commit, tree, clean_status]
+  provider_run_receipt_required: true
+  independent_review_not_implied: true
+  product_acceptance_not_implied: true
