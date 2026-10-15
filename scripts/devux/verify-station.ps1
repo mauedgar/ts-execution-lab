@@ -22,7 +22,7 @@ function Check-WindowsRepo([string]$name, [string]$path, [string]$expected) {
   }
   $head = (& git.exe -C $path rev-parse HEAD 2>$null)
   $branch = (& git.exe -C $path branch --show-current 2>$null)
-  $tree = (& git.exe -C $path rev-parse HEAD^{tree} 2>$null)
+  $tree = (& git.exe -C $path rev-parse "HEAD^{tree}" 2>$null)
   $dirty = (& git.exe -C $path status --porcelain=v1 2>$null)
   if ($LASTEXITCODE -ne 0 -or -not $head -or -not $tree) {
     $script:rows.Add([pscustomobject]@{name=$name;result="INVALID_GIT";root=$path;branch=$branch;head=$head;tree=$tree})
