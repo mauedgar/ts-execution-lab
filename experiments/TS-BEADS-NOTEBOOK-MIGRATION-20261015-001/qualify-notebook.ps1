@@ -35,8 +35,8 @@ $sourceDesktopStores = @(
 $locationPushed = $false
 $receipt = $null
 function Native {
-  param([string]$Binary,[string[]]$Args,[string]$What)
-  $message = (& $Binary @Args 2>&1 | Out-String)
+  param([string]$Binary,[string[]]$Arguments,[string]$What)
+  $message = (& $Binary @Arguments 2>&1 | Out-String)
   if ($LASTEXITCODE -ne 0) {
     throw ("NATIVE_FAIL:"+$What+";exit="+$LASTEXITCODE+";log="+$message.Substring(0,[Math]::Min(480,$message.Length)))
   }
