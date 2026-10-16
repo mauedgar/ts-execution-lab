@@ -11,3 +11,4 @@ Not Product SOT, lifecycle authority, knowledge SOT, or an orchestrator.
 - scripts/emit-receipt.mjs — receipt emitter (Node built-ins only)
 - .github/workflows/remote-smoke.yml — remote smoke workflow
 - bootstrap/dispatch-receipt.yaml — workflow dispatch receipt
+- docs/stations/TS-DEV-UX-NOTEBOOK-PROVISIONAL-20261015.md — **provisional, non-Product** notebook/workspace execution map; Beads and Upper LC still pending
