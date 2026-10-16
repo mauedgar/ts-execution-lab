@@ -51,7 +51,7 @@ jobs:
   oauth:
     name: OAuth inference and protected refresh (not yet provisioned)
     needs: package
-    if: ${{ inputs.phase == 'oauth-smoke' && github.actor == 'mauedgar' }}
+    if: ${{ inputs.phase == 'oauth-smoke' && github.actor == 'mauedgar' && github.ref == 'refs/heads/main' && github.repository == 'mauedgar/ts-execution-lab' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: opencode-ci-pilot
@@ -60,6 +60,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Install pinned runner before exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/opencode-ci-pilot"
+          cd "$RUNNER_TEMP/opencode-ci-pilot"
+          npm install --no-save --no-audit --no-fund opencode-ci@0.1.20
+          node node_modules/opencode-ci/dist/cli.js --version
       - name: Check manually provisioned prerequisites
         shell: bash
         env:
@@ -86,7 +94,7 @@ jobs:
           set -euo pipefail
           umask 077
           cd "$RUNNER_TEMP"
-          npx --yes opencode-ci@0.1.20 run \
+          node "$RUNNER_TEMP/opencode-ci-pilot/node_modules/opencode-ci/dist/cli.js" run \
             --skip-project-config \
             --auth-env OPENCODE_CI_AUTH_JSON \
             --auth-output "$RUNNER_TEMP/opencode-ci-refreshed.json" \
@@ -109,6 +117,6 @@ jobs:
           if cmp -s "$rotated" <(printf '%s' "$INITIAL_AUTH_JSON"); then
             echo "OPENCODE_CI_AUTH_UNCHANGED"
           else
-            gh secret set OPENCODE_CI_AUTH_JSON --repo "$GITHUB_REPOSITORY" < "$rotated"
+            gh secret set OPENCODE_CI_AUTH_JSON --env opencode-ci-pilot --repo "$GITHUB_REPOSITORY" < "$rotated"
             echo "OPENCODE_CI_AUTH_REFRESH_WRITE_ATTEMPT_COMPLETED"
           fi
