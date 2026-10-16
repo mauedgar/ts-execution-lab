@@ -1,0 +1,114 @@
+name: TS OpenCode CI OAuth pilot (manual)
+
+# Experimental execution binding only. No Product lifecycle or repository writes.
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Published package check or explicitly authorized OAuth smoke
+        type: choice
+        required: true
+        default: package
+        options:
+          - package
+          - oauth-smoke
+      model:
+        description: "For oauth-smoke only: an authorized OpenAI model ID"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Serialize all uses of this CI OAuth credential in this repository.
+# This is NOT a cross-repository concurrency lock.
+concurrency:
+  group: ts-opencode-ci-oauth-pilot
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Qualify published runner without authentication
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Inspect exact published package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          node --version
+          npm --version
+          npx --yes opencode-ci@0.1.20 --version
+          npx --yes opencode-ci@0.1.20 run --help > /dev/null
+          echo "OPENCODE_CI_PACKAGE_QUALIFICATION_PASS"
+
+  oauth:
+    name: OAuth inference and protected refresh (not yet provisioned)
+    needs: package
+    if: ${{ inputs.phase == 'oauth-smoke' && github.actor == 'mauedgar' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: opencode-ci-pilot
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Check manually provisioned prerequisites
+        shell: bash
+        env:
+          OPENCODE_CI_AUTH_JSON: ${{ secrets.OPENCODE_CI_AUTH_JSON }}
+          CI_SECRETS_TOKEN: ${{ secrets.OPENCODE_CI_SECRETS_TOKEN }}
+          MODEL_ID: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$OPENCODE_CI_AUTH_JSON" || -z "$CI_SECRETS_TOKEN" ]]; then
+            echo "BLOCKED_AUTH_NOT_PROVISIONED: both OAuth and secrets-update credentials are required" >&2
+            exit 2
+          fi
+          if [[ "$MODEL_ID" != openai/* ]]; then
+            echo "BLOCKED_MODEL: select an authorized OpenAI model for the ChatGPT OAuth pilot" >&2
+            exit 2
+          fi
+      - name: One minimal read-only OAuth inference
+        id: infer
+        shell: bash
+        env:
+          OPENCODE_CI_AUTH_JSON: ${{ secrets.OPENCODE_CI_AUTH_JSON }}
+          MODEL_ID: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$RUNNER_TEMP"
+          npx --yes opencode-ci@0.1.20 run \
+            --skip-project-config \
+            --auth-env OPENCODE_CI_AUTH_JSON \
+            --auth-output "$RUNNER_TEMP/opencode-ci-refreshed.json" \
+            --model "$MODEL_ID" --timeout 120 \
+            'Reply with exactly TS_OPENCODE_CI_AUTH_OK. Do not use tools.'
+      - name: Persist refreshed credential when changed
+        if: ${{ always() && steps.infer.outcome != 'skipped' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.OPENCODE_CI_SECRETS_TOKEN }}
+          INITIAL_AUTH_JSON: ${{ secrets.OPENCODE_CI_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          rotated="$RUNNER_TEMP/opencode-ci-refreshed.json"
+          if [[ ! -s "$rotated" ]]; then
+            echo "BLOCKED_REFRESH_RECEIPT_MISSING: credential state must be reconciled before retry" >&2
+            exit 2
+          fi
+          if cmp -s "$rotated" <(printf '%s' "$INITIAL_AUTH_JSON"); then
+            echo "OPENCODE_CI_AUTH_UNCHANGED"
+          else
+            gh secret set OPENCODE_CI_AUTH_JSON --repo "$GITHUB_REPOSITORY" < "$rotated"
+            echo "OPENCODE_CI_AUTH_REFRESH_WRITE_ATTEMPT_COMPLETED"
+          fi
