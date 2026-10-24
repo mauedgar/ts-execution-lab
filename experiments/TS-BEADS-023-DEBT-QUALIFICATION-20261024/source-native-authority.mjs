@@ -9,6 +9,7 @@ const p=createRequire(join(dir,'package.json'));
 const {FilesystemStateStore,create,transition,satisfy,inspect}=p(join(dir,'src/state-kernel-v0'));
 const {createStateKernelTaskCycleLifecycle}=p(join(dir,'src/operational-spine-v0/state-kernel-adapter'));
 const {createReconcileAndCloseTaskCycleRecipe}=p(join(dir,'src/operational-spine-v0/recipes/reconcile-and-close-taskcycle'));
+import {req} from './fixtures023.mjs';
 const checks=[],home=mkdtempSync(join(tmpdir(),'beads-023-native-'));
 const mark=(name,v)=>{assert.ok(v,name);checks.push(name)};
 const obligations=['INDEPENDENT_REVIEW','DEVELOPER_ACCEPTANCE','CANONICAL_INTEGRATION','REMOTE_PUBLICATION','LIFECYCLE_RECONCILIATION'];
@@ -28,7 +29,14 @@ try{
  mark('source_native_reachable_presatisfied_active',snapshot.state==='ACTIVE'&&snapshot.obligations.every(x=>x.status==='SATISFIED'));
  mark('competent_developer_authority_attached',snapshot.authority_refs.some(x=>x.id==='authority:developer-001'));
  result.reachable_state={state:snapshot.state,obligations:snapshot.obligations,authority_refs:snapshot.authority_refs};
- result.limit='This reaches the native all-satisfied state using real Product transitions, but does not by itself validate whether later contrary Developer evidence is admissible in a real upstream history.';
+ const consumer=createReconcileAndCloseTaskCycleRecipe({lifecycle:createStateKernelTaskCycleLifecycle({store})});
+ const newRejected=req('TC023',{badDeveloper:true,expectedRevision:store.verify().revision});
+ const recheck=await consumer.preflight(newRejected);
+ result.source_native_post_satisfaction_rejected_preflight={status:recheck.status,reason:recheck.reason??null};
+ mark('original_recipe_returns_READY_for_post_satisfaction_new_REJECTED',recheck.status==='READY');
+ const untouched=inspect(store,'TaskCycle','TC023').aggregate;
+ mark('preflight_did_not_close_native_taskcycle',untouched.state==='ACTIVE');
+ result.limit='Original native transitions reach ACTIVE/all-satisfied and original recipe preflight sees new synthetic REJECTED as READY; independent competence/provenance of changed external evidence is not established.';
  result.status='PASS_NATIVE_PRESATISFIED_REACHABLE';
  console.log('TS023_AUTHORITY_NATIVE=PASS;checks='+checks.length+';product=NONE');
 }catch(e){result.status='FAIL_NATIVE_RECONCILE';result.error=String(e.stack||e);throw e
