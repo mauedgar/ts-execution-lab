@@ -167,8 +167,8 @@ try:
         candidates=[d for d in dbs if d not in ("information_schema","performance_schema","mysql","sys")]
         if len(candidates)!=1:raise RuntimeError("NONUNIQUE_SYNTHETIC_BEADS_DATABASE:"+str(candidates))
         db_name=candidates[0]
-        cur.execute("CREATE USER 'ts025_readonly'@'%' IDENTIFIED BY %s",(readonly_pass,))
-        cur.execute(f"GRANT SELECT ON \`{db_name}\`.* TO 'ts025_readonly'@'%'")
+        cur.execute("CREATE USER 'ts025_readonly'@'%%' IDENTIFIED BY %s",(readonly_pass,))
+        cur.execute(f"GRANT SELECT ON `{db_name}`.* TO 'ts025_readonly'@'%'")
     rootconn.close()
     check("read_only_authenticated_sql_user_created",True)
     # Root and readonly credentials are never written to the public Git repo or receipt.
