@@ -25,6 +25,7 @@ const receipt={id:'TS-BEADS-FIRST-REAL-CONSUMER-20261024-021',
  scope:'ACTUAL_PRODUCT_RECONCILE_AND_CLOSE_RECIPE_MEMORY_ADAPTED;NO_PRODUCT_FILE_CHANGED'};
 const ok=(key,truth,kind='positive')=>{assert.ok(truth,key);receipt.check.push({key,result:'PASS',kind})};
 const clone=x=>structuredClone(x);
+const prodRequire=createRequire(join(PROD,'package.json'));
 const dir=join(PROD,'src/operational-spine-v0/recipes');
 const sourceFile=join(dir,'reconcile-and-close-taskcycle.js');
 const original=readFileSync(sourceFile,'utf8');
