@@ -1,0 +1,80 @@
+name: TS Beads 023 source-native authority and one-time GitHub provider ACK loss
+on:
+  push:
+    branches: [experiment/beads-023-closure-authority-dependencies-provider-20261024]
+    paths: [.github/workflows/ts-beads-023-authority-provider.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  authority-and-provider:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Original Product State Kernel source-native authority reachability
+        shell: bash
+        run: |
+          set -euo pipefail
+          product=7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56
+          tree=8caa56d36f3efeba359bbbf65b158ffb01a19da6
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$product"
+          test "$(gh api repos/mauedgar/tecnotron-ai/git/commits/$product --jq .tree.sha)" = "$tree"
+          lab="$RUNNER_TEMP/beads023-source-native-$GITHUB_RUN_ID"
+          test ! -e "$lab"
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$lab"
+          git -C "$lab" checkout -q --detach "$product"
+          test "$(git -C "$lab" rev-parse HEAD)" = "$product"
+          test "$(git -C "$lab" rev-parse 'HEAD^{tree}')" = "$tree"
+          npm --prefix "$lab" ci --ignore-scripts --no-audit --no-fund
+          export PRODUCT_ROOT="$lab"
+          export RESULT_PATH="$RUNNER_TEMP/beads023-source-native-reachability.json"
+          node --check experiments/TS-BEADS-023-DEBT-QUALIFICATION-20261024/source-native-authority.mjs
+          node experiments/TS-BEADS-023-DEBT-QUALIFICATION-20261024/source-native-authority.mjs
+          node -e "const fs=require('node:fs'),x=JSON.parse(fs.readFileSync(process.env.RESULT_PATH,'utf8'));if(x.status!=='PASS_NATIVE_PRESATISFIED_REACHABLE'||x.product_effect!=='NONE'||x.checks.length<7)process.exit(2)"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$product"
+      - name: Preserve source-native authority receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-023-source-native-authority-receipt
+          path: ${{ runner.temp }}/beads023-source-native-reachability.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Materialize exact external provider attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TS023_PROVIDER_FILE="$RUNNER_TEMP/ts-beads-023-external-original.json"
+          node -e '
+            const fs=require("node:fs"),crypto=require("node:crypto");
+            const x={schema_version:"ts-beads-023-github-artifact-effect/v1",
+              attempt_id:"TS-BEADS-023-ORIGINAL-GITHUB-ARTIFACT-"+process.env.GITHUB_RUN_ID,
+              source_git_subject:process.env.GITHUB_SHA,
+              provider:"GITHUB_ACTIONS_ARTIFACT",
+              status:"PUBLISHED_ONCE",
+              authority:"NONPRODUCT_EXPERIMENTAL_ONLY",
+              product_effect:"NONE"};
+            const buf=Buffer.from(JSON.stringify(x)+"\n");
+            fs.writeFileSync(process.env.TS023_PROVIDER_FILE,buf,{flag:"wx"});
+            process.stdout.write("TS_BEADS023_PROVIDER_ATTEMPT="+x.attempt_id+"\n");
+            process.stdout.write("TS_BEADS023_PROVIDER_PAYLOAD_SHA256="+crypto.createHash("sha256").update(buf).digest("hex")+"\n");
+          '
+      - name: Single original GitHub provider publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-023-external-provider-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-beads-023-external-original.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Withhold original provider ACK from consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "TS_BEADS023_ORIGINAL_ACK_WITHHELD_FOR_DEFERRED_DURABLE_JOIN=$GITHUB_RUN_ID"
+          # Never use the previous upload step output to claim successful external effect.
