@@ -16,7 +16,7 @@ let server=null,base='',logs='';
 async function stop(){if(server&&server.exitCode===null&&server.signalCode===null){server.kill();await Promise.race([new Promise(done=>server.once('exit',done)),delay(7000)])}if(server&&server.exitCode===null&&server.signalCode===null)throw Error('SERVER_UNCONFIRMED');server=null}
 async function start(){const port=32000+(Number(process.env.GITHUB_RUN_ID||23)%16000);base='http://127.0.0.1:'+port;server=spawn(BD,['serve','--addr','127.0.0.1:'+port],{cwd:LAB,env,windowsHide:true,stdio:['ignore','pipe','pipe']});server.stderr.on('data',v=>logs+=String(v));for(let i=0;i<100;i++){if(server.exitCode!==null)throw Error('SERVER_DIED:'+logs.slice(-300));try{if((await fetch(base+'/healthz',{signal:AbortSignal.timeout(500)})).ok)return}catch{}await delay(190)}throw Error('SERVER_UNHEALTHY:'+logs.slice(-500))}
 async function api(path,body){const isGet=body===undefined;r.calls[isGet?'get':'batch']++;const resp=await fetch(base+path,{...(isGet?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),signal:AbortSignal.timeout(12000)});const raw=await resp.text();let data;try{data=JSON.parse(raw)}catch{}return{ok:resp.ok,status:resp.status,data,raw:raw.slice(0,600)}}
-function locate(o,id,depth=0){if(!o||typeof o!=='object'||depth>7)return null;if(o.id===id&&o.metadata!==undefined)return o;for(const v of Object.values(o)){const z=locate(v,id,depth+1);if(z)return z}return null}
+function locate(o,id,depth=0){if(!o||typeof o!=='object'||depth>7)return null;if(o.id===id&&typeof o.status==='string')return o;for(const v of Object.values(o)){const z=locate(v,id,depth+1);if(z)return z}return null}
 async function issue(id){const q=await api('/v0/beads/issues/'+id+'?brief_deps=true');if(!q.ok)throw Error('GET_'+id+'_'+q.raw);const z=locate(q.data,id);if(!z)throw Error('MISSING_DETAIL_'+id);return z}
 const patch=(id,token,tag)=>({kind:'update',update:{target:{id},expected_version:token,patch:{metadata:{set:{ts023_marker:tag}}}}});
 async function batch(items,tag){return api('/v0/beads/issues:batchApply',{actor:'TS-BEADS-023',provenance:'test://TS023/'+tag,items})}
@@ -24,7 +24,7 @@ const depIds=x=>(x.dependencies||[]).map(d=>d.id).sort();
 async function discover(startId){const queue=[startId],seen=new Map();while(queue.length){const id=queue.shift();if(seen.has(id))continue;const row=await issue(id);const refs=depIds(row);seen.set(id,{revision:row.revision,deps:refs,metadata:row.metadata});for(const target of refs)if(!seen.has(target))queue.push(target)}return seen}
 try{
  cmd(['init','--server','--quiet','--stealth']);ok('git_store_no_remote',!cmd(['--version']).includes('UNKNOWN'));
- for(const id of Object.values(ids)){const a=cmdJ(['create','TS023 '+id,'--type','task','--id',id,'--force','--description','NONPRODUCT']);ok('create_'+id,(Array.isArray(a)?a[0]:a).id===id)}
+ for(const id of Object.values(ids)){const a=cmdJ(['create','TS023 '+id,'--type','task','--id',id,'--force','--description','NONPRODUCT','--metadata',JSON.stringify({ts023_marker:'BASE'})]);ok('create_'+id,(Array.isArray(a)?a[0]:a).id===id)}
  cmd(['dep','add',ids.root,ids.gate,'--type','related']);
  cmd(['dep','add',ids.gate,ids.ancestor,'--type','related']);
  await start();ok('native_http_ready',true);
@@ -36,7 +36,7 @@ try{
  ok('concurrent_ancestor_changed',chg.ok);
  const stale=await batch([...a].map(([id,x])=>patch(id,x.revision,'NOT_APPLIED_RELATED_STALE')),'readset-stale');
  ok('atomic_native_batch_refuses_any_stale_transitive_relation',!stale.ok);
- const root=await issue(ids.root),meta=typeof root.metadata==='string'?JSON.parse(root.metadata):root.metadata;
+ const root=await issue(ids.root),meta=typeof root.metadata==='string'?JSON.parse(root.metadata):(root.metadata||{});
  ok('rejected_multiissue_batch_did_not_write_root',meta.ts023_marker!=='NOT_APPLIED_RELATED_STALE');
  const b=await discover(ids.root);const ux=await issue(ids.unrelated);
  ok('unrelated_native_mutation',(await batch([patch(ids.unrelated,ux.revision,'UNRELATED_CHANGED')],'unrelated-change')).ok);
