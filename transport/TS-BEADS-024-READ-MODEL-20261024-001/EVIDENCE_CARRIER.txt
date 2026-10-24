@@ -1,0 +1,262 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 e4cc289ac9ed771e32571c4d0023f0a213a9f68869c12354678a925399346600
+MANIFEST-BYTES 559
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":348,"path":"CONTROL_EXPERIMENTAL.txt","sha256":"e98701820cc1ffede4b6667d1c517c5f562c9b2f628405aa106a0e47159d178b"},{"byte_length":5767,"path":"evidence/ORIGINAL_024_RESULT.json","sha256":"cddc0b9bf943e6d3edffb64d9526ae73e33195145ecb3ed08ec37c503c06c9b3"},{"byte_length":2937,"path":"selection/PLAN.md","sha256":"a97cb4cb0b01637afa52c8bcd82d3c88c5e548816ac8e35bdf44962937abb7b6"}],"source_archive":{"entry_count":3,"sha256":"d40f4360180c436516ce0523d911f07d3b41ddcf73d63e23d778185f74dd5563","size":20480}}
+MEMBER {"byte_length":348,"path":"CONTROL_EXPERIMENTAL.txt","sha256":"e98701820cc1ffede4b6667d1c517c5f562c9b2f628405aa106a0e47159d178b"}
+TS Beads 024 original non-Product result
+Product authority: NONE
+GitHub original run: 40109272872
+Original code Git SHA: 1f96415dc9c8faf94bf5f0ba42c9da2a8b07f28e
+Source: original result.json + exact selection PLAN.md
+Transport format: IR-TXT-CARRIER/1 (reuse qualified Product script)
+This is a read model, not an acceptance or Independent Review.
+
+END-MEMBER
+MEMBER {"byte_length":5767,"path":"evidence/ORIGINAL_024_RESULT.json","sha256":"cddc0b9bf943e6d3edffb64d9526ae73e33195145ecb3ed08ec37c503c06c9b3"}
+{
+  "experiment_id": "TS-BEADS-024-GRAPH-READ-MODEL-20261024-001",
+  "status": "PASS_NONAUTHORITATIVE_READ_MODEL_WITH_RACE_DETECTION",
+  "Product_effect": "NONE",
+  "Product_authority": "NONE",
+  "issue_24_selection": "EXPERIMENTAL_CONTROL_ONLY",
+  "native_remote_effect": "NONE",
+  "checks": [
+    {
+      "name": "fresh_disposable_git_has_no_remote",
+      "result": "PASS"
+    },
+    {
+      "name": "created_ts024-root",
+      "result": "PASS"
+    },
+    {
+      "name": "created_ts024-gate",
+      "result": "PASS"
+    },
+    {
+      "name": "created_ts024-ancestor",
+      "result": "PASS"
+    },
+    {
+      "name": "created_ts024-late",
+      "result": "PASS"
+    },
+    {
+      "name": "created_ts024-unrelated",
+      "result": "PASS"
+    },
+    {
+      "name": "native_http_ready",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_stable_observation_only",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_transitive_dependency_closure",
+      "result": "PASS"
+    },
+    {
+      "name": "uncontrolled_native_edge_expansion_did_not_advance_root_token",
+      "result": "PASS"
+    },
+    {
+      "name": "reader_detected_concurrent_native_edge_expansion_without_authorization",
+      "result": "PASS"
+    },
+    {
+      "name": "fresh_reobservation_includes_late_dependency",
+      "result": "PASS"
+    },
+    {
+      "name": "synthetic_related_writer_committed",
+      "result": "PASS"
+    },
+    {
+      "name": "reader_detected_version_change_in_ancestor",
+      "result": "PASS"
+    },
+    {
+      "name": "synthetic_unrelated_writer_committed",
+      "result": "PASS"
+    },
+    {
+      "name": "reader_does_not_fail_on_unrelated_issue",
+      "result": "PASS"
+    },
+    {
+      "name": "native_ready_frontier_fetched",
+      "result": "PASS"
+    },
+    {
+      "name": "independent_native_CLI_readback_correct_id",
+      "result": "PASS"
+    }
+  ],
+  "samples": [
+    {
+      "case": "initial",
+      "data": {
+        "classification": "NONAUTHORITATIVE_OBSERVATION",
+        "authority": "NONE_PRODUCT",
+        "mayAuthorize": false,
+        "nodes": [
+          {
+            "id": "ts024-ancestor",
+            "revision": "4749837266025692532",
+            "status": "open",
+            "dependencies": []
+          },
+          {
+            "id": "ts024-gate",
+            "revision": "3586843910281758569",
+            "status": "open",
+            "dependencies": [
+              "ts024-ancestor"
+            ]
+          },
+          {
+            "id": "ts024-root",
+            "revision": "2786309808178991126",
+            "status": "open",
+            "dependencies": [
+              "ts024-gate"
+            ]
+          }
+        ],
+        "observation": {
+          "first_nodes": 3,
+          "second_nodes": 3,
+          "root_revision_equal": true
+        },
+        "reason": "Two equal sequential scans, non-atomic; informational only"
+      }
+    },
+    {
+      "case": "native_edge_expansion",
+      "data": {
+        "classification": "INCONSISTENT_GRAPH",
+        "authority": "NONE_PRODUCT",
+        "mayAuthorize": false,
+        "nodes": [],
+        "observation": {
+          "first_nodes": 3,
+          "second_nodes": 4,
+          "root_revision_equal": true
+        },
+        "reason": "Concurrent dependency/status/revision divergence"
+      }
+    },
+    {
+      "case": "related_version_change",
+      "data": {
+        "classification": "INCONSISTENT_GRAPH",
+        "authority": "NONE_PRODUCT",
+        "mayAuthorize": false,
+        "nodes": [],
+        "observation": {
+          "first_nodes": 4,
+          "second_nodes": 4,
+          "root_revision_equal": true
+        },
+        "reason": "Concurrent dependency/status/revision divergence"
+      }
+    },
+    {
+      "case": "unrelated_change",
+      "data": {
+        "classification": "NONAUTHORITATIVE_OBSERVATION",
+        "authority": "NONE_PRODUCT",
+        "mayAuthorize": false,
+        "nodes": [
+          {
+            "id": "ts024-ancestor",
+            "revision": "5803319793139396922",
+            "status": "open",
+            "dependencies": []
+          },
+          {
+            "id": "ts024-gate",
+            "revision": "3586843910281758569",
+            "status": "open",
+            "dependencies": [
+              "ts024-ancestor"
+            ]
+          },
+          {
+            "id": "ts024-late",
+            "revision": "54038782534043788",
+            "status": "open",
+            "dependencies": []
+          },
+          {
+            "id": "ts024-root",
+            "revision": "2786309808178991126",
+            "status": "open",
+            "dependencies": [
+              "ts024-gate",
+              "ts024-late"
+            ]
+          }
+        ],
+        "observation": {
+          "first_nodes": 4,
+          "second_nodes": 4,
+          "root_revision_equal": true
+        },
+        "reason": "Two equal sequential scans, non-atomic; informational only"
+      }
+    }
+  ],
+  "native_counts": {
+    "GET": 41,
+    "read_model_rounds": 5
+  },
+  "scope": "REAL_NATIVE_BEADS_GET_GRAPH_PROJECTION_ONLY",
+  "native_readiness": {
+    "kind": "NATIVE_READY_INFORMATIONAL_ONLY",
+    "count": 5,
+    "not_Tecnotron_TaskCycle_authorization": true
+  },
+  "known_limitations": [
+    "Equality of two scans is not a transactional read and does not prevent post-check graph changes",
+    "Native Beads ready status is informational, not Developer grant/Independent Review/TaskCycle admission",
+    "No enforcement of exclusive edge writers: original bypass remains material blocker for authoritative graph effects",
+    "Fixture has known initial root, does not qualify dynamic discovery from arbitrary GitHub Product consumers",
+    "No Product migrations, source native Product files unchanged"
+  ]
+}
+
+END-MEMBER
+MEMBER {"byte_length":2937,"path":"selection/PLAN.md","sha256":"a97cb4cb0b01637afa52c8bcd82d3c88c5e548816ac8e35bdf44962937abb7b6"}
+# TS — Beads 024 | Control experimental: selección y criterios
+
+**Estado:** CONTRACT_SELECTED_FOR_NONPRODUCT_EXPERIMENT / NO_PRODUCT_AUTHORITY.  
+**Propósito:** calificar una vista de lectura del grafo nativo Beads que sea explícitamente informativa, incluso cuando un escritor no controlado modifica aristas o revisiones.
+
+**Autoridad experimental:** el usuario delegó Control dentro de la línea experimental. Control Product de Tecnotron **no** se transfirió; la SOT competente sigue en `mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56`, tree `8caa56d36f3efeba359bbbf65b158ffb01a19da6`, y el TXT 023 está en `mauedgar/ts-execution-transport@8231c0898c6ee6e9585ae946dacde13928d4c013:results/TS-BEADS-023-TXT-PORTABLE-CARRIER-20261024-001/EVIDENCE_CARRIER.txt`.
+
+## Selección
+
+El envelope 023 se consumió y se evaluó como entrada experimental. Se preserva la incompatibilidad demostrada: `bd dep add` puede agregar una dependencia sin actualizar `root.revision`. La mitigación `update root + dep_add` funciona solo con escritores controlados; **no** es exclusividad general.
+
+Por tanto **no** se concede adopción del grafo para decisiones autoritativas. El siguiente incremento independiente es un consumidor de solo lectura que no emite permisos ni inicia/cierra TaskCycles, no ejecuta acciones externas y no interpreta `bd ready` como aceptación.
+
+## Contrato acotado del 024
+
+El lector realiza dos recorridos sucesivos independientes con `GET /v0/beads/issues/{id}?brief_deps=true`, arma el cierre transitivo del grafo con versiones por issue y devuelve sólo:
+- `NONAUTHORITATIVE_OBSERVATION`, si dos pasadas tienen filas y aristas iguales;
+- `INCONSISTENT_GRAPH`, si difieren filas, revisiones, estados o dependencias;
+- `INCOMPLETE_READ`, si falla alguna adquisición.
+
+**Siempre:** `authority=NONE_PRODUCT`, `mayAuthorize=false`. Incluso dos pasadas iguales **no** representan un snapshot transaccional ni protección contra cambios posteriores. No se crea estado mutable duplicado.
+
+**Tests nativos aislados:** baseline transitivo, carrera `bd dep add` sin cambio de versión raíz, reobservación de arista nueva, mutación concurrente sobre ancestro, escritura irrelevante, consulta native `bd ready` como información y persistencia CLI independiente.
+
+**DoD:** evidencia nativa terminal con sujeto commit/run exactos; TXT `IR-TXT-CARRIER/1` generado/verificado/extraído mediante `scripts/review_txt_carrier.py` existente; confirmación Product y Dolt compartido intactos; informe y limitaciones. Si falla el test, conservar intento y diagnosticar sin autoaceptar ni repetir efectos externos originales.
+
+**Exclusiones:** decisiones Product, cambio de State Kernel, efecto remoto original, permiso de writer exclusivo, revisión independiente semántica como dictamen Product, migración de consumidores en Tecnotron, eliminación de deuda Developer `REJECTED`.
+
+END-MEMBER
+END-BUNDLE
