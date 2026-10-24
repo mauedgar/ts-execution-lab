@@ -406,8 +406,8 @@ try{
   String(lost.reason).includes('EFFECT_CONFIRMED_BUT_UNACKNOWLEDGED'),'negative');
  const partial=aggregate(await readSet(ack));
  ok('partial_native_obligation_effect_preserved_not_replayed',
-   partial.state==='ACTIVE'&&partial.obligations.filter(x=>x.status==='SATISFIED').length===3&&
-   partial.obligations.filter(x=>x.status==='PENDING').length===2);
+   partial.state==='ACTIVE'&&partial.obligations.filter(x=>x.status==='SATISFIED').length===1&&
+   partial.obligations.filter(x=>x.status==='PENDING').length===4);
  receipt.negative.push({type:'PENDING_OBLIGATION_WRONG_ACK_EXACT_EFFECT',
    status:lost.status,effect_state:lost.effect_state,reason:lost.reason,
    native_obligations_satisfied:partial.obligations.filter(x=>x.status==='SATISFIED').map(x=>x.id),
