@@ -1,0 +1,48 @@
+name: TS Beads 023 TXT Envelope Materialization
+on:
+  push:
+    branches:
+      - experiment/beads-023-txt-envelope-transport-20261024-001
+    paths:
+      - .github/workflows/ts-beads-023-txt-envelope.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  materialize-reuse-qualified-carrier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact Git subject and Product untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "experiment/beads-023-txt-envelope-transport-20261024-001"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/heads/main | cut -f1)" = "b30241201d07a9590e1e845abe767cdcf9921479"
+      - name: Reuse Product-qualified project verify extract with original GitHub 023 receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-BEADS-023-TXT-TRANSPORT-20261024-001/materialize-envelope.py
+          test -f transport/TS-BEADS-023-REVIEW-TXT-20261024-001/EVIDENCE_CARRIER.txt
+          git add -- transport/TS-BEADS-023-REVIEW-TXT-20261024-001/EVIDENCE_CARRIER.txt
+          test "$(git diff --cached --name-only)" = "transport/TS-BEADS-023-REVIEW-TXT-20261024-001/EVIDENCE_CARRIER.txt"
+          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(transport): persist 023 evidence as qualified TXT envelope"
+          git push origin HEAD:refs/heads/experiment/beads-023-txt-envelope-transport-20261024-001
+          echo "TS_BEADS023_TXT_PUBLISHED_SUBJECT=$(git rev-parse HEAD)"
+          echo "TS_BEADS023_TXT_BLOB=$(git rev-parse HEAD:transport/TS-BEADS-023-REVIEW-TXT-20261024-001/EVIDENCE_CARRIER.txt)"
+      - name: Confirm no Product or shared Dolt remote mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "1f72d68797114170a97fee27641858f2e55a4571"
+          echo "TS_BEADS023_TXT_NO_PRODUCT_EFFECT=PASS"
