@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
-      - name: Native Beads 024 native graph read model and adversarial concurrent edges
+      - name: Native Beads 024 bounded attempt 2, fix cross-step TXT evidence environment
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -77,6 +77,8 @@ jobs:
           $env:LAB_ROOT=$lab
           $env:PROVIDER_ROOT=Join-Path $folder 'isolated-independent-synthetic-provider'
           $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads024-read-model-result.json'
+          "PRODUCT_ROOT=$productClone" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "RESULT_PATH=$env:RESULT_PATH" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-024-GRAPH-READ-MODEL-20261024-001/read-model024.mjs'
           & node --check $script
           if($LASTEXITCODE -ne 0){throw 'NODE_SYNTAX_FAIL'}
