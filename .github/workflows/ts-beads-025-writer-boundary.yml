@@ -1,0 +1,73 @@
+name: TS Beads 025 Effective Causal Writer Boundary
+on:
+  push:
+    branches:
+      - experiment/beads-025-writer-boundary-20261024-001
+    paths:
+      - .github/workflows/ts-beads-025-writer-boundary.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  native-effective-writer-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: One bounded native Beads/Dolt writer-boundary adversarial test, verified TXT result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject=7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56
+          tree=8caa56d36f3efeba359bbbf65b158ffb01a19da6
+          shared=1f72d68797114170a97fee27641858f2e55a4571
+          test "$(git branch --show-current)" = "experiment/beads-025-writer-boundary-20261024-001"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$subject"
+          test "$(gh api repos/mauedgar/tecnotron-ai/git/commits/$subject --jq .tree.sha)" = "$tree"
+          test "$(gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools' --jq .sha)" = "dd8d34a7e3ef3094805d014f9e59741d2c553957"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
+          scratch="$RUNNER_TEMP/ts-beads-025-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -m 755 "$scratch"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          mkdir -p "$scratch/beads" "$scratch/dolt" "$scratch/python"
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/beads"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/beads" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          python3 -m pip install -q --disable-pip-version-check --target "$scratch/python" 'PyMySQL==1.1.1'
+          chmod -R a+rX "$scratch/python"
+          export PYTHONPATH="$scratch/python"
+          export LAB_ROOT="$scratch/disposable-private-store"
+          export RESULT_PATH="$scratch/original-025-result.json"
+          export PRODUCT_ROOT="$scratch/product-qualified-tool"
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$PRODUCT_ROOT"
+          git -C "$PRODUCT_ROOT" checkout -q --detach "$subject"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse HEAD)" = "$subject"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')" = "$tree"
+          python3 -m py_compile experiments/TS-BEADS-025-WRITER-BOUNDARY-20261024-001/native025.py
+          python3 experiments/TS-BEADS-025-WRITER-BOUNDARY-20261024-001/native025.py
+          python3 -c 'import json,os; r=json.load(open(os.environ["RESULT_PATH"])); assert r["Product_effect"]=="NONE" and len(r["checks"])>=12 and r["status"] in ("PASS_EFFECTIVE_UID_BOUNDARY_WITH_MATERIAL_SAME_UID_LIMITATIONS","BLOCKED_NETWORK_OWNER_POLICY_UNAVAILABLE"),r'
+          python3 experiments/TS-BEADS-025-WRITER-BOUNDARY-20261024-001/materialize025.py
+          out=transport/TS-BEADS-025-WRITER-BOUNDARY-20261024-001/EVIDENCE_CARRIER.txt
+          test -f "$out"
+          git add -- "$out"
+          test "$(git diff --cached --name-only)" = "$out"
+          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(beads 025): publish original native writer-boundary verified TXT envelope"
+          git push origin HEAD:refs/heads/experiment/beads-025-writer-boundary-20261024-001
+          echo "TS_BEADS025_TXT_PUBLISHED_COMMIT=$(git rev-parse HEAD)"
+          echo "TS_BEADS025_TXT_BLOB=$(git rev-parse HEAD:$out)"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$subject"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
+          echo "TS_BEADS025_NO_PRODUCT_EFFECT=PASS;product=$subject;shared_dolt=$shared"
