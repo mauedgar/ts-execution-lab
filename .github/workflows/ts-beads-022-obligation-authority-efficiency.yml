@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Native Beads 022 exact pending-obligation Product consumer, bounded attempt 1
+      - name: Native Beads 022 read-only GET row-version optimization, bounded attempt 2
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -76,23 +76,23 @@ jobs:
           $env:PRODUCT_ROOT=$productClone
           $env:LAB_ROOT=$lab
           $env:PROVIDER_ROOT=Join-Path $folder 'isolated-independent-synthetic-provider'
-          $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads022-obligation-authority-result.json'
-          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/consumer022.mjs'
+          $env:RESULT_PATH=Join-Path $env:RUNNER_TEMP 'beads022-get-revision-result.json'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/consumer022-readonly-revision.mjs'
           & node --check $script
           if($LASTEXITCODE -ne 0){throw 'NODE_SYNTAX_FAIL'}
           & node $script
           if($LASTEXITCODE -ne 0){throw ('NATIVE_CAS_SCRIPT_EXIT='+$LASTEXITCODE)}
           $receipt=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
-          if($receipt.status -cne 'PASS_BOUNDED_PRODUCT_PENDING_OBLIGATIONS_AND_AUTHORITY_NEGATIVE_WITH_LIMITATIONS' -or $receipt.Product_effect -cne 'NONE' -or $receipt.check.Count -lt 18){throw 'NATIVE_022_RESULT_IDENTITY_FAIL'}
+          if($receipt.status -cne 'PASS_READONLY_NATIVE_GET_REVISION_PRODUCT_CONSUMER_WITH_LIMITATIONS' -or $receipt.Product_effect -cne 'NONE' -or $receipt.check.Count -lt 22){throw 'NATIVE_022_RESULT_IDENTITY_FAIL'}
           $afterDolt=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
           $afterProduct=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
           if($LASTEXITCODE -ne 0 -or $afterDolt -cne $shared -or $afterProduct -cne $product){throw 'PRODUCT_OR_SHARED_DOLT_CHANGED'}
           Write-Output ('TS_BEADS022_NO_EXTERNAL_EFFECT=PASS;product='+$afterProduct+';dolt='+$afterDolt)
-      - name: Upload exact Beads 022 pending obligation source authority and native efficiency receipt
+      - name: Upload exact Beads 022 optimized native GET revision and original consumer receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ts-beads-022-obligation-authority-efficiency-receipt
-          path: ${{ runner.temp }}/beads022-obligation-authority-result.json
+          name: ts-beads-022-readonly-native-revision-receipt
+          path: ${{ runner.temp }}/beads022-get-revision-result.json
           if-no-files-found: warn
           retention-days: 7
