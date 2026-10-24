@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Native Beads 023 native transitive graph and expansion race
+      - name: Native Beads 023 corrected optional metadata native graph, attempt 2
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
