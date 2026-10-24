@@ -96,7 +96,8 @@ function verifiedEvidence(tc,obs){
 }
 function req(tcId,{badDeveloper=false}={}){
  const obs=obsFor(tcId);
- if(badDeveloper){obs.developer_acceptance=[{source_ref:'authority:developer-001',
+ if(badDeveloper==='MISSING')obs.developer_acceptance=[];
+ else if(badDeveloper){obs.developer_acceptance=[{source_ref:'authority:developer-001',
   observed:{reference:'authority:developer-001',disposition:'REJECTED'}}];}
  return {
   recipe_id:'reconcile_and_close_taskcycle',recipe_version:'v0',
@@ -271,12 +272,31 @@ try{
  const s=cases[0];
  const consumer=createReconcileAndCloseTaskCycleRecipe({lifecycle:capability(s)});
  const validRequest=req(s.tc);
- const badDev=req(s.tc,{badDeveloper:true});
- const missingAuthority=await consumer.preflight(badDev);
- ok('original_Product_reconciler_rejects_invalid_developer_evidence',
+ const rejectedReq=req(s.tc,{badDeveloper:true});
+ const patchedRejected=await consumer.preflight(rejectedReq);
+ const oldOriginal=prodRequire(sourceFile).createReconcileAndCloseTaskCycleRecipe({
+  lifecycle:{
+   snapshot:()=>({revision:50,event_count:50,taskcycle:aggregate({
+    root:{ts021_taskcycle:clone(metadata(show(s.root)).ts021_taskcycle)}}),
+    legal_next:['CLOSED'],obligations:{pending:[],obligations:[],legal_next:[],store_revision:50}}),
+   hasUnreconciledExecution:()=>false,
+   observeInvocationBookkeeping(){throw Error('NOT_REQUIRED')},
+   satisfyObligation(){throw Error('NOT_REQUIRED')},
+   closeTaskCycle(){throw Error('NOT_REQUIRED')}
+  }
+ });
+ const unmodifiedRejected=await oldOriginal.preflight(rejectedReq);
+ receipt.negative.push({kind:'REJECTED_DEVELOPER_EVIDENCE_ORIGINAL_PRODUCT_CONSUMER',
+  result_original:unmodifiedRejected.status,result_adapted:patchedRejected.status,
+  interpretation:'If both READY with pre-satisfied synthetic obligations, this is an ORIGINAL consumer semantic gap candidate, not caused by Beads or async conversion; needs independent Product qualification, no acceptance inferred'});
+ ok('rejected_evidence_behavior_corresponds_to_unmodified_Product_code',
+  unmodifiedRejected.status===patchedRejected.status,'negative');
+ const missingAuthority=await consumer.preflight(req(s.tc,{badDeveloper:'MISSING'}));
+ ok('original_Product_reconciler_blocks_absent_developer_evidence',
   missingAuthority.status!=='READY','negative');
- receipt.negative.push({kind:'INVALID_DEVELOPER_EVIDENCE',status:missingAuthority.status,reason:missingAuthority.reason});
- ok('invalid_authority_did_not_change_native_TC',aggregate(await readSet(s)).state==='ACTIVE','negative');
+ receipt.negative.push({kind:'MISSING_DEVELOPER_EVIDENCE',
+  status:missingAuthority.status,reason:missingAuthority.reason});
+ ok('missing_authority_did_not_change_native_TC',aggregate(await readSet(s)).state==='ACTIVE','negative');
  await nativeSetAttempt(s,'UNKNOWN');
  const unknown=await consumer.preflight(validRequest);
  ok('original_Product_consumer_preflight_blocks_UNKNOWN',
