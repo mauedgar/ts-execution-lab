@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Attempt 2: bounded Beads/Dolt SQL literal repair and writer-boundary test, verified TXT
+      - name: Validate isolated causal writer boundary
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
