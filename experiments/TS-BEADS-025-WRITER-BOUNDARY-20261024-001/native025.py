@@ -110,8 +110,10 @@ def attacker(mode,*,target=None):
     env={**os.environ,"TS025_HTTP_PORT":str(HTTP_PORT),"TS025_SQL_PORT":str(SQL_PORT),
         "TS025_DEP_SOURCE":"ts025-root","TS025_DEP_TARGET":target or "ts025-unauthorized",
         "TS025_DATABASE":db_name,"TS025_READER_PASSWORD":readonly_pass}
-    x=run(["sudo","-n","-u","nobody","--",SYS_PY,__file__,"attacker",mode],
-      env=env,timeout=20,allow_fail=True)
+    restricted=["PYTHONPATH","TS025_HTTP_PORT","TS025_SQL_PORT","TS025_DEP_SOURCE","TS025_DEP_TARGET","TS025_DATABASE","TS025_READER_PASSWORD"]
+    wrapper=["sudo","-n","-u","nobody","--","/usr/bin/env",*[f"{k}={env.get(k,'')}" for k in restricted],
+             SYS_PY,__file__,"attacker",mode]
+    x=run(wrapper,env=env,timeout=20,allow_fail=True)
     if x.returncode:raise RuntimeError("ATTACKER_RUNNER_"+mode+": "+x.stderr[-500:])
     return json.loads(x.stdout.strip())
 def sql_conn(user,password,database=None):
@@ -174,7 +176,11 @@ try:
         a=run([BINARY,"create","TS025 "+id,"--type","task","--id",id,"--force",
                 "--description","EXPERIMENT_ONLY","--metadata",'{"ts025_graph_version_marker":"BASE"}','--json'],
                 cwd=gitroot,env=env,timeout=55)
-        obj=json.loads(a.stdout.strip())
+        raw=a.stdout.strip();offset=raw.find("{")
+        alt=raw.find("[")
+        if alt>=0 and (offset<0 or alt<offset):offset=alt
+        if offset<0:raise RuntimeError("NATIVE_CREATE_JSON_MISSING")
+        obj=json.loads(raw[offset:])
         if isinstance(obj,list):obj=obj[0]
         check("native_issue_created_"+id,obj.get("id")==id)
     b=run([BINARY,"dep","add","ts025-root","ts025-initial","--type","related"],cwd=gitroot,env=env,timeout=50)
