@@ -1,0 +1,469 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 63082051c4be896d9b7fcd3b9be0cf8dd82988fa80c19424af149f1fe04ca016
+MANIFEST-BYTES 1399
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":608,"path":"CONSUME.txt","sha256":"9a2f368780f95f64adeee90944b66582594b38b64ace1ee1b99966b60ed9b702"},{"byte_length":2420,"path":"evidence/authority-guard/beads023-guard-native-result.json","sha256":"4a0534dc3366df1a782cf13b770a4add56219c3e04f7c710a2a0267375706686"},{"byte_length":2080,"path":"evidence/authority-native/beads023-source-native-reachability.json","sha256":"4a15b5b3651349cf8da0ea63a723095fcc8dc91fcacef771e88f37e5b91c8e9a"},{"byte_length":2805,"path":"evidence/graph-mitigation/beads023-guarded-writer-result.json","sha256":"7f99f8badb776bbeca21d8a1fea89fa0fd17e94baecfd6d6d87270bd2933c0b4"},{"byte_length":1932,"path":"evidence/graph-negative/beads023-causal-graph-result.json","sha256":"570966abdda2ddcf502a1f3c2d3e44d5f15039c7159ceef2f3a2594e017f7e6e"},{"byte_length":319,"path":"evidence/provider-original/ts-beads-023-external-original.json","sha256":"14bd7b15c34957c4cd851be1fcef01d7e0bf654a45469741308e36d3360822b5"},{"byte_length":5712,"path":"reports/BEADS_FIRST_PRODUCT_CHANGE_CANDIDATE.md","sha256":"abc3abe6aee657fa81d61d09af7ea40822ca8369115acc0ff31413aa313de1b9"},{"byte_length":11818,"path":"reports/RESULT.md","sha256":"4d40e99b939c337d3bbcb6114a917ec93ca1bec924e6195a498d065f49b5761d"}],"source_archive":{"entry_count":8,"sha256":"4a0ad6f9be8acba1bafd893b9c75f03489409a5dbd955d4f91a3c48f0a605c84","size":40960}}
+MEMBER {"byte_length":608,"path":"CONSUME.txt","sha256":"9a2f368780f95f64adeee90944b66582594b38b64ace1ee1b99966b60ed9b702"}
+TS-BEADS-023 TEXT ENVELOPE - READONLY RESEARCH TRANSFER
+Qualified format: IR-TXT-CARRIER/1 (reuse exact Product script blob 96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4)
+Original research subject: mauedgar/ts-execution-lab@4d1fa2ec6a81a45f30782f271f6ac2d51d4e3125
+Product read-only subject: mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56
+Purpose: evidence acquisition and competent review preparation, not Product acceptance.
+Preserve original GitHub Actions run, source sha and artifact zip digests in RESULT.md.
+No rerun. No Product mutation. No Developer grant. No TaskCycle transition.
+
+END-MEMBER
+MEMBER {"byte_length":2420,"path":"evidence/authority-guard/beads023-guard-native-result.json","sha256":"4a0534dc3366df1a782cf13b770a4add56219c3e04f7c710a2a0267375706686"}
+{
+  "status": "PASS_NATIVE_REACHABILITY_AND_IN_MEMORY_AUTHORITY_GUARD",
+  "checks": [
+    "native_satisfy_INDEPENDENT_REVIEW",
+    "native_satisfy_DEVELOPER_ACCEPTANCE",
+    "native_satisfy_CANONICAL_INTEGRATION",
+    "native_satisfy_REMOTE_PUBLICATION",
+    "native_satisfy_LIFECYCLE_RECONCILIATION",
+    "source_native_reachable_presatisfied_active",
+    "competent_developer_authority_attached",
+    "original_recipe_returns_READY_for_post_satisfaction_new_REJECTED",
+    "experimental_product_guard_rejects_post_satisfaction_REJECTED",
+    "experimental_product_guard_preserves_ACCEPTED_preflight",
+    "preflight_did_not_close_native_taskcycle"
+  ],
+  "source_native": true,
+  "product_effect": "NONE",
+  "reachable_state": {
+    "state": "ACTIVE",
+    "obligations": [
+      {
+        "id": "INDEPENDENT_REVIEW",
+        "status": "SATISFIED",
+        "authority_ref": "authority:reviewer-001"
+      },
+      {
+        "id": "DEVELOPER_ACCEPTANCE",
+        "status": "SATISFIED",
+        "authority_ref": "authority:developer-001"
+      },
+      {
+        "id": "CANONICAL_INTEGRATION",
+        "status": "SATISFIED",
+        "authority_ref": "authority:effect-001"
+      },
+      {
+        "id": "REMOTE_PUBLICATION",
+        "status": "SATISFIED",
+        "authority_ref": "authority:effect-001"
+      },
+      {
+        "id": "LIFECYCLE_RECONCILIATION",
+        "status": "SATISFIED",
+        "authority_ref": null
+      }
+    ],
+    "authority_refs": [
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:reviewer-001",
+        "location": "evidence/authority-reviewer-001.json"
+      },
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:developer-001",
+        "location": "evidence/authority-developer-001.json"
+      },
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:effect-001",
+        "location": "evidence/authority-effect-001.json"
+      }
+    ]
+  },
+  "source_native_post_satisfaction_rejected_preflight": {
+    "status": "READY",
+    "reason": null
+  },
+  "guarded_research_candidate": {
+    "new_rejected_preflight": "BLOCKED",
+    "accepted_preflight": "READY",
+    "lines_added": 3,
+    "implementation": "IN_MEMORY_ONLY_NOT_PRODUCT"
+  },
+  "limit": "Original native transitions reach ACTIVE/all-satisfied and original recipe preflight sees new synthetic REJECTED as READY; independent competence/provenance of changed external evidence is not established."
+}
+
+END-MEMBER
+MEMBER {"byte_length":2080,"path":"evidence/authority-native/beads023-source-native-reachability.json","sha256":"4a15b5b3651349cf8da0ea63a723095fcc8dc91fcacef771e88f37e5b91c8e9a"}
+{
+  "status": "PASS_NATIVE_PRESATISFIED_REACHABLE",
+  "checks": [
+    "native_satisfy_INDEPENDENT_REVIEW",
+    "native_satisfy_DEVELOPER_ACCEPTANCE",
+    "native_satisfy_CANONICAL_INTEGRATION",
+    "native_satisfy_REMOTE_PUBLICATION",
+    "native_satisfy_LIFECYCLE_RECONCILIATION",
+    "source_native_reachable_presatisfied_active",
+    "competent_developer_authority_attached",
+    "original_recipe_returns_READY_for_post_satisfaction_new_REJECTED",
+    "preflight_did_not_close_native_taskcycle"
+  ],
+  "source_native": true,
+  "product_effect": "NONE",
+  "reachable_state": {
+    "state": "ACTIVE",
+    "obligations": [
+      {
+        "id": "INDEPENDENT_REVIEW",
+        "status": "SATISFIED",
+        "authority_ref": "authority:reviewer-001"
+      },
+      {
+        "id": "DEVELOPER_ACCEPTANCE",
+        "status": "SATISFIED",
+        "authority_ref": "authority:developer-001"
+      },
+      {
+        "id": "CANONICAL_INTEGRATION",
+        "status": "SATISFIED",
+        "authority_ref": "authority:effect-001"
+      },
+      {
+        "id": "REMOTE_PUBLICATION",
+        "status": "SATISFIED",
+        "authority_ref": "authority:effect-001"
+      },
+      {
+        "id": "LIFECYCLE_RECONCILIATION",
+        "status": "SATISFIED",
+        "authority_ref": null
+      }
+    ],
+    "authority_refs": [
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:reviewer-001",
+        "location": "evidence/authority-reviewer-001.json"
+      },
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:developer-001",
+        "location": "evidence/authority-developer-001.json"
+      },
+      {
+        "kind": "AUTHORITY",
+        "id": "authority:effect-001",
+        "location": "evidence/authority-effect-001.json"
+      }
+    ]
+  },
+  "source_native_post_satisfaction_rejected_preflight": {
+    "status": "READY",
+    "reason": null
+  },
+  "limit": "Original native transitions reach ACTIVE/all-satisfied and original recipe preflight sees new synthetic REJECTED as READY; independent competence/provenance of changed external evidence is not established."
+}
+
+END-MEMBER
+MEMBER {"byte_length":2805,"path":"evidence/graph-mitigation/beads023-guarded-writer-result.json","sha256":"7f99f8badb776bbeca21d8a1fea89fa0fd17e94baecfd6d6d87270bd2933c0b4"}
+{
+  "status": "PASS_CONDITIONAL_GRAPH_WRITER_WITH_UNCONTROLLED_EDGE_GAP",
+  "checks": [
+    "git_store_no_remote",
+    "create_ts023-root",
+    "create_ts023-gate",
+    "create_ts023-ancestor",
+    "create_ts023-unrelated",
+    "create_ts023-late",
+    "native_http_ready",
+    "native_graph_discovery_reaches_transitive_ancestor",
+    "concurrent_ancestor_changed",
+    "atomic_native_batch_refuses_any_stale_transitive_relation",
+    "rejected_multiissue_batch_did_not_write_root",
+    "unrelated_native_mutation",
+    "full_scoped_batch_ignores_unrelated_issue",
+    "native_dependency_discovery_observes_new_edge",
+    "new_root_graph_contains_late_issue",
+    "safety_gap_detected_and_recorded",
+    "created_controlled_ts023-controlled-root",
+    "created_controlled_ts023-controlled-edge",
+    "created_controlled_ts023-controlled-other",
+    "atomic_graph_edge_and_root_row_revision_update",
+    "controlled_graph_root_revision_advances",
+    "controlled_graph_native_dependencies_visible",
+    "stale_concurrent_edge_writer_fails_whole_batch",
+    "native_atomic_rollback_did_not_insert_stale_edge",
+    "stale_effect_after_controlled_edge_writer_is_refused",
+    "conditional_fix_does_not_explain_away_original_uncontrolled_gap",
+    "third_process_native_readback"
+  ],
+  "facts": [
+    {
+      "phase": "INITIAL_DISCOVERY",
+      "nodes": [
+        {
+          "id": "ts023-root",
+          "revision": "2516023620581373900",
+          "dependencies": [
+            "ts023-gate"
+          ]
+        },
+        {
+          "id": "ts023-gate",
+          "revision": "-3878268508752116628",
+          "dependencies": [
+            "ts023-ancestor"
+          ]
+        },
+        {
+          "id": "ts023-ancestor",
+          "revision": "-5784902720450115818",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "phase": "DYNAMIC_GRAPH_EXPANSION",
+      "new_dependency": "ts023-late",
+      "root_revision_before": "3799894533049874390",
+      "root_revision_after": "3799894533049874390",
+      "root_revision_advances": false
+    },
+    {
+      "phase": "GRAPH_RACE_NEGATIVE",
+      "stale_graph_batch_accepted": true,
+      "http_status": 200,
+      "gap": "NATIVE_EDGE_MUTATION_NOT_PROTECTED_BY_ORIGINAL_READ_SET"
+    },
+    {
+      "phase": "CONTROLLED_SCOPED_GRAPH_WRITER",
+      "root": "ts023-controlled-root",
+      "original_version": "-4162517901694734621",
+      "updated_version": "904171940248778370",
+      "atomic_edge_inserted": true,
+      "concurrent_edge_writer_refused": true,
+      "uncontrolled_bd_dep_add_remains_unprotected": true
+    }
+  ],
+  "calls": {
+    "get": 23,
+    "batch": 8
+  },
+  "product_effect": "NONE",
+  "graph_authority": "NATIVE_BEADS_ONLY_NONPRODUCT",
+  "disposition": "GRAPH_EXPANSION_REQUIRES_EXCLUSIVE_CAUSAL_EDGE_WRITER_CONTRACT"
+}
+
+END-MEMBER
+MEMBER {"byte_length":1932,"path":"evidence/graph-negative/beads023-causal-graph-result.json","sha256":"570966abdda2ddcf502a1f3c2d3e44d5f15039c7159ceef2f3a2594e017f7e6e"}
+{
+  "status": "GAP_NATIVE_GRAPH_EXPANSION_NOT_ATOMIC_WITH_ROW_GUARDS",
+  "checks": [
+    "git_store_no_remote",
+    "create_ts023-root",
+    "create_ts023-gate",
+    "create_ts023-ancestor",
+    "create_ts023-unrelated",
+    "create_ts023-late",
+    "native_http_ready",
+    "native_graph_discovery_reaches_transitive_ancestor",
+    "concurrent_ancestor_changed",
+    "atomic_native_batch_refuses_any_stale_transitive_relation",
+    "rejected_multiissue_batch_did_not_write_root",
+    "unrelated_native_mutation",
+    "full_scoped_batch_ignores_unrelated_issue",
+    "native_dependency_discovery_observes_new_edge",
+    "new_root_graph_contains_late_issue",
+    "safety_gap_detected_and_recorded",
+    "third_process_native_readback"
+  ],
+  "facts": [
+    {
+      "phase": "INITIAL_DISCOVERY",
+      "nodes": [
+        {
+          "id": "ts023-root",
+          "revision": "-2472154907326633383",
+          "dependencies": [
+            "ts023-gate"
+          ]
+        },
+        {
+          "id": "ts023-gate",
+          "revision": "4871867513463587291",
+          "dependencies": [
+            "ts023-ancestor"
+          ]
+        },
+        {
+          "id": "ts023-ancestor",
+          "revision": "-776569111832202857",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "phase": "DYNAMIC_GRAPH_EXPANSION",
+      "new_dependency": "ts023-late",
+      "root_revision_before": "3836929297786408721",
+      "root_revision_after": "3836929297786408721",
+      "root_revision_advances": false
+    },
+    {
+      "phase": "GRAPH_RACE_NEGATIVE",
+      "stale_graph_batch_accepted": true,
+      "http_status": 200,
+      "gap": "NATIVE_EDGE_MUTATION_NOT_PROTECTED_BY_ORIGINAL_READ_SET"
+    }
+  ],
+  "calls": {
+    "get": 20,
+    "batch": 5
+  },
+  "product_effect": "NONE",
+  "graph_authority": "NATIVE_BEADS_ONLY_NONPRODUCT",
+  "disposition": "BLOCK_BEADS_FIRST_AUTOMATED_EFFECT_UNTIL_GRAPH_SERIALIZATION_QUALIFIED"
+}
+
+END-MEMBER
+MEMBER {"byte_length":319,"path":"evidence/provider-original/ts-beads-023-external-original.json","sha256":"14bd7b15c34957c4cd851be1fcef01d7e0bf654a45469741308e36d3360822b5"}
+{"schema_version":"ts-beads-023-github-artifact-effect/v1","attempt_id":"TS-BEADS-023-ORIGINAL-GITHUB-ARTIFACT-40104370902","source_git_subject":"f34df4c706c92e66a850a50a6f55d2315400736f","provider":"GITHUB_ACTIONS_ARTIFACT","status":"PUBLISHED_ONCE","authority":"NONPRODUCT_EXPERIMENTAL_ONLY","product_effect":"NONE"}
+
+END-MEMBER
+MEMBER {"byte_length":5712,"path":"reports/BEADS_FIRST_PRODUCT_CHANGE_CANDIDATE.md","sha256":"abc3abe6aee657fa81d61d09af7ea40822ca8369115acc0ff31413aa313de1b9"}
+# Tecnotron — Propuesta experimental de reestructuración Beads-first
+
+**Documento de investigación, NO decisión Product ni contrato canónico.**  
+**Base:** [Beads 023 RESULT](RESULT.md); Beads 019–022, originales con SHAs en esos informes.  
+**Product todavía competente:** `mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56`.
+
+## Propuesta
+
+**Dar prioridad a la funcionalidad nativa comprobada de Beads** — almacenamiento Dolt, dependencia, read-only GET revision, CAS de issues y batch transaccional — y rediseñar interfaces de consumidores seleccionados **asíncronos y de concurrencia causal**, en lugar de construir un reemplazo que emule exactamente el State Kernel.
+
+No confundir esta preferencia arquitectónica con autorización para reemplazar el lifecycle vigente: issue Beads abierta/ready/cerrada no es TaskCycle iniciada/cerrada, Independent Review, Developer aceptación ni concesión de autoridad.
+
+## Cambios que la evidencia justificaría someter a Product
+
+1. **Autoridad explícita en preflight de cierre.** El original `reconcile_and_close_taskcycle` permite `READY` con evidencia Developer recién reconciliada como `REJECTED` sobre un estado genuinamente alcanzable de obligaciones satisfechas. Propuesta: exigir explícitamente `developer_acceptance.disposition === ACCEPTED` donde corresponda a cierre, con un contrato claro de vigencia/correspondencia de evidencia. Un guard de **tres líneas**, aplicado en memoria, fue positivo (11/11); no es parche aceptado. Antes de integración: revisión independiente de semántica y casos de contradicción/revocación, alcance de documentación/callers, y negativos fuente-nativos.
+2. **Escritor único *de hecho*, no un rol/orquestador nuevo.** La ruta de mutación de aristas que resulte seleccionada debe hacer `update root metadata + dep_add` bajo una sola transacción `batchApply`, usando `expected_version` del root. Una operación de cierre/admisión debe proteger el **read-set causal descubierto completo** en la misma transacción nativa. Prohibir técnicamente o aislar las rutas de escritura que omiten ese contrato (por ejemplo `bd dep add` directo). El experimento reproduce bypass: CLI agrega edge sin tocar `root.revision`; un CAS sobre la revisión antigua **lo acepta**. Sin enforcement contra bypass la propuesta permanece bloqueada.
+3. **Simplificación del modelo de versiones.** No conservar `global store_revision` por inercia para nuevos consumidores, si un contrato versionado por sujetos causales efectivamente protege sus invariantes. 021–022 ejecutaron el consumidor original transformado en memoria y 022 midió 42,5 % menos llamadas para mismo workload de prueba al usar `GET(...).revision`, conservando CAS. No equivale a throughput ni reducción neta de código.
+4. **Semántica de efectos fuera de Beads.** El contrato Tecnotron para `NONE/CONFIRMED/UNKNOWN`, identidad Git/proveedor y no-blind-retry permanece explícito. 023 recuperó un artifact externo real de GitHub después de ocultar un acuse sintético; provider real y lectura independiente, no timeout real. Beads no confiere ni reemplaza autoridad Product.
+5. **Migración por consumidor y eliminación, no duplicación.** Priorizar reutilizar Beads para read-only backlog / grafo operacional no autoritativo como posible primer consumidor; para lifecycle autoritativo exigir primero cierre causal y revalidación de evidencias. Inventariar los consumidores instalados de RunStore/SQLite/Kernel antes de retirar interfaces. No crear un segundo journal global Beads, scheduler, orquestador o pipeline de aprobación por defecto.
+
+## Arquitectura propuesta en capas mínimas
+
+- **Datos operacionales:** Beads/Dolt para graph, status operativo, etiquetas, ready, claims y persistencia.
+- **Frontera de mutación causal:** una ruta nativa acotada, con autorización explícita en Control y atomicidad issue-update/dep_add, protegida de bypass. No implica un actor o scheduler separado por defecto.
+- **Semántica Product:** responsabilidad, selección, fase, autoridad, IR, aceptación, cierre y reconciliación de efectos originales siguen en Tecnotron bajo autoridad competente. Se permiten nuevos puertos asíncronos si la decisión Product los selecciona explícitamente.
+- **Evidencia portable:** sujetos Git exactos, receipts verificables y handoffs; publicación y actualizaciones operacionales no implican aceptación.
+
+## Precondiciones materiales **para recomendar** adopción autoritativa
+
+- Calificar la ruta de escritura elegida **en todos los escritores relevantes** y demostrar técnicamente que no se puede modificar una arista relevante sin invalidar el token causal o bloquear la operación.
+- Calificar read-set dinámico, aparición/eliminación de aristas, concurrencia multi-actores, fallas reales de proveedor y composición de evidencia competente, sin repetir efectos UNKNOWN.
+- Revisar independientemente el guard Developer/REJECTED, con corpus fuente-nativo de observaciones vigentes y pasadas.
+- Demostrar reducción neta de complejidad, recuperación y compatibilidad histórica de cada consumidor seleccionado; no migrar retrospectivamente acciones/fallos originales.
+
+**Decisión propuesta para Control:** mantener `State Kernel` operativo allí donde sigue siendo autoridad, **dar prioridad de investigación y posible evolución futura a Beads-first**, y no conceder aún `READY_FOR_PRODUCT_ADOPTION` para lifecycle o graph autoritativo por el bypass demostrado.
+
+Esta propuesta no modifica la SOT, ni selecciona #34, ni inicia TaskCycles, ni autoriza Phase 2, IR o integración. Sólo Control/autoridad Product competente puede convertirla en decisión e implementación canónica.
+
+END-MEMBER
+MEMBER {"byte_length":11818,"path":"reports/RESULT.md","sha256":"4d40e99b939c337d3bbcb6114a917ec93ca1bec924e6195a498d065f49b5761d"}
+# TS — Beads 023 | Cierre de deudas, evidencia contradictoria y recuperación del proveedor
+
+**Fecha:** 2026-10-24.  
+**Responsabilidad:** Beads experimental, aislado, bajo @Autónomo Experimental.  
+**Disposición:** `COMPLETE_WITH_MATERIAL_ADOPTION_BLOCKER` — experimentación terminal, propuesta Product todavía **NO ADOPTADA**.  
+**Autoridad:** `NONPRODUCT_ONLY`; ningún cambio a Product, TaskCycles reales, State Kernel canónico, GitHub Issues Product ni Dolt compartido.
+
+## Identidad de fuentes, no deriva
+
+- Product observado: `mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56`, tree `8caa56d36f3efeba359bbbf65b158ffb01a19da6`, `docs/SOURCE_OF_TRUTH.md` blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`, `docs/current-state.md` blob `0d8a6426f51020d51d74bfb50dc8702a07f02837`.
+- Lab base `mauedgar/ts-execution-lab:main@b30241201d07a9590e1e845abe767cdcf9921479`, rama aislada `experiment/beads-023-closure-authority-dependencies-provider-20261024`.
+- Parent 022 `mauedgar/ts-execution-lab@32f86383c979ba015024d0e70ccd98c61858e132:experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/RESULT.md`.
+- Shared Dolt remoto protegido: `refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571`, verificado sin cambios en las ejecuciones nativas.
+- Beads `v1.3.1`, Dolt `v2.2.0`, sólo stores descartables Git sin remotos y repositorio Product en clone detached read-only.
+
+## Matriz terminal de sujetos exactos
+
+| Operación acotada | Original run/commit | Terminal | Evidencia |
+| --- | --- | --- | --- |
+| Fuente-nativa Product + GitHub proveedor externo publicado una vez | [40104370902](https://github.com/mauedgar/ts-execution-lab/actions/runs/40104370902), `f34df4c706c92e66a850a50a6f55d2315400736f`, job `120902884949` | **SUCCESS**, 9/9 PASS, publicación única y deferred durable join | Authority artifact `12564401090`; provider artifact `12564166868` |
+| Primer lector causal, sin metadatos nativos seed | [40104322456](https://github.com/mauedgar/ts-execution-lab/actions/runs/40104322456), `97143d8bb690dc4bf0263c63d42728fbbda05d5c`, job `120902741314` | **FAIL** `MISSING_DETAIL_ts023-root` por lector experimental demasiado estricto; no se evaluó la carrera | Artifact `12564530519` preservado |
+| Descubrimiento de grafo causal corregido | [40104466243](https://github.com/mauedgar/ts-execution-lab/actions/runs/40104466243), `5e1add19b0748bc5bf7f06e4a6cbe932bc7b6be0`, job `120903166603` | **SUCCESS / 17/17** con **GAP material** en expansión del grafo | Artifact `12563759008` |
+| Mitigación de escritor causal atómico, distinta operación | [40104741250](https://github.com/mauedgar/ts-execution-lab/actions/runs/40104741250), `34d8f2969d33ea5d4ca4b580182746c61b1f1a46`, job `120903976787` | **SUCCESS / 27/27** — mitigación **condicionada**; conserva contraejemplo de ruta sin control | Artifact `12563878788` |
+| Calificación de guard de autoridad en memoria | [40104867163](https://github.com/mauedgar/ts-execution-lab/actions/runs/40104867163), `9cdf1bb6e223b476bb8f9127aed7eab0a0be5462`, job `120904357049` | **SUCCESS / 11/11** | Artifact `12564725164` |
+
+**No hubo retry ciego de efectos reales**, especialmente del artifact externo. Los ensayos con fallas son intentos terminales distintos y se conservaron.
+
+## Deuda 1: rechazo Developer tras obligaciones satisfechas
+
+Se utilizó el **State Kernel original auténtico** en Linux, con FS durable en carpeta descartable. Se ejecutaron las primitivas Product reales `create`, `transition ACTIVE` y `satisfy` para las cinco obligaciones de una TaskCycle sintética, adjuntando autoridades reviewer/developer/effect vía referencias válidas. Se llegó a `ACTIVE` con las cinco `SATISFIED` y `authority:developer-001` asociada; no se utilizó una instantánea inventada para ese estado.
+
+Sobre ese estado **realmente alcanzable**, la receta Product original e intacta `createReconcileAndCloseTaskCycleRecipe` devolvió **`preflight READY`** ante una nueva observación Developer sintética verificable con `disposition=REJECTED`. Esta discrepancia procede del consumidor original y no de Beads. El preflight no mutó ni cerró la TaskCycle.
+
+En una **variante en memoria, exclusivamente investigativa**, se añadió un control tras la reconciliación para exigir `reconciliation.observed_facts.developer_acceptance.disposition === 'ACCEPTED'` antes de disponer el cierre. La variante:
+- `REJECTED` tras obligaciones satisfechas → **BLOCKED**;
+- `ACCEPTED` → **READY**;
+- 11/11 controles sobre tienda Product fuente-nativa → **PASS**.
+
+**Fuente nativa original:** artifact `12564401090`, ZIP sha256 `62e93e9289d5c6037e1bab0c180e39fe04ac169c3c090aabd6df25f8959e1ae9`, JSON sha256 `4a15b5b3651349cf8da0ea63a723095fcc8dc91fcacef771e88f37e5b91c8e9a`.  
+**Variante corregida en memoria:** artifact `12564725164`, ZIP sha256 `dcb46ce0a1600597692abd82c6d9b5631518ce70bde2998317cb707878dcc314`, JSON sha256 `4a0534dc3366df1a782cf13b770a4add56219c3e04f7c710a2a0267375706686`.  
+Código: `source-native-authority.mjs`, `source-native-authority-guard.mjs`, `fixtures023.mjs`.
+
+**Límite:** la alcanzabilidad del estado source-native quedó probada, **no** la admisibilidad Product real de presentar después evidencia contradictoria con una aceptación previa, ni un cierre indebido histórico. El fix de tres líneas es **propuesta de semántica**, no cambio canónico, aceptación Product o Developer grant. Debe pasar review competente y regresiones relevantes.
+
+## Deuda 2: descubrimiento transitorio del read-set causal
+
+Beads nativo descubrió, mediante `GET /v0/beads/issues/{id}`, el grafo `root → gate → ancestor`. Un cambio a `ancestor` tras snapshot fue rechazado con CAS nativo de las tres issues; ninguna mutación parcial de `root`. Un cambio en issue independiente **no** impidió transacción sobre el conjunto causal.
+
+**Hallazgo crítico reproducido:** un escritor ejecutó `bd dep add root late --type related` **después** de observar el conjunto causal. Se encontró nueva arista en el GET siguiente, pero la revisión **de root no avanzó**. Una transacción `batchApply` con versiones del conjunto anterior fue **aceptada (HTTP 200)**, ignorando el nuevo miembro: `GAP_NATIVE_GRAPH_EXPANSION_NOT_ATOMIC_WITH_ROW_GUARDS`. Esto invalidó la premisa de que el mero `expected_version` del root sella el grafo y **bloquea la adopción general**.
+
+Receipts originales:
+- Caso negativo 17/17: artifact `12563759008`, ZIP sha256 `c9b9c2c9d45596ec9b815cca52cb09d5f60ca9626ada4c76937bb9ccbd4b6b50`, JSON sha256 `570966abdda2ddcf502a1f3c2d3e44d5f15039c7159ceef2f3a2594e017f7e6e`.
+- Código `native-graph023.mjs`; el hallazgo se preserva **sin redefinir PASS como equivalencia**.
+
+### Mitigación nativa condicional probada
+
+Un escritor controlado llamó **una sola transacción** `POST /v0/beads/issues:batchApply` con:
+1. `update` a la issue raíz, `expected_version` previamente leído y cambio de marca semántica de grafo en la metadata **de esa misma issue**, produciendo nueva revisión raíz.
+2. `dep_add` de la nueva arista, en el mismo batch atómico.
+
+27/27 verificaciones PASS: nueva arista visible; revisión raíz avanzó; otro escritor que llevaba la revisión anterior no pudo añadir su arista (rollback de toda la transacción); un efecto con revisión anterior fue rechazado. **No se añadió un ledger global ni un coordinador aparte.**
+
+**Limitación ineludible:** `bd dep add` usado directamente fuera del escritor controlado sigue pudiendo crear aristas **sin** cambiar revisión raíz, como demostró el contraejemplo original. El requisito de una ruta de escritores exclusivos/contractuales **no está hoy impuesto por Beads a todos los clientes**. La mitigación es válida sólo con exclusividad efectiva de la ruta de mutación del grafo y protección contra bypass. No habilita ejecución automática Product.
+
+Artifact `12563878788`, ZIP sha256 `859ee8f4f65262753f2a205160068c4e1c0cbd890e761875ac2e3fc9128a1330`, JSON sha256 `7f99f8badb776bbeca21d8a1fea89fa0fd17e94baecfd6d6d87270bd2933c0b4`.
+Código `native-graph023-guarded.mjs`. Disposición `GRAPH_EXPANSION_REQUIRES_EXCLUSIVE_CAUSAL_EDGE_WRITER_CONTRACT`.
+
+## Deuda 3: efecto externo real con ACK no consumido
+
+GitHub Actions **publicó una única vez** un artifact externo nativo; no era un stub local. El step siguiente ocultó al consumidor los outputs del upload; posteriormente, ChatGPT realizó **deferred durable join** mediante GitHub API del run exacto, descargó su ZIP, verificó SHA-256 y validó payload interno. **No se repitió el upload ni se fabricó un recibo de ejecución.**
+
+- Original run `40104370902`; provider artifact `12564166868`, `ts-beads-023-external-provider-40104370902`.
+- ZIP SHA256 `8331b34121a1a2dcb3df9b08d3bd00cf9cf851abf79590024a0292e9d2f5bd3a`.
+- Payload JSON SHA256 `14bd7b15c34957c4cd851be1fcef01d7e0bf654a45469741308e36d3360822b5`.
+- `attempt_id: TS-BEADS-023-ORIGINAL-GITHUB-ARTIFACT-40104370902`, `source_git_subject: f34df4c706c92e66a850a50a6f55d2315400736f`; `provider: GITHUB_ACTIONS_ARTIFACT`, `status: PUBLISHED_ONCE`, `product_effect: NONE`.
+- **Disposición:** `EXTERNAL_EFFECT_CONFIRMED`, exact original provider publication; no repeat.
+
+**Límite:** la falta de ACK fue simulada intencionalmente; no fue una desconexión real del proveedor ni prueba de conciliación de cualquier GitHub Issue, PR o implementación. Se acreditó un efecto **real** de GitHub Actions Artifact y su recuperación por identidad.
+
+## Balance de deuda e invariantes
+
+| Frente | Evidencia 023 | Disposición |
+| --- | --- | --- |
+| Alcanzabilidad de TaskCycle original con obligaciones satisfechas | **9/9 fuente-nativo** | Calificada; la admisión de nueva evidencia contradictoria requiere revisión Product |
+| Posible guard ACCEPTED al cierre | **11/11 memoria original + variante** | Propuesta concreta de 3 líneas, no adoptada |
+| Cierre transitivo de dependencias conocidas | **17/17 negativo/positivo** | El CAS nativo protege filas conocidas |
+| Expansión dinámica no declarada del grafo | **Unsafe contraejemplo reproducido** | **BLOQUEO MATERIAL de adopción general** |
+| Escritor nativo de aristas controlado con revisión raíz | **27/27 PASS** | Mitigación **condicionada a exclusividad del escritor**; falta enforcement/qualificación de consumidores |
+| Efecto externo y pérdida de ACK | 1 artifact genuino, recibo recuperado y verificado | `EXTERNAL_EFFECT_CONFIRMED`, sin retry |
+| Ahorro de complejidad Product y migración de consumidores instalados | 022 reducción medida de llamadas, no migración instalada | **DIFERIDO**, no calculada reducción neta |
+
+**Conclusión:** la experimentación 023 cumplió la responsabilidad de caracterizar y ensayar reparaciones nativas, pero reveló una condición crucial que no puede eliminarse fingiendo equivalencia. Beads-first tiene prioridad como **candidato arquitectónico** (async, native CAS, batching, work graph), no como reemplazo autoritativo inmediato. El resultado 023 es `COMPLETE_WITH_MATERIAL_ADOPTION_BLOCKER`, no `READY_FOR_PRODUCT_ADOPTION`.
+
+El paso recomendado es entregar una propuesta explícita a Control: (a) guard de aceptación Developer con revisión independiente; (b) contrato de **único escritor causal** para cambios de dependencias o alternativa técnicamente equivalente, verificada frente a bypass; (c) migración experimental de un consumidor de lectura no autoritativo antes de cambios reales de TaskCycle; (d) plan de compatibilidad histórica. No introducir orquestadores, schedulers, roles o nuevas gates por defecto; reemplazar/reducir duplicaciones sólo tras justificar necesidades y autoridad.
+
+**Efectos:** no Product, no modificaciones de `tecnotron-ai:tools`, no TaskCycle #34, no PR Product, ningún efecto de proveedor repetido y shared Dolt intacto.
+
+END-MEMBER
+END-BUNDLE
