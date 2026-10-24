@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: One bounded native Beads/Dolt writer-boundary adversarial test, verified TXT result
+      - name: Attempt 2: bounded Beads/Dolt SQL literal repair and writer-boundary test, verified TXT
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
