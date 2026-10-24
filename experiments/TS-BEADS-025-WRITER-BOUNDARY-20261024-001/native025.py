@@ -53,6 +53,17 @@ ROOT.chmod(0o700)
 for p in [BINARY,DOLT]:
     if not p.exists():raise RuntimeError("BINARY_MISSING_"+str(p))
 RUN_ID=int(os.environ.get("GITHUB_RUN_ID","25"))
+# Untrusted UID must read only public *code* and the PyMySQL package. Do not
+# grant access to Actions workspace, private Dolt store, result or SQL passwords.
+ATTACKER_STAGE=pathlib.Path("/tmp")/f"tsbeads025-untrusted-{RUN_ID}"
+if ATTACKER_STAGE.exists():raise RuntimeError("ATTACKER_STAGE_EXISTS_NO_REPLAY")
+ATTACKER_STAGE.mkdir(mode=0o755)
+shutil.copy2(pathlib.Path(__file__).resolve(),ATTACKER_STAGE/"attacker025.py")
+(ATTACKER_STAGE/"attacker025.py").chmod(0o644)
+shutil.copytree(pathlib.Path(pymysql.__file__).resolve().parent, ATTACKER_STAGE/"pymysql")
+for package_file in (ATTACKER_STAGE/"pymysql").rglob("*"):
+    if package_file.is_dir():package_file.chmod(0o755)
+    else:package_file.chmod(0o644)
 SQL_PORT=27000+RUN_ID%13000
 HTTP_PORT=41000+RUN_ID%12000
 SYS_PY=sys.executable
@@ -110,9 +121,10 @@ def attacker(mode,*,target=None):
     env={**os.environ,"TS025_HTTP_PORT":str(HTTP_PORT),"TS025_SQL_PORT":str(SQL_PORT),
         "TS025_DEP_SOURCE":"ts025-root","TS025_DEP_TARGET":target or "ts025-unauthorized",
         "TS025_DATABASE":db_name,"TS025_READER_PASSWORD":readonly_pass}
+    env["PYTHONPATH"]=str(ATTACKER_STAGE)
     restricted=["PYTHONPATH","TS025_HTTP_PORT","TS025_SQL_PORT","TS025_DEP_SOURCE","TS025_DEP_TARGET","TS025_DATABASE","TS025_READER_PASSWORD"]
     wrapper=["sudo","-n","-u","nobody","--","/usr/bin/env",*[f"{k}={env.get(k,'')}" for k in restricted],
-             SYS_PY,__file__,"attacker",mode]
+             SYS_PY,str(ATTACKER_STAGE/"attacker025.py"),"attacker",mode]
     x=run(wrapper,env=env,timeout=20,allow_fail=True)
     if x.returncode:raise RuntimeError("ATTACKER_RUNNER_"+mode+": "+x.stderr[-500:])
     return json.loads(x.stdout.strip())
@@ -282,4 +294,5 @@ finally:
         except subprocess.TimeoutExpired:sqlserver.kill()
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n",encoding="utf8")
+    shutil.rmtree(ATTACKER_STAGE,ignore_errors=True)
     print(f"TS_BEADS025_RECEIPT={OUT};status={receipt['status']}")
