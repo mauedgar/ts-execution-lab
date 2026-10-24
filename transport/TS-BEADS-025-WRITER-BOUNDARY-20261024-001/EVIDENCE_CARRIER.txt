@@ -1,0 +1,196 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 f906b2b0ab313274c9f97eaa5a26a4075d9dc7e2fe4a628c08b8797afeb49e21
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":318,"path":"README.txt","sha256":"24e496a7e12e4ca4428ea133a89c1af9b09151362163a7c2a6ed37308dd14fe6"},{"byte_length":4106,"path":"control/PLAN.md","sha256":"ad28bd30852167656b87e45c6f36a1ded281d636fb56e9028a37c5f8cd52d009"},{"byte_length":4239,"path":"original/RESULT025.json","sha256":"b89560dd04308e0c1f28464e90511d06c89d4eab058c0916c16bd9c802cbb060"}],"source_archive":{"entry_count":3,"sha256":"1ee1d72c55b05d065bc1bfa5c2bff2648f6860045b1ef5328e3549dcdac6c1b5","size":20480}}
+MEMBER {"byte_length":318,"path":"README.txt","sha256":"24e496a7e12e4ca4428ea133a89c1af9b09151362163a7c2a6ed37308dd14fe6"}
+NONPRODUCT Beads 025 original experimental writer boundary.
+Exact GitHub Actions run: 40118772611
+Executable Git source: fc1eec6d763f1de5b405531eb3041a018c80d1da
+No Product effect. Original attempt executed once. No credentials in this carrier.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":4106,"path":"control/PLAN.md","sha256":"ad28bd30852167656b87e45c6f36a1ded281d636fb56e9028a37c5f8cd52d009"}
+# TS — Beads 025 | Contrato de Control experimental: frontera real del escritor causal
+
+**Selección experimental autorizada por el usuario:** investigar la frontera efectiva de escritura del grafo Beads, sin añadir un ledger global, sin modificar Product ni dar nuevos grants o estados TaskCycle.
+
+**Originales competentes reobservados:** `mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56` tree `8caa56d36f3efeba359bbbf65b158ffb01a19da6`, SOT blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`, estado actual blob `0d8a6426f51020d51d74bfb50dc8702a07f02837`. Lab base `main@b30241201d07a9590e1e845abe767cdcf9921479`, Dolt remoto compartido `refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571`.
+
+**Evidencia previa:** 023 documentó bypass de `bd dep add` sin cambio de `root.revision`, contra CAS del conjunto viejo, y la mitigación condicional `update(root, expected_version) + dep_add` en una transacción nativa. Control experimental 024 calificó solo una vista no autoritativa. Ambas pruebas y receipts se preservan, no se repiten como efectos.
+
+## Pregunta verificable
+
+¿Puede un cliente no privilegiado, con acceso sólo a consultas nativas del grafo, alterar dependencias por el SQL o HTTP del mismo runner? ¿Puede bloquearse la ruta HTTP sin afectar a un escritor competente, usando políticas existentes de Dolt y del SO, **sin inventar otro orquestador o ledger**?
+
+### Ensayo acotado, no Product
+
+En un runner Ubuntu descartable:
+1. Dolt SQL Server Beads v1.3.1/Dolt v2.2.0 en carpeta privada `0700`, root SQL protegido con contraseña efímera; usuario SQL distinto sólo con SELECT.
+2. Proceso separado UID `nobody` lee SQL y se le niega escritura, y no accede al almacén directo del usuario competente.
+3. Antes de proteger la API HTTP, ese proceso intenta `dep_add` sin `update(root)`: debe registrarse si una API local alcanzable permite eludir SQL y filesystem ACL y agregar arista sin cambiar la revisión raíz. Este es un **control negativo**, no una operación legítima.
+4. Calificar un firewall de OS `iptables -m owner --uid-owner nobody` para impedir sólo conexiones de ese UID al puerto HTTP de escritura. Repetir ataque: debe quedar rechazado; el lector SQL sigue funcionando y el escritor autorizado aún hace `root update + dep_add` en batch con CAS; un segundo batch obsoleto debe ser rechazado.
+5. Retirar la regla temporal en `finally`, terminar servicios y archivar sólo recibos sin claves ni tokens.
+
+**El permiso de escritura SQL no basta**, porque el API HTTP nativo y el acceso a disco pueden eludirlo. Toda conclusión de aislamiento aplica únicamente al conjunto acotado de identidades, puertos y procesos probados. **La misma UID con acceso a credenciales / servidor, root o sudo, otro endpoint expuesto y varios hosts NO quedan calificados por una regla owner de iptables.** No declarar exclusividad general ni adopción Product si subsisten esas rutas.
+
+Si `iptables` u otro control no existe en el runner, no simular una frontera segura: el resultado será `BLOCKED_NETWORK_OWNER_POLICY_UNAVAILABLE` con el contraejemplo conservado. Si cualquier prueba falla, el intento queda FAIL y se reconcilia antes de posibles correcciones.
+
+## Evidencia y transporte
+
+Un solo intento acotado por workflow GitHub Actions, original `ExecutionAttempt` ligado a Git SHA, runner, recibo JSON local. Emisión de TXT `IR-TXT-CARRIER/1` **mediante el script Product existente** `scripts/review_txt_carrier.py`, verificación y extracción byte-a-byte, publicación create-only en rama experimental del laboratorio; nunca sustituir por un nuevo ZIP como formato de transferencia. GitHub Actions podrá almacenar su artifact nativo histórico ZIP, pero no será la entrega principal.
+
+**Criterio de control experimental:** `PASS_EFFECTIVE_UID_BOUNDARY_WITH_MATERIAL_SAME_UID_LIMITATIONS` sólo si todos los controles técnicos de ese caso pasan. Aun así, `READY_FOR_PRODUCT_ADOPTION` permanece **NO**; requiere calificación de todos los clientes, endpoints, identidad y credenciales reales y protección multi-host. Product sigue fuera de alcance.
+
+END-MEMBER
+MEMBER {"byte_length":4239,"path":"original/RESULT025.json","sha256":"b89560dd04308e0c1f28464e90511d06c89d4eab058c0916c16bd9c802cbb060"}
+{
+  "Product_effect": "NONE",
+  "attempt_provider": "GITHUB_ACTIONS",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "boundary": {
+    "HTTP_untrusted_UID": "DENIED_BY_EPHEMERAL_OS_POLICY",
+    "SQL_reader_read_count": 5,
+    "authenticated_sql_write": "DENIED_BY_GRANTS",
+    "authorized_writer": "EXACT_ROOT_BATCH_VERSIONED",
+    "bypass_under_same_UID": "NOT_PREVENTED_BY_OWNER_POLICY",
+    "credential_mode": "DOLT_SQL_AUTH_AND_UNIX_UID_NETWORK_POLICY",
+    "direct_private_store": "DENIED_BY_DIRECTORY_PERMISSIONS",
+    "root_secret_exposure": "NONE_TO_UNTRUSTED",
+    "separate_global_ledger": false,
+    "writer_API_requires_isolation": true
+  },
+  "checks": [
+    {
+      "name": "native_binaries_exist",
+      "status": "PASS"
+    },
+    {
+      "name": "synthetic_git_no_remotes",
+      "status": "PASS"
+    },
+    {
+      "name": "SQL_root_without_password_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "read_only_authenticated_sql_user_created",
+      "status": "PASS"
+    },
+    {
+      "name": "native_issue_created_ts025-root",
+      "status": "PASS"
+    },
+    {
+      "name": "native_issue_created_ts025-initial",
+      "status": "PASS"
+    },
+    {
+      "name": "native_issue_created_ts025-unauthorized",
+      "status": "PASS"
+    },
+    {
+      "name": "native_issue_created_ts025-controlled",
+      "status": "PASS"
+    },
+    {
+      "name": "native_issue_created_ts025-blocked",
+      "status": "PASS"
+    },
+    {
+      "name": "native_baseline_edge_created",
+      "status": "PASS"
+    },
+    {
+      "name": "privileged_native_beads_service_ready",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_UID_read_only_SQL_query_succeeds",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_UID_SQL_write_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_UID_cannot_read_private_Beads_metadata",
+      "status": "PASS"
+    },
+    {
+      "name": "unprotected_privileged_HTTP_can_be_called_by_untrusted_UID",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_HTTP_dep_add_modified_same_native_graph",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_HTTP_dep_add_did_not_advance_root_revision",
+      "status": "PASS"
+    },
+    {
+      "name": "ephemeral_process_UID_HTTP_network_boundary_installed",
+      "status": "PASS"
+    },
+    {
+      "name": "untrusted_UID_cannot_reach_write_API_after_owner_policy",
+      "status": "PASS"
+    },
+    {
+      "name": "rejected_untrusted_writer_did_not_change_graph",
+      "status": "PASS"
+    },
+    {
+      "name": "privileged_controlled_edge_update_native_atomic",
+      "status": "PASS"
+    },
+    {
+      "name": "privileged_root_revision_advanced_after_controlled_edge",
+      "status": "PASS"
+    },
+    {
+      "name": "privileged_controlled_edge_exists",
+      "status": "PASS"
+    },
+    {
+      "name": "native_stale_competing_writer_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "reader_retains_native_SQL_read_after_HTTP_policy",
+      "status": "PASS"
+    },
+    {
+      "name": "reader_cannot_update_SQL_after_HTTP_policy",
+      "status": "PASS"
+    }
+  ],
+  "findings": [
+    {
+      "after_uncontrolled_edge": "7638680676507712774",
+      "name": "SQL_ACL_AND_FILE_ACL_ALONE_INSUFFICIENT",
+      "observation": "Untrusted OS UID with no write SQL privileges and no private store access wrote a native dependency through exposed local Beads HTTP API without advancing root revision",
+      "original_root_revision": "7638680676507712774"
+    },
+    {
+      "exclusions": [
+        "same-UID code execution",
+        "root/sudo escalation",
+        "other network ingress",
+        "separately exposed Beads writable endpoints",
+        "direct filesystem access under privileged identity",
+        "real multi-host deployment and Product lifecycle"
+      ],
+      "name": "CONDITIONAL_EFFECTIVE_BOUNDARY",
+      "scope": "Untrusted separate Unix UID with readonly SQL credentials vs privileged writer on ephemeral Linux runner"
+    }
+  ],
+  "id": "TS-BEADS-025-EFFECTIVE-CAUSAL-WRITER-BOUNDARY-20261024-001",
+  "native": "BEADS_1.3.1_DOLT_2.2.0_UBUNTU",
+  "shared_Dolt_effect": "NONE",
+  "status": "PASS_EFFECTIVE_UID_BOUNDARY_WITH_MATERIAL_SAME_UID_LIMITATIONS"
+}
+
+END-MEMBER
+END-BUNDLE
