@@ -27,7 +27,7 @@ jobs:
           subject=7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56
           tree=8caa56d36f3efeba359bbbf65b158ffb01a19da6
           shared=1f72d68797114170a97fee27641858f2e55a4571
-          test "$(git branch --show-current)" = "experiment/beads-026-writer-boundary-20261026-001"
+          test "$(git branch --show-current)" = "experiment/beads-026-native-auth-boundary-20261026-001"
           test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$subject"
           test "$(gh api repos/mauedgar/tecnotron-ai/git/commits/$subject --jq .tree.sha)" = "$tree"
           test "$(gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools' --jq .sha)" = "dd8d34a7e3ef3094805d014f9e59741d2c553957"
@@ -64,8 +64,8 @@ jobs:
           test -f "$out"
           git add -- "$out"
           test "$(git diff --cached --name-only)" = "$out"
-          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(beads 026): publish original native writer-boundary verified TXT envelope"
-          git push origin HEAD:refs/heads/experiment/beads-026-writer-boundary-20261026-001
+          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(beads 026): publish native bearer recovery original TXT envelope"
+          git push origin HEAD:refs/heads/experiment/beads-026-native-auth-boundary-20261026-001
           echo "TS_BEADS026_TXT_PUBLISHED_COMMIT=$(git rev-parse HEAD)"
           echo "TS_BEADS026_TXT_BLOB=$(git rev-parse HEAD:$out)"
           test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$subject"
