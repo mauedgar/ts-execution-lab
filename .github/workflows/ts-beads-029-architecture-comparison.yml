@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Audit exact source and original results; publish qualified TXT
+      - name: Attempt 2 source measurements with explicit 024 malformed-envelope member recovery
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -51,19 +51,49 @@ jobs:
           git show 32f86383c979ba015024d0e70ccd98c61858e132:experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/RESULT.md > "$E022_REPORT"
           git show 4a2511e1fa02858b765715ac76e7d19a32aa67da:transport/TS-BEADS-024-READ-MODEL-20261024-001/EVIDENCE_CARRIER.txt > "$e024"
           git show 9e8016004ef5d3ca74abd67914d8e1a03ffcd851:transport/TS-BEADS-028-FAILCLOSED-20261028-001/EVIDENCE_CARRIER.txt > "$e028"
+          test "$(git hash-object "$e024")" = "0bb53ee9b59f25ac288844ae7ab7594a5dee32d4"
+          test "$(git hash-object "$e028")" = "7c96a1886eebeb693f5f0c7de6d2f117c39b9111"
           product_tool="$PRODUCT_ROOT/scripts/review_txt_carrier.py"
-          for n in 024 028; do
-             if [ "$n" = 024 ]; then p="$e024"; else p="$e028"; fi
-             python3 "$product_tool" verify "$p" --report "$scratch/verify-$n.json"
-             python3 "$product_tool" extract "$p" --out "$scratch/extract-$n" --report "$scratch/extract-$n.json"
-             python3 - "$scratch/verify-$n.json" "$scratch/extract-$n.json" <<'PY'
+          # Historical 024 full TXT is independently known to be malformed in Git:
+          # its LAST member is 27 bytes truncated. Preserve the negative and
+          # recover ONLY the intact original 024 JSON member by exact SHA256.
+          if python3 "$product_tool" verify "$e024" --report "$scratch/verify-024.json" >"$scratch/invalid-024-diagnosis.txt" 2>&1; then
+             echo "UNEXPECTED_024_ENVELOPE_BECAME_VALID; do not silently change source" >&2
+             exit 3
+          fi
+          grep -q 'truncated member payload' "$scratch/invalid-024-diagnosis.txt"
+          export E024_RESULT="$scratch/024-member-only-original.json"
+          python3 - "$e024" "$E024_RESULT" <<'PY'
+          import json,sys,re,hashlib,pathlib
+          raw=pathlib.Path(sys.argv[1]).read_bytes()
+          assert raw.startswith(b"IR-TXT-CARRIER/1\n")
+          members=[]
+          for m in re.finditer(br"\nMEMBER (\{[^\n]+\})\n",raw):
+              meta=json.loads(m.group(1))
+              begin=m.end()
+              term=raw.find(b"\nEND-MEMBER\n",begin)
+              assert term!=-1
+              value=raw[begin:term]
+              members.append((meta,value))
+          assert len(members)==3
+          final=next((m,v) for m,v in members if m["path"]=="selection/PLAN.md")
+          assert final[0]["byte_length"]-len(final[1])==27
+          meta,data=next((m,v) for m,v in members if m["path"]=="evidence/ORIGINAL_024_RESULT.json")
+          expected="cddc0b9bf943e6d3edffb64d9526ae73e33195145ecb3ed08ec37c503c06c9b3"
+          assert len(data)==meta["byte_length"]==5767
+          assert hashlib.sha256(data).hexdigest()==meta["sha256"]==expected
+          assert json.loads(data)["status"]=="PASS_NONAUTHORITATIVE_READ_MODEL_WITH_RACE_DETECTION"
+          pathlib.Path(sys.argv[2]).write_bytes(data)
+          print("TS_BEADS029_HISTORICAL_024=CARRIER_INVALID;JSON_MEMBER_SHA256_CONFIRMED;27_BYTES_TRUNCATED_LAST_MEMBER")
+          PY
+          python3 "$product_tool" verify "$e028" --report "$scratch/verify-028.json"
+          python3 "$product_tool" extract "$e028" --out "$scratch/extract-028" --report "$scratch/extract-028.json"
+          python3 - "$scratch/verify-028.json" "$scratch/extract-028.json" <<'PY'
           import json,sys
           for p in sys.argv[1:]:
               j=json.load(open(p))
               assert j.get("status")=="PASS" and j.get("member_payload_equivalence")=="PASS",(p,j)
           PY
-          done
-          export E024_RESULT="$scratch/extract-024/evidence/ORIGINAL_024_RESULT.json"
           export E028_RESULT="$scratch/extract-028/original/RESULT028.json"
           export RESULT_PATH="$scratch/original-029-result.json"
           python3 -m py_compile experiments/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/measure029.py
