@@ -1,0 +1,288 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 e88be8aa887bcc184180d593815cf279eadfe2ea7154750a7c97c94818e1e370
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":313,"path":"README.txt","sha256":"b3f1fde9f5991409109a6b2de8ad380a125c2be8e025fe0ed1a1a672debe3888"},{"byte_length":3881,"path":"control/PLAN.md","sha256":"beddbcb28c640369d6b13d185cce9e7fa3eefc29c00e97ee8e9dff569a8f2bc5"},{"byte_length":8591,"path":"original/RESULT029.json","sha256":"f22524821730653c731ace9b19c6d1323c778e577160670b796ebeb0a1a8e08b"}],"source_archive":{"entry_count":3,"sha256":"133075a7660f85f4035c6f265b6fbc4b303f0f19114efdc735aa65a0d08e16af","size":20480}}
+MEMBER {"byte_length":313,"path":"README.txt","sha256":"b3f1fde9f5991409109a6b2de8ad380a125c2be8e025fe0ed1a1a672debe3888"}
+NONPRODUCT Beads 029 original architecture comparison.
+Exact GitHub Actions run: 40787776443
+Executable Git source: ca953402f27c866b284ee73d5286e372f09d574b
+No Product effect. Original attempt executed once. No credentials in this carrier.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":3881,"path":"control/PLAN.md","sha256":"beddbcb28c640369d6b13d185cce9e7fa3eefc29c00e97ee8e9dff569a8f2bc5"}
+# TS Beads 029 — Control experimental: costos y dependencia reales de dos arquitecturas
+
+**Autoridad**: Control experimental de Beads únicamente. **No Product**, no TaskCycle, Developer grant, IR Product, Phase 2, integración o migración. No repetir 022–028.
+
+## Pregunta seleccionada
+
+¿Conviene priorizar Beads como (A) **proyección informativa read-only** manteniendo el lifecycle Product actual, o (B) **almacenamiento autoritativo** con ports async, CAS causal y aislamiento del escritor? Comparar con mediciones del repositorio competente y recibos nativos originales, sin extrapolaciones no sustentadas ni simular que unas llamadas HTTP ahorradas equivalen a mantenimiento/latencia de producción.
+
+## Sujetos congelados
+
+- Product `mauedgar/tecnotron-ai:tools@d4154bd43f26515c39a41be974e462a0c7406a2d`, tree `cbfb71ad8632047e8e64fe2665d8614d835a2c8b`; SOT blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`, current state blob `0d8a6426f51020d51d74bfb50dc8702a07f02837`.
+- Lab main `b30241201d07a9590e1e845abe767cdcf9921479`. Shared Dolt `refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571` (no access for mutation).
+- 022 report `mauedgar/ts-execution-lab@32f86383c979ba015024d0e70ccd98c61858e132:experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/RESULT.md`.
+- 024 original native receipt `mauedgar/ts-execution-lab@4a2511e1fa02858b765715ac76e7d19a32aa67da:transport/TS-BEADS-024-READ-MODEL-20261024-001/EVIDENCE_CARRIER.txt`.
+- 028 native original receipt `mauedgar/ts-execution-lab@9e8016004ef5d3ca74abd67914d8e1a03ffcd851:transport/TS-BEADS-028-FAILCLOSED-20261028-001/EVIDENCE_CARRIER.txt`. 023–027 hallazgos preservados en sus dictámenes, no reejecutar.
+
+## Método
+
+1. Clonar Product detached a SHA/tree exactos (read-only). Contar bytes/líneas, archivos Source Kernel, adapter, RunStore y Recipe original y las referencias de símbolos/imports runtime/tests. Las referencias son inventario de contacto, **no tareas de migración demostradas** ni autorización de borrado. El conteo y las categorías deben salir del código real.
+2. Obtener 022/024/028 originales del Git exacto, verificar/extract TXT 024/028 mediante el proyector Product original y corroborar sus status originales. Medir solicitudes observadas de cada suite; comparar únicamente condiciones de un mismo workload. 022 compara 127 vs 73 solicitudes en dos variantes **dentro de B**; 024 mide GET del lector A en un fixture diferente; no hacer comparación de latencia A/B.
+3. Comparar obligaciones no equivalentes: A conserva autoridad Product y no puede usar Beads ready/close como aceptación; B requiere ports async, cierre completo del read-set dinámico, exclusividad efectiva de los escritores, fail-closed en todos los arranques, competencia de la autoridad Developer, `NONE/CONFIRMED/UNKNOWN`, migración histórica y equivalencia fuente-nativa del lifecycle. 023–028 demostraron bypass de escritura al margen de un launcher seguro; no declararlo resuelto.
+4. Entregar JSON de medidas y propuesta decisional **sin puntajes arbitrarios ni estimaciones de ahorros Product**. No se editará Product, no se instalará Beads en Product ni se creará otro ledger.
+
+## DoD
+
+Un intento acotado GitHub Actions por sujeto Git; resultado original JSON con métricas y controles, TXT `IR-TXT-CARRIER/1` creado/verificado/extraído con Product `scripts/review_txt_carrier.py` blob `96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4`. Publicación create-only en branch experimental lab, un único commit final y diagnóstico de fallos preservado. Comparación y recomendación experimental únicamente; Product authority NONE.
+
+**Resultados no calificados:** medición de performance de producción, prueba de reducción neta del código, protección universal contra bypass privilegiado, migración de consumidores existentes, garantía de retención/archivo durante shutdown.
+
+END-MEMBER
+MEMBER {"byte_length":8591,"path":"original/RESULT029.json","sha256":"f22524821730653c731ace9b19c6d1323c778e577160670b796ebeb0a1a8e08b"}
+{
+  "Product_effect": "NONE",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": [
+    "state_kernel_real_files",
+    "product_file_present_state-kernel-adapter.js",
+    "product_file_present_run-store.js",
+    "product_file_present_reconcile-and-close-taskcycle.js",
+    "at_least_one_state_kernel_runtime_reference",
+    "adapter_explicitly_imports_original_kernel",
+    "022_published_baseline_requests",
+    "022_matched_optimized_workload",
+    "024_real_native_read_only_status",
+    "028_native_route_and_launcher_status",
+    "024_live_native_counters_exposed",
+    "024_authority_never_granted",
+    "028_privileged_CLI_bypass_original",
+    "028_misconfigured_restart_original",
+    "022_arithmetic",
+    "no_deletion_claim_made"
+  ],
+  "id": "TS-BEADS-029-ARCHITECTURE-COST-COMPARISON-20261028-001",
+  "interpretation": {
+    "A": "lower known adoption-risk: independent informational Beads without Product authority migration",
+    "B": "higher architectural replacement potential but unknown net cost, incomplete behavioral/recovery/security equivalence",
+    "Product_adoption": false,
+    "caution": "Do not compare HTTP calls from distinct synthetic 022/024 suites as latency or performance improvement",
+    "measured_net_Product_deletion": 0,
+    "measured_net_maintenance_savings": "UNKNOWN",
+    "source_files_count_not_work_estimate": true
+  },
+  "measurements": {
+    "kernel_direct_or_symbol_referencing_source": [
+      {
+        "bytes": 2234,
+        "import_reference": false,
+        "path": "src/operational-spine-v0/index.d.ts",
+        "references": 4
+      },
+      {
+        "bytes": 1024,
+        "import_reference": true,
+        "path": "src/operational-spine-v0/index.js",
+        "references": 1
+      },
+      {
+        "bytes": 14395,
+        "import_reference": true,
+        "path": "src/operational-spine-v0/recipe-invocation-worker.js",
+        "references": 3
+      },
+      {
+        "bytes": 16198,
+        "import_reference": true,
+        "path": "src/operational-spine-v0/recipe-invocation.js",
+        "references": 3
+      },
+      {
+        "bytes": 12020,
+        "import_reference": true,
+        "path": "src/operational-spine-v0/state-kernel-adapter.js",
+        "references": 14
+      },
+      {
+        "bytes": 2703,
+        "import_reference": false,
+        "path": "src/state-kernel-v0/cli.js",
+        "references": 2
+      },
+      {
+        "bytes": 14361,
+        "import_reference": false,
+        "path": "src/state-kernel-v0/index.js",
+        "references": 2
+      },
+      {
+        "bytes": 9766,
+        "import_reference": false,
+        "path": "src/state-kernel-v0/store.js",
+        "references": 2
+      },
+      {
+        "bytes": 15566,
+        "import_reference": true,
+        "path": "src-typescript/operational-spine-v0/recipe-invocation-worker.ts",
+        "references": 4
+      },
+      {
+        "bytes": 16255,
+        "import_reference": true,
+        "path": "src-typescript/operational-spine-v0/recipe-invocation.ts",
+        "references": 4
+      }
+    ],
+    "legacy_022_authoritative_optimization": {
+      "baseline_calls": 127,
+      "extra_race_GET": 11,
+      "extra_race_batch": 3,
+      "matched_fewer_calls": 54,
+      "matched_optimized_calls": 73,
+      "optimized_full_suite_calls": 87,
+      "relative_reduction_percent": 42.5,
+      "scope": "same bounded synthetic 022 Beads authoritative consumer workload, NOT A-vs-B production comparison"
+    },
+    "legacy_024_informational_read": {
+      "classifications": [
+        {
+          "case": "initial",
+          "classification": "NONAUTHORITATIVE_OBSERVATION",
+          "mayAuthorize": false
+        },
+        {
+          "case": "native_edge_expansion",
+          "classification": "INCONSISTENT_GRAPH",
+          "mayAuthorize": false
+        },
+        {
+          "case": "related_version_change",
+          "classification": "INCONSISTENT_GRAPH",
+          "mayAuthorize": false
+        },
+        {
+          "case": "unrelated_change",
+          "classification": "NONAUTHORITATIVE_OBSERVATION",
+          "mayAuthorize": false
+        }
+      ],
+      "historic_carrier_verification": "INVALID_TRUNCATED_LAST_MEMBER",
+      "member_recovery": "EXACT_SHA256_VERIFIED_ORIGINAL_JSON_ONLY",
+      "native_http_GET": 41,
+      "original_checks": 18,
+      "original_member_sha256": "cddc0b9bf943e6d3edffb64d9526ae73e33195145ecb3ed08ec37c503c06c9b3",
+      "read_model_rounds": 5
+    },
+    "legacy_028_isolation_and_auth": {
+      "insecure_restart_bypass": true,
+      "original_checks": 35,
+      "route_count": 41,
+      "untrusted_root_revision_bypass": true,
+      "write_route_count": 20
+    },
+    "product_src_files": 111,
+    "product_test_files": 56,
+    "source_buckets": {
+      "installed_RunStore_separate_mechanics_not_equivalent": {
+        "bytes": 4752,
+        "lines": 158,
+        "sha256": "f0cd4516fa5d09afbda545f78124e3d7360e0a67aaa07382b1eb25ff0c84803a"
+      },
+      "installed_kernel_source": {
+        "bytes": 36715,
+        "files": 4,
+        "lines": 481
+      },
+      "installed_operational_spine_adapter": {
+        "bytes": 12020,
+        "lines": 368,
+        "sha256": "239d5ed4bdc063c0da390b5b4b57fed9ec4fa779636be1cb911f500c8f42d888"
+      },
+      "installed_taskcycle_closure_recipe_preserve_semantics": {
+        "bytes": 36279,
+        "lines": 1008,
+        "sha256": "cd07ef9243b05b04021210e745069f9b397ca21d8e696afb536969b0a4e1ce5f"
+      }
+    },
+    "test_references": [
+      {
+        "bytes": 27642,
+        "import_reference": true,
+        "path": "tests/operational-spine-v0/git-execution-qualification.test.js",
+        "references": 3
+      },
+      {
+        "bytes": 16476,
+        "import_reference": true,
+        "path": "tests/operational-spine-v0/recipe-invocation-worker.test.js",
+        "references": 5
+      },
+      {
+        "bytes": 3018,
+        "import_reference": true,
+        "path": "tests/operational-spine-v0/recipe-kernel-decoupling.test.js",
+        "references": 6
+      },
+      {
+        "bytes": 44499,
+        "import_reference": true,
+        "path": "tests/operational-spine-v0/reconcile-and-close-taskcycle.test.js",
+        "references": 4
+      },
+      {
+        "bytes": 21347,
+        "import_reference": true,
+        "path": "tests/operational-spine-v0/vertical.test.js",
+        "references": 10
+      },
+      {
+        "bytes": 22462,
+        "import_reference": true,
+        "path": "tests/state-kernel-v0/kernel.test.js",
+        "references": 12
+      },
+      {
+        "bytes": 10471,
+        "import_reference": true,
+        "path": "tests/state-kernel-v0/late-obligation-extension.test.js",
+        "references": 5
+      }
+    ]
+  },
+  "scenarios": {
+    "A_informational_readonly_plus_existing_Product_authority": {
+      "Product_kernel_state_machine_replaced": false,
+      "hard_limit": "native Beads ready/status/graph cannot grant Product authority or trigger closure",
+      "measured_read_cost": "024: 41 native GET across 5 read-model rounds, synthetic suite only",
+      "native_Beads_graph_read_experiment": "024 complete; two scans are not atomic",
+      "native_api_mutation_rights_for_implementer": "NOT_REQUIRED; read-only SQL only",
+      "new_Product_runtime_changes_measured": 0,
+      "possible_kernel_source_deletion_now": 0
+    },
+    "B_authoritative_Beads_with_isolated_writer": {
+      "Product_kernel_state_machine_replaced": "PROPOSED_NOT_INSTALLED",
+      "complete_evidence_semantics_and_recovery_equivalence": "NOT_QUALIFIED",
+      "hard_limit": "No enforced exclusive graph writer across all privileged clients; no full original TaskCycle compatibility or migration",
+      "installed_consumer_binding_touch_points_lower_bound": 10,
+      "measured_read_cost": "022 matched synthetic workload: 127 vs 73 calls within B only",
+      "native_async_readset_and_CAS": "022 partly qualified; dynamic graph additions require guarded writers",
+      "native_service_writer_isolation": "025-028: conditional; privileged direct CLI / second unauthenticated serve bypass",
+      "possible_kernel_source_deletion_now": 0
+    }
+  },
+  "shared_Dolt_effect": "NONE",
+  "status": "PASS_MEASURED_SOURCE_FOOTPRINT_WITH_NONCOMPARABLE_RUNTIME_TELEMETRY",
+  "subjects": {
+    "e022_subject": "32f86383c979ba015024d0e70ccd98c61858e132",
+    "e024_subject": "4a2511e1fa02858b765715ac76e7d19a32aa67da",
+    "e028_subject": "9e8016004ef5d3ca74abd67914d8e1a03ffcd851",
+    "product_subject": "d4154bd43f26515c39a41be974e462a0c7406a2d",
+    "product_tree": "cbfb71ad8632047e8e64fe2665d8614d835a2c8b"
+  }
+}
+
+END-MEMBER
+END-BUNDLE
