@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Attempt 5 credential-redacted native Dolt startup diagnosis and qualification
+      - name: Attempt 6 private HOME qualified for native Dolt service and reader/writer isolation
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
