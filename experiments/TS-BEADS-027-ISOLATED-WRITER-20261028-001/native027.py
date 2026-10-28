@@ -158,7 +158,8 @@ try:
     # The privileged server has its own UID and private Dolt directory.
     shell=("cd "+shlex.quote(str(sql_dir))+" && exec "+shlex.quote(str(DOLT))+
           " sql-server --host 127.0.0.1 --port "+str(SQL_PORT))
-    proc_sql=subprocess.Popen(["sudo","-n","-u",WRITER,"--","/bin/sh","-c",shell],
+    proc_sql=subprocess.Popen(["sudo","-n","-u",WRITER,"--","/usr/bin/env",
+        "HOME="+str(home),"/bin/sh","-c",shell],
          stdout=log,stderr=subprocess.STDOUT)
     for _ in range(110):
         if proc_sql.poll() is not None:
