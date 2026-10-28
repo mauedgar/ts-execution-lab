@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Attempt 2 distinct Unix principals with corrected native Python harness
+      - name: Attempt 3 owner-credential stat correction for distinct Unix principals
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
