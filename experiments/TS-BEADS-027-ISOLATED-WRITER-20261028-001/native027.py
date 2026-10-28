@@ -187,7 +187,7 @@ try:
         if len(names)!=1:raise RuntimeError("UNEXPECTED_DATABASE_SET:"+repr(names))
         db_name=names[0]
         cur.execute("CREATE USER 'ts027_reader'@'%%' IDENTIFIED BY %s",(read_pass,))
-        cur.execute("GRANT SELECT ON \`"+db_name+"\`.* TO 'ts027_reader'@'%'")
+        cur.execute("GRANT SELECT ON "+chr(96)+db_name+chr(96)+".* TO 'ts027_reader'@'%'")
     c.close()
     for issue in ("ts027-root","ts027-guarded","ts027-insecure"):
         p=writer([BD,"create","TS027 "+issue,"--type","task","--id",issue,
