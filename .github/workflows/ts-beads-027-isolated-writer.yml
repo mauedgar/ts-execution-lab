@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Attempt 4 cross-UID accessible fixture with private credentials and native service
+      - name: Attempt 5 credential-redacted native Dolt startup diagnosis and qualification
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
