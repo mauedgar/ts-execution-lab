@@ -65,7 +65,10 @@ try:
  check("024_real_native_read_only_status",t024["status"]=="PASS_NONAUTHORITATIVE_READ_MODEL_WITH_RACE_DETECTION" and t024.get("Product_effect")=="NONE")
  check("028_native_route_and_launcher_status",t028["status"]=="PASS_SELECTED_FAILCLOSED_LAUNCHER_AND_FULL_ROUTE_MATRIX_WITH_PRIVILEGED_BYPASS" and t028.get("Product_effect")=="NONE")
  check("024_live_native_counters_exposed",t024["native_counts"]["GET"]>0 and t024["native_counts"]["read_model_rounds"]>0)
- evidence_024={"original_checks":len(t024["checks"]),"native_http_GET":t024["native_counts"]["GET"],
+ evidence_024={"historic_carrier_verification":"INVALID_TRUNCATED_LAST_MEMBER",
+  "member_recovery":"EXACT_SHA256_VERIFIED_ORIGINAL_JSON_ONLY",
+  "original_member_sha256":"cddc0b9bf943e6d3edffb64d9526ae73e33195145ecb3ed08ec37c503c06c9b3",
+  "original_checks":len(t024["checks"]),"native_http_GET":t024["native_counts"]["GET"],
   "read_model_rounds":t024["native_counts"]["read_model_rounds"],
   "classifications":[{"case":s["case"],"classification":s["data"]["classification"],"mayAuthorize":s["data"]["mayAuthorize"]} for s in t024["samples"]]}
  check("024_authority_never_granted",all(x["mayAuthorize"] is False for x in evidence_024["classifications"]))
