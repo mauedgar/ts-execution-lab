@@ -1,0 +1,87 @@
+name: TS Beads 029 Source-Grounded A-B Architecture Cost Comparison
+on:
+  push:
+    branches:
+      - experiment/beads-029-architecture-cost-comparison-20261028-001
+    paths:
+      - .github/workflows/ts-beads-029-architecture-comparison.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  exact-source-dependency-and-historical-telemetry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Audit exact source and original results; publish qualified TXT
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          product=d4154bd43f26515c39a41be974e462a0c7406a2d
+          tree=cbfb71ad8632047e8e64fe2665d8614d835a2c8b
+          shared=1f72d68797114170a97fee27641858f2e55a4571
+          branch=experiment/beads-029-architecture-cost-comparison-20261028-001
+          test "$(git branch --show-current)" = "$branch"
+          scratch="$RUNNER_TEMP/ts-beads-029-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          export PRODUCT_ROOT="$scratch/product"
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$PRODUCT_ROOT"
+          git -C "$PRODUCT_ROOT" checkout -q --detach "$product"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse HEAD)" = "$product"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')" = "$tree"
+          test "$(git -C "$PRODUCT_ROOT" hash-object docs/SOURCE_OF_TRUTH.md)" = dd8d34a7e3ef3094805d014f9e59741d2c553957
+          test "$(git -C "$PRODUCT_ROOT" hash-object docs/current-state.md)" = 0d8a6426f51020d51d74bfb50dc8702a07f02837
+          for br in experiment/beads-first-obligations-readset-authority-20261024-022 experiment/beads-024-graph-read-model-20261024-001 experiment/beads-028-failclosed-route-inventory-20261028-001; do
+             git fetch -q --no-tags origin "refs/heads/$br"
+          done
+          git cat-file -e '32f86383c979ba015024d0e70ccd98c61858e132^{commit}'
+          git cat-file -e '4a2511e1fa02858b765715ac76e7d19a32aa67da^{commit}'
+          git cat-file -e '9e8016004ef5d3ca74abd67914d8e1a03ffcd851^{commit}'
+          export E022_REPORT="$scratch/022-original.md"
+          e024="$scratch/024-envelope.txt"
+          e028="$scratch/028-envelope.txt"
+          git show 32f86383c979ba015024d0e70ccd98c61858e132:experiments/TS-BEADS-OBLIGATION-AUTHORITY-EFFICIENCY-20261024-022/RESULT.md > "$E022_REPORT"
+          git show 4a2511e1fa02858b765715ac76e7d19a32aa67da:transport/TS-BEADS-024-READ-MODEL-20261024-001/EVIDENCE_CARRIER.txt > "$e024"
+          git show 9e8016004ef5d3ca74abd67914d8e1a03ffcd851:transport/TS-BEADS-028-FAILCLOSED-20261028-001/EVIDENCE_CARRIER.txt > "$e028"
+          product_tool="$PRODUCT_ROOT/scripts/review_txt_carrier.py"
+          for n in 024 028; do
+             if [ "$n" = 024 ]; then p="$e024"; else p="$e028"; fi
+             python3 "$product_tool" verify "$p" --report "$scratch/verify-$n.json"
+             python3 "$product_tool" extract "$p" --out "$scratch/extract-$n" --report "$scratch/extract-$n.json"
+             python3 - "$scratch/verify-$n.json" "$scratch/extract-$n.json" <<'PY'
+          import json,sys
+          for p in sys.argv[1:]:
+              j=json.load(open(p))
+              assert j.get("status")=="PASS" and j.get("member_payload_equivalence")=="PASS",(p,j)
+          PY
+          done
+          export E024_RESULT="$scratch/extract-024/evidence/ORIGINAL_024_RESULT.json"
+          export E028_RESULT="$scratch/extract-028/original/RESULT028.json"
+          export RESULT_PATH="$scratch/original-029-result.json"
+          python3 -m py_compile experiments/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/measure029.py
+          python3 experiments/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/measure029.py
+          python3 - "$RESULT_PATH" <<'PY'
+          import json,sys
+          a=json.load(open(sys.argv[1]))
+          assert a["status"]=="PASS_MEASURED_SOURCE_FOOTPRINT_WITH_NONCOMPARABLE_RUNTIME_TELEMETRY",a
+          assert a["Product_effect"]=="NONE" and len(a["checks"])>=10
+          PY
+          python3 experiments/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/materialize029.py
+          out=transport/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/EVIDENCE_CARRIER.txt
+          test -f "$out"
+          git add -- "$out"
+          test "$(git diff --cached --name-only)" = "$out"
+          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(beads 029): original measured A/B architecture evidence as qualified TXT envelope"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "TS_BEADS029_TXT_PUBLISHED_COMMIT=$(git rev-parse HEAD)"
+          echo "TS_BEADS029_TXT_BLOB=$(git rev-parse HEAD:$out)"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
+          echo "TS_BEADS029_NO_PRODUCT_EFFECT=PASS;product=$product;shared_dolt=$shared"
