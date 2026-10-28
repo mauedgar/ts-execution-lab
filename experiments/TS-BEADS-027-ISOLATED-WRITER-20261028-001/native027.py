@@ -143,7 +143,7 @@ try:
     sudo(["chmod","0700",str(PRIVATE)])
     check("writer_store_and_credentials_private",
       call(["stat","-c","%a",str(PRIVATE)]).stdout.strip()=="700" and
-      call(["stat","-c","%a",str(auth_file)]).stdout.strip()=="600")
+      sudo(["stat","-c","%a",str(auth_file)]).stdout.strip()=="600")
     for f in [PRIVATE,auth_file,script]:
         denied=sudo(["-u",READER,"--","test","-r",str(f)],allow_fail=True)
         check("reader_UID_cannot_read_privileged_"+f.name,denied.returncode!=0)
