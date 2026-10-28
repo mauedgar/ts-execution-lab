@@ -156,8 +156,8 @@ try:
     sudo(["chown","-R",READER+":"+READER,str(reader_dir)])
     log=open(BASE/"dolt.log","w");streams.append(log)
     # The privileged server has its own UID and private Dolt directory.
-    shell="cd "+shlex.quote(str(sql_dir))+" && exec "+shlex.quote(str(DOLT))+
-          " sql-server --host 127.0.0.1 --port "+str(SQL_PORT)
+    shell=("cd "+shlex.quote(str(sql_dir))+" && exec "+shlex.quote(str(DOLT))+
+          " sql-server --host 127.0.0.1 --port "+str(SQL_PORT))
     proc_sql=subprocess.Popen(["sudo","-n","-u",WRITER,"--","/bin/sh","-c",shell],
          stdout=log,stderr=subprocess.STDOUT)
     for _ in range(110):
