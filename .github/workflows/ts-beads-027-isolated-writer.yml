@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Attempt 3 owner-credential stat correction for distinct Unix principals
+      - name: Attempt 4 cross-UID accessible fixture with private credentials and native service
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -32,7 +32,7 @@ jobs:
           test "$(gh api repos/mauedgar/tecnotron-ai/git/commits/$subject --jq .tree.sha)" = "$tree"
           test "$(gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools' --jq .sha)" = "dd8d34a7e3ef3094805d014f9e59741d2c553957"
           test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
-          scratch="$RUNNER_TEMP/ts-beads-027-$GITHUB_RUN_ID"
+          scratch="/tmp/ts-beads-027-$GITHUB_RUN_ID"
           test ! -e "$scratch"
           mkdir -m 755 "$scratch"
           curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
