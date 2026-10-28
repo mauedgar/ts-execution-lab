@@ -1,0 +1,297 @@
+{
+  "schema": "ts-beads-028-v1-native-route-inventory",
+  "source": "gastownhall/beads@v1.3.1:internal/httpapi/routes.go",
+  "source_git_blob": "50b5ad53f41204e15c0a55af31076f06918d26e1",
+  "source_route_count": 41,
+  "write_route_count": 20,
+  "qualification": "SOURCE_DERIVED_ROUTER_TABLE_NOT_AN_ADOPTED_PRODUCT_CONTRACT",
+  "routes": [
+    {
+      "operation": "OpHealth",
+      "method": "GET",
+      "path": "/healthz",
+      "auth_exempt": true,
+      "write": false
+    },
+    {
+      "operation": "OpGetContext",
+      "method": "GET",
+      "path": "/v0/beads/context",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpListReadyWork",
+      "method": "GET",
+      "path": "/v0/beads/ready",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpGetStats",
+      "method": "GET",
+      "path": "/v0/beads/stats",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpListDependencyCycles",
+      "method": "GET",
+      "path": "/v0/beads/dependencies/cycles",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpCountReadyWork",
+      "method": "GET",
+      "path": "/v0/beads/ready:count",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpListIssues",
+      "method": "GET",
+      "path": "/v0/beads/issues",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpQueryIssues",
+      "method": "GET",
+      "path": "/v0/beads/issues:query",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpCountIssues",
+      "method": "GET",
+      "path": "/v0/beads/issues:count",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpGetIssue",
+      "method": "GET",
+      "path": "/v0/beads/issues/{id}",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpUpdateIssue",
+      "method": "PATCH",
+      "path": "/v0/beads/issues/{id}",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpListRelatedIssues",
+      "method": "GET",
+      "path": "/v0/beads/issues/{id}/related",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpAddComment",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}/comments",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpListSettings",
+      "method": "GET",
+      "path": "/v0/beads/config",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpGetSetting",
+      "method": "GET",
+      "path": "/v0/beads/config/{key}",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpSetSetting",
+      "method": "PUT",
+      "path": "/v0/beads/config/{key}",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpUnsetSetting",
+      "method": "DELETE",
+      "path": "/v0/beads/config/{key}",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpListDependencies",
+      "method": "GET",
+      "path": "/v0/beads/dependencies",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpCountDependencyEdges",
+      "method": "GET",
+      "path": "/v0/beads/dependencies:count",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpListBlockingAnnotations",
+      "method": "GET",
+      "path": "/v0/beads/dependencies/blocking",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpGetDependencyTree",
+      "method": "GET",
+      "path": "/v0/beads/dependencies/tree",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpCreateIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpBatchCreateIssues",
+      "method": "POST",
+      "path": "/v0/beads/issues:batchCreate",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpApplyBatch",
+      "method": "POST",
+      "path": "/v0/beads/issues:batchApply",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpClaimIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}:claim",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpReleaseIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}:release",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpCloseIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}:close",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpCompareAndSetMetadata",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}:casMetadata",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpReopenIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues/{id}:reopen",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpBatchCloseIssues",
+      "method": "POST",
+      "path": "/v0/beads/issues:batchClose",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpClaimNextIssue",
+      "method": "POST",
+      "path": "/v0/beads/issues:claimNext",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpSweepIssues",
+      "method": "POST",
+      "path": "/v0/beads/issues:sweep",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpDeleteIssues",
+      "method": "POST",
+      "path": "/v0/beads/issues:delete",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpAddDependencies",
+      "method": "POST",
+      "path": "/v0/beads/dependencies:add",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpRemoveDependency",
+      "method": "POST",
+      "path": "/v0/beads/dependencies:remove",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpListMemories",
+      "method": "GET",
+      "path": "/v0/beads/memories",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpRememberMemory",
+      "method": "POST",
+      "path": "/v0/beads/memories",
+      "auth_exempt": false,
+      "write": true
+    },
+    {
+      "operation": "OpGetMemory",
+      "method": "GET",
+      "path": "/v0/beads/memories/{key}",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpListEvents",
+      "method": "GET",
+      "path": "/v0/beads/events",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpWatchEvents",
+      "method": "GET",
+      "path": "/v0/beads/events:watch",
+      "auth_exempt": false,
+      "write": false
+    },
+    {
+      "operation": "OpForgetMemory",
+      "method": "DELETE",
+      "path": "/v0/beads/memories/{key}",
+      "auth_exempt": false,
+      "write": true
+    }
+  ]
+}
