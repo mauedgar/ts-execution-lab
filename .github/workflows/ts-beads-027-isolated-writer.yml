@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Distinct Unix principals, native auth and intentional insecure restart negative
+      - name: Attempt 2 distinct Unix principals with corrected native Python harness
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
