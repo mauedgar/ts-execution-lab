@@ -1,0 +1,125 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 3f4149d2ba3821a0fa2261be7c7c7f5ff19213ea40cbef6bcd683b99ce9979d8
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":318,"path":"README.txt","sha256":"d583c6fa3ea6a0e35d4eae417940c7a0429ee9de5fb44da84444a14ce8775ea4"},{"byte_length":3075,"path":"control/PLAN.md","sha256":"faa84e6c03826251ea68daf06815f08be155c9eb880322bfdbe6ed338fb7a792"},{"byte_length":3214,"path":"original/RESULT027.json","sha256":"79075d6855028720b783f22d90144dcb5aca5963a7fc89dca147a7c495b8c81e"}],"source_archive":{"entry_count":3,"sha256":"c52656279ec1ab0832ac77a64ed5e4c12133035fd70172009962b649fe12b205","size":10240}}
+MEMBER {"byte_length":318,"path":"README.txt","sha256":"d583c6fa3ea6a0e35d4eae417940c7a0429ee9de5fb44da84444a14ce8775ea4"}
+NONPRODUCT Beads 027 original experimental writer boundary.
+Exact GitHub Actions run: 40737074572
+Executable Git source: 41e3205d0bda0800de4f52676f2da7d099e1ef92
+No Product effect. Original attempt executed once. No credentials in this carrier.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":3075,"path":"control/PLAN.md","sha256":"faa84e6c03826251ea68daf06815f08be155c9eb880322bfdbe6ed338fb7a792"}
+# TS Beads 027 — Control experimental | servicio de escritor aislado
+
+**Estado:** CONTRACT_SELECTED, no Product adoption. **Autoridad:** Experimental Control only. No TaskCycle, Developer grant, IR Product ni Phase 2.
+
+**Sujeto Product read-only:** mauedgar/tecnotron-ai:tools@7a7225940aeaf1fbd16ac46ecd1cb76fa527ff56; tree 8caa56d36f3efeba359bbbf65b158ffb01a19da6; docs/SOURCE_OF_TRUTH.md blob dd8d34a7e3ef3094805d014f9e59741d2c553957; docs/current-state.md blob 0d8a6426f51020d51d74bfb50dc8702a07f02837. Base lab main@b30241201d07a9590e1e845abe767cdcf9921479; shared Dolt refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571.
+
+**Motivo:** 025 separó UID con ACL SQL y red pero dejó bypass same-UID. 026 demostró 33/33 que el token Bearer Beads v1.3.1 protege endpoints, rota y se recupera, pero mismo UID accede al secreto y al CLI Dolt; servicio caliente conserva última credencial cuando desaparece el token. Dictamen original: mauedgar/ts-execution-lab@a01cf0d48698f4670facef9e899436c0c0e2b299:experiments/TS-BEADS-026-NATIVE-AUTH-20261026-001/CONTROL_EXPERIMENTAL_VERDICT.md.
+
+## Selección de experiencia 027
+
+Calificar dos identidades Unix **distintas** en runner Linux descartable: escritor tiene Dolt root y archivo bearer privados 0700/0600; lector tiene SELECT-only SQL, no acceso a directorios/secretos del escritor ni a API privilegiada. Ensayar write nativo exacto por root-update expected_version + dep_add atómicos, rechazo CAS obsoleto, reanudación tras restart con autenticación obligatoria y startup sin token (fail closed). Ejecutar negativa de despliegue: reiniciar servicio sin --auth-token-file y mostrar que un cliente lectura puede añadir una arista; detener inmediatamente ese servidor y restaurar el protegido.
+
+Este contraste evita una falsa solución: **la separación de UID solo es segura si también se preserva la postura de autenticación**. No se instala un nuevo scheduler, daemon propio persistente ni ledger global; únicamente los servidores nativos BD/Dolt y un harness de prueba local.
+
+**Evidencia positiva requerida:** identidad diferente, reader SELECT sí y UPDATE no, private files inaccesibles, cinco rutas HTTP 401, escritura nativa competente y CAS, reanudación segura y negativos de configuración correctamente clasificados. **Limitaciones permanentes:** root/sudo, distribución multihost, contenedores/Kubernetes, side channels, inventario exhaustivo de endpoints, credencial robada, validación Product.
+
+**Formato de entrega:** exact original JSON y PLAN en IR-TXT-CARRIER/1, generado/verificado/extraído con el script Product existente scripts/review_txt_carrier.py blob 96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4. Git experimental create-only. Original workflow metadata/attempt history and original terminal receipt remain accessible.
+
+**Éxito de calificación:** PASS_SEPARATE_UID_WRITER_WITH_NATIVE_AUTH_CONFIGURATION_GAP significa frontera condicional demostrada **con fallo seguro ante postura de configuración incorrecta explícitamente NO demostrado**. Nunca implica READY_FOR_PRODUCT_ADOPTION.
+
+END-MEMBER
+MEMBER {"byte_length":3214,"path":"original/RESULT027.json","sha256":"79075d6855028720b783f22d90144dcb5aca5963a7fc89dca147a7c495b8c81e"}
+{
+  "Product_effect": "NONE",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": [
+    "pinned_native_binaries",
+    "separate_OS_identities",
+    "writer_store_and_credentials_private",
+    "reader_UID_cannot_read_privileged_writer-private",
+    "reader_UID_cannot_read_privileged_bearer",
+    "reader_UID_cannot_read_privileged_writer-exec.sh",
+    "SQL_privileged_writer_root_auth_required",
+    "native_Dolt_process_under_writer_UID",
+    "writer_git_store_no_remote",
+    "writer_created_ts027-root",
+    "writer_created_ts027-guarded",
+    "writer_created_ts027-insecure",
+    "native_service_auth_running",
+    "separate_reader_SQL_SELECT_allowed",
+    "separate_reader_SQL_UPDATE_denied",
+    "separate_reader_HTTP_routes_all_401",
+    "reader_no_direct_Beads_storage_access",
+    "authorized_writer_scoped_batch_succeeded",
+    "causal_writer_advances_root_version",
+    "native_CAS_rejects_old_version",
+    "restart_kept_service_authenticated",
+    "restart_kept_authorized_read",
+    "restart_missing_token_file_fail_closed",
+    "restored_credential_service_denies_unauthorized_reader",
+    "omitted_native_auth_flag_reopened_write_API",
+    "misconfigured_unprotected_graph_change_persisted",
+    "misconfigured_edge_was_not_root_revision_fenced",
+    "restored_auth_post_misconfig_closes_readonly_client_write"
+  ],
+  "evidence": [
+    {
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v0/beads/issues/ts027-root",
+          "status": 401
+        },
+        {
+          "method": "GET",
+          "path": "/v0/beads/context",
+          "status": 401
+        },
+        {
+          "method": "POST",
+          "path": "/v0/beads/issues:batchApply",
+          "status": 401
+        },
+        {
+          "method": "POST",
+          "path": "/v0/beads/dependencies:add",
+          "status": 401
+        },
+        {
+          "method": "POST",
+          "path": "/v0/beads/issues:claimNext",
+          "status": 401
+        }
+      ],
+      "phase": "authenticated_boundary",
+      "sql_issue_count": 3,
+      "sql_write": "SQL_WRITE_REFUSED"
+    },
+    {
+      "authenticated_restart": "PASS",
+      "missing_file_start": "REFUSED",
+      "omitted_auth_restart": "UNAUTHORIZED_DEP_ADD_SUCCEEDED",
+      "phase": "restart_and_config_drift",
+      "restored_auth_restart": "READER_DENIED",
+      "root_revision_unchanged_during_unprotected_edge": true
+    }
+  ],
+  "id": "TS-BEADS-027-SEPARATE-PRINCIPAL-20261028-001",
+  "limits": [
+    "Local disposable Ubuntu separate Unix users; no production multihost nor root escalation",
+    "Writer service retains full Beads and Dolt privileges; implementers must not share writer UID",
+    "Native HTTP token covers entire surface, not fine-grained per-operation permission",
+    "No proof of durable production supervisor, disaster recovery or all clients/endpoints",
+    "Misconfigured unauthenticated loopback startup remains a possible unsafe alternate mode",
+    "Non-authenticated loopback start can reintroduce full write bypass even with separate UIDs. Native Beads does not force bearer on loopback."
+  ],
+  "shared_Dolt_effect": "NONE",
+  "status": "PASS_SEPARATE_UID_WRITER_WITH_NATIVE_AUTH_CONFIGURATION_GAP"
+}
+
+END-MEMBER
+END-BUNDLE
