@@ -161,7 +161,12 @@ try:
     proc_sql=subprocess.Popen(["sudo","-n","-u",WRITER,"--","/bin/sh","-c",shell],
          stdout=log,stderr=subprocess.STDOUT)
     for _ in range(110):
-        if proc_sql.poll() is not None:raise RuntimeError("DOLT_SERVER_DIED")
+        if proc_sql.poll() is not None:
+            log.flush()
+            diagnosis=(BASE/"dolt.log").read_text(errors="replace")[-1000:]
+            for secret in (root_pass,bearer,read_pass):
+                diagnosis=diagnosis.replace(secret,"[REDACTED]")
+            raise RuntimeError("DOLT_SERVER_DIED_EXIT_"+str(proc_sql.returncode)+":"+diagnosis)
         try:c=sql_root("");break
         except Exception:time.sleep(.15)
     else:raise RuntimeError("DOLT_SERVER_BOOTSTRAP_FAILED")
