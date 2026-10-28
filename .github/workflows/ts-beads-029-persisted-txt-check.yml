@@ -1,0 +1,50 @@
+name: TS Beads 029 Persisted TXT Postpublication Verification
+on:
+  push:
+    branches: [experiment/beads-029-architecture-cost-comparison-20261028-001]
+    paths: [.github/workflows/ts-beads-029-persisted-txt-check.yml]
+permissions:
+  contents: read
+jobs:
+  exact-git-persisted-txt-verified:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reobtain exact immutable Git carrier and verify full Product TXT
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref=c89158d907341c6ab30f8ee3bfaf5097a2a62db4
+          product=d4154bd43f26515c39a41be974e462a0c7406a2d
+          path=transport/TS-BEADS-029-ARCHITECTURE-COMPARISON-20261028-001/EVIDENCE_CARRIER.txt
+          scratch="$RUNNER_TEMP/ts029-postcommit-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          git cat-file -e "$ref:$path"
+          test "$(git rev-parse "$ref:$path")" = 43042ffdfc843be89a9e5536a0b0a47b968aba73
+          git show "$ref:$path" > "$scratch/persisted.txt"
+          echo "b7a4334162369cf66be9aa747ead62aa37a497e7c755e2266cf4044c23c4a694  $scratch/persisted.txt" | sha256sum -c -
+          test "$(wc -c < "$scratch/persisted.txt" | tr -d ' ')" = 13872
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$scratch/product"
+          git -C "$scratch/product" checkout -q --detach "$product"
+          test "$(git -C "$scratch/product" hash-object scripts/review_txt_carrier.py)" = 96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4
+          tool="$scratch/product/scripts/review_txt_carrier.py"
+          python3 "$tool" verify "$scratch/persisted.txt" --report "$scratch/verify.json"
+          python3 "$tool" extract "$scratch/persisted.txt" --out "$scratch/recovered" --report "$scratch/extract.json"
+          python3 - "$scratch" <<'PY'
+          import hashlib,json,pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          for name in ('verify','extract'):
+              o=json.loads((p/(name+'.json')).read_text())
+              assert o["status"]=="PASS" and o["member_payload_equivalence"]=="PASS"
+          r=(p/'recovered/original/RESULT029.json').read_bytes()
+          assert hashlib.sha256(r).hexdigest()=="f22524821730653c731ace9b19c6d1323c778e577160670b796ebeb0a1a8e08b"
+          j=json.loads(r)
+          assert j["status"]=="PASS_MEASURED_SOURCE_FOOTPRINT_WITH_NONCOMPARABLE_RUNTIME_TELEMETRY"
+          assert j["Product_effect"]=="NONE" and len(j["checks"])==16
+          print("TS_BEADS029_PERSISTED_GIT_TXT=PASS;member_hash=PASS;verify=PASS;extract=PASS;Product=NONE")
+          PY
