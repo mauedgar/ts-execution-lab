@@ -63,3 +63,12 @@ The Git-backed 024 `IR-TXT-CARRIER/1` has **27 fewer bytes** in `selection/PLAN.
 4. Record 024 carrier persistence defect as transport-only debt; require postpublication exact Git blob byte-length/SHA roundtrip in future experiments.
 
 **Terminal:** `029 COMPLETE_WITH_MEASURED_SOURCE_BOUNDARIES_AND_UNMEASURED_NET_REPLACEMENT_COST`. Product and shared Dolt verified unchanged.
+
+## Postpublication Git TXT readback (independent bounded verification)
+
+After the initial original receipt was published, the lab performed a **separate read-only, one-time verification against the immutable Git-persisted carrier**:
+
+- [Actions run 40788015862](https://github.com/mauedgar/ts-execution-lab/actions/runs/40788015862), source `afe7738d59119293bb4906339e7e25c346c37bb7`, job `123165975731`, terminal **SUCCESS**.
+- Reobtained the original file from `c89158d907341c6ab30f8ee3bfaf5097a2a62db4`; confirmed blob `43042ffdfc843be89a9e5536a0b0a47b968aba73`, full UTF-8 SHA256 `b7a4334162369cf66be9aa747ead62aa37a497e7c755e2266cf4044c23c4a694`, bytes **13,872**.
+- Reused Product `scripts/review_txt_carrier.py` exact blob `96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4` to run **verify and extract** on the Git persisted bytes, then checked original `RESULT029.json` SHA256 `f22524821730653c731ace9b19c6d1323c778e577160670b796ebeb0a1a8e08b`, status and all 16 checks. Result: `TS_BEADS029_PERSISTED_GIT_TXT=PASS;member_hash=PASS;verify=PASS;extract=PASS;Product=NONE`.
+- This readback does not repair the unrelated historical malformed 024 TXT, does not rerun any native 022–028 experiment, and does not add Product authority. It makes the **029 published** carrier fully qualified, not just the prepublication local file.
