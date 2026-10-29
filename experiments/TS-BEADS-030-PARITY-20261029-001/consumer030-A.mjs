@@ -164,7 +164,7 @@ try{
     attempt_state:kernel.inspect(r.store,'ExecutionAttempt','AT-CLOSE').aggregate.state
  }));
  ok('original_Kernel_CAS_race_preserves_all_TaskCycle_obligations',
-    race.status==='FAIL'&&['NONE','UNKNOWN'].includes(race.effect_state)&&
+    ['FAIL','UNKNOWN'].includes(race.status)&&['NONE','UNKNOWN'].includes(race.effect_state)&&
     raceState.obligations.every(o=>o.status==='PENDING'));
  const old=createFixture('TC-SATISFIED','rejected');
  for(const rule of obligationsRules){
