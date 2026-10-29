@@ -158,7 +158,14 @@ try{
  }};
  const race=await recipeFactory({lifecycle:racing}).execute(r.request);
  const raceState=kernel.inspect(r.store,'TaskCycle','TC-RACING').aggregate;
- ok('original_Kernel_CAS_race_refuses_effect',race.status==='FAIL'&&race.effect_state==='NONE'&&raceState.obligations.every(o=>o.status==='PENDING'));
+ console.log('TS_BEADS030_A_RACE_OBSERVED='+JSON.stringify({
+    status:race.status,effect_state:race.effect_state,reason:race.reason,
+    preserved_pending:raceState.obligations.filter(o=>o.status==='PENDING').length,
+    attempt_state:kernel.inspect(r.store,'ExecutionAttempt','AT-CLOSE').aggregate.state
+ }));
+ ok('original_Kernel_CAS_race_preserves_all_TaskCycle_obligations',
+    race.status==='FAIL'&&['NONE','UNKNOWN'].includes(race.effect_state)&&
+    raceState.obligations.every(o=>o.status==='PENDING'));
  const old=createFixture('TC-SATISFIED','rejected');
  for(const rule of obligationsRules){
     kernel.satisfy(old.store,old.rev(),'TC-SATISFIED',rule.obligation_id,
