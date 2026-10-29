@@ -14,9 +14,12 @@ Under a single disposable Beads service and two cooperating unprivileged caller 
 
 ## Mechanics and success criterion
 - Beads `v1.3.1` / Dolt `v2.2.0`, pinned archives and SHA-256.
-- Isolated disposable Git lab with **no remote**, Beads embedded Dolt, auto-push off. Run one loopback Beads server with generated local bearer token.
+- Isolated disposable Git lab with **no remote**, local-only Dolt SQL Server (native `bd serve` explicitly rejects embedded mode), auto-push off. Run one loopback Beads server with generated local bearer token. No SQL port beyond loopback.
 - Create one native root and two unique native child issues per round. Both independently forked worker processes receive the exact same server-minted root revision and wait on a release barrier; send native HTTP batchApply in parallel with distinct targets, no direct Dolt/CLI writes from workers.
 - PASS only if exactly one worker commits, the other is rejected; root metadata identifies winner, exactly winner's graph edge exists, losing edge absent; a later fresh guarded request with stale token is rejected, and end-of-experiment CLI reload confirms the exact graph without any remote.
 - Every check is original runner evidence; publish only after PASS through existing `IR-TXT-CARRIER/1` project/verify/extract.
 - If both commit or no one commits, preserve FAIL and investigate; never relaunch same workflow attempt, only distinct source/attempt if safe and justified.
 - **Limit:** same native server, clients authorized to submit guarded batches, no arbitrary privileged direct CLI access; 028's universal bypass remains open, no Product authority, adoption or migration.
+
+## Preserved infrastructure attempt
+- Attempt 1: [GitHub Actions 40934697591](https://github.com/mauedgar/ts-execution-lab/actions/runs/40934697591), source `82cf2d02ae1d6993d0bade13f618197862cd1bfe`, `completed/failure` **before race**, native HTTP server prematurely exited because harness tried embedded Dolt mode. Pinned upstream `gastownhall/beads@v1.3.1:cmd/bd/serve.go` explicitly refuses embedded mode for atomicity; this is a source-proven harness mismatch, NOT evidence about competing guarded writers. Do not retry run 40934697591. Attempt 2 corrects only the native SQL-server binding; all race acceptance criteria remain fixed.
