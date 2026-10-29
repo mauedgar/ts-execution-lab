@@ -1,0 +1,362 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 5ff9c975c31684774d35cccdab3e7c5fcd6f962e51daa7d979a45c429c5a9714
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":352,"path":"README.txt","sha256":"bcbcbe5eee52fad4ab26b0303a1614a496cc514d3e7a0d86fd7eb90adf793168"},{"byte_length":3530,"path":"control/PLAN.md","sha256":"d2e3a9e631c9b6a40c6e59690a255f9ba71e8378baa6058fa1a120f50d00e08c"},{"byte_length":9046,"path":"original/RESULT035.json","sha256":"481bd506462df53ffb6032db37fb0a5fe805b88f53dc5cbe0988b30697be994d"}],"source_archive":{"entry_count":3,"sha256":"987c68b9101d9bb75ef04c371bca71aec402b94754d2930d47fab95842d9be49","size":20480}}
+MEMBER {"byte_length":352,"path":"README.txt","sha256":"bcbcbe5eee52fad4ab26b0303a1614a496cc514d3e7a0d86fd7eb90adf793168"}
+NONPRODUCT Beads 035 isolated concurrent guarded native writer race; privileged 028 bypass not replayed.
+Exact GitHub Actions run: 40935082766
+Executable Git source: 4b845ae857c01c8e181caa55858e08d609ebbfff
+No Product/shared-Dolt/provider effect. Original attempt executed once.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":3530,"path":"control/PLAN.md","sha256":"d2e3a9e631c9b6a40c6e59690a255f9ba71e8378baa6058fa1a120f50d00e08c"}
+# TS Beads 035 — bounded real concurrent guarded causal mutation
+
+Authority: EXPERIMENTAL_CONTROL_ONLY. The user authorizes priority 035, not Product migration or privileged-writer bypass.
+
+## Immutable baseline
+- Product SOT: `mauedgar/tecnotron-ai:tools@d4154bd43f26515c39a41be974e462a0c7406a2d`, tree `cbfb71ad8632047e8e64fe2665d8614d835a2c8b`, SOT blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`.
+- Shared Dolt: `mauedgar/ts-execution-lab:refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571`.
+- Parent experiment 034 terminal `1c8509b4fa47d36609f0047c3ceaf8240e3732fb`. DO NOT REPLAY 033/034.
+- 028 terminal `9e8016004ef5d3ca74abd67914d8e1a03ffcd851` already demonstrated privileged alternate writer bypass with direct `bd dep add` and direct `bd serve`. Do NOT repeat or evade existing safety controls.
+- 018 established stale sequential `expected_version` batch rollback, but **not a genuine simultaneous cross-process race**.
+
+## Distinct 035 question
+Under a single disposable Beads service and two cooperating unprivileged caller processes, does native `batchApply` with the **same observed root revision** admit at most one competing `update root(expected_version)+dep_add` transaction? Is rejected writer's edge absent? Repeat bounded races, check exact identities, single winning edge, root version change and historical persistence. No attempt to qualify universal exclusivity, OS privilege boundaries, native ACL security or full Kernel invariants.
+
+## Mechanics and success criterion
+- Beads `v1.3.1` / Dolt `v2.2.0`, pinned archives and SHA-256.
+- Isolated disposable Git lab with **no remote**, local-only Dolt SQL Server (native `bd serve` explicitly rejects embedded mode), auto-push off. Run one loopback Beads server with generated local bearer token. No SQL port beyond loopback.
+- Create one native root and two unique native child issues per round. Both independently forked worker processes receive the exact same server-minted root revision and wait on a release barrier; send native HTTP batchApply in parallel with distinct targets, no direct Dolt/CLI writes from workers.
+- PASS only if exactly one worker commits, the other is rejected; root metadata identifies winner, exactly winner's graph edge exists, losing edge absent; a later fresh guarded request with stale token is rejected, and end-of-experiment CLI reload confirms the exact graph without any remote.
+- Every check is original runner evidence; publish only after PASS through existing `IR-TXT-CARRIER/1` project/verify/extract.
+- If both commit or no one commits, preserve FAIL and investigate; never relaunch same workflow attempt, only distinct source/attempt if safe and justified.
+- **Limit:** same native server, clients authorized to submit guarded batches, no arbitrary privileged direct CLI access; 028's universal bypass remains open, no Product authority, adoption or migration.
+
+## Preserved infrastructure attempt
+- Attempt 1: [GitHub Actions 40934697591](https://github.com/mauedgar/ts-execution-lab/actions/runs/40934697591), source `82cf2d02ae1d6993d0bade13f618197862cd1bfe`, `completed/failure` **before race**, native HTTP server prematurely exited because harness tried embedded Dolt mode. Pinned upstream `gastownhall/beads@v1.3.1:cmd/bd/serve.go` explicitly refuses embedded mode for atomicity; this is a source-proven harness mismatch, NOT evidence about competing guarded writers. Do not retry run 40934697591. Attempt 2 corrects only the native SQL-server binding; all race acceptance criteria remain fixed.
+
+END-MEMBER
+MEMBER {"byte_length":9046,"path":"original/RESULT035.json","sha256":"481bd506462df53ffb6032db37fb0a5fe805b88f53dc5cbe0988b30697be994d"}
+{
+  "Product_effect": "NONE",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": {
+    "authenticated_service_started": {
+      "evidence": null,
+      "result": "PASS"
+    },
+    "beads_initialized_successfully": {
+      "evidence": null,
+      "result": "PASS"
+    },
+    "final_git_no_remote": {
+      "evidence": null,
+      "result": "PASS"
+    },
+    "final_live_graph_exact_winning_edges": {
+      "evidence": [
+        "ts035-r1b",
+        "ts035-r2a",
+        "ts035-r3a",
+        "ts035-r4a"
+      ],
+      "result": "PASS"
+    },
+    "fresh_cli_process_recovers_same_graph": {
+      "evidence": {
+        "expected": [
+          "ts035-r1b",
+          "ts035-r2a",
+          "ts035-r3a",
+          "ts035-r4a"
+        ],
+        "observed": [
+          "ts035-r1b",
+          "ts035-r2a",
+          "ts035-r3a",
+          "ts035-r4a"
+        ]
+      },
+      "result": "PASS"
+    },
+    "isolated_git_no_remote": {
+      "evidence": null,
+      "result": "PASS"
+    },
+    "loopback_dolt_SQL_server_available": {
+      "evidence": 30766,
+      "result": "PASS"
+    },
+    "root_native_revision_available": {
+      "evidence": "-5689250552097565823",
+      "result": "PASS"
+    },
+    "round1_one_winner_one_rejection": {
+      "evidence": {
+        "codes": {
+          "A": 409,
+          "B": 200
+        },
+        "revision": "-5689250552097565823"
+      },
+      "result": "PASS"
+    },
+    "round1_rejected_request_failure_status": {
+      "evidence": {
+        "loser": "A",
+        "response": "detail\":\"a precondition guard did not match; nothing was written, so re-read the row and recompose the request rather than retrying it\",\"expected_version\":\"-5689250552097565823\",\"item_index\":0,\"item_issue_id\":\"ts035-root\",\"item_kind\":\"update\",\"param\":\"items[0].update.expected_version\",\"request_id\":\"fb080066-000005\",\"status\":409,\"title\":\"Conflict\"}\n",
+        "status": 409
+      },
+      "result": "PASS"
+    },
+    "round1_root_metadata_records_winner": {
+      "evidence": {
+        "ts035_epoch": "round1-B"
+      },
+      "result": "PASS"
+    },
+    "round1_root_revision_changed": {
+      "evidence": {
+        "after": "-5894314993370318538",
+        "before": "-5689250552097565823"
+      },
+      "result": "PASS"
+    },
+    "round1_winner_edge_only": {
+      "evidence": {
+        "loser": "ts035-r1a",
+        "observed": [
+          "ts035-r1b"
+        ],
+        "winner": "ts035-r1b"
+      },
+      "result": "PASS"
+    },
+    "round2_one_winner_one_rejection": {
+      "evidence": {
+        "codes": {
+          "A": 200,
+          "B": 409
+        },
+        "revision": "-5894314993370318538"
+      },
+      "result": "PASS"
+    },
+    "round2_rejected_request_failure_status": {
+      "evidence": {
+        "loser": "B",
+        "response": "detail\":\"a precondition guard did not match; nothing was written, so re-read the row and recompose the request rather than retrying it\",\"expected_version\":\"-5894314993370318538\",\"item_index\":0,\"item_issue_id\":\"ts035-root\",\"item_kind\":\"update\",\"param\":\"items[0].update.expected_version\",\"request_id\":\"fb080066-000010\",\"status\":409,\"title\":\"Conflict\"}\n",
+        "status": 409
+      },
+      "result": "PASS"
+    },
+    "round2_root_metadata_records_winner": {
+      "evidence": {
+        "ts035_epoch": "round2-A"
+      },
+      "result": "PASS"
+    },
+    "round2_root_revision_changed": {
+      "evidence": {
+        "after": "-8404917026913625319",
+        "before": "-5894314993370318538"
+      },
+      "result": "PASS"
+    },
+    "round2_winner_edge_only": {
+      "evidence": {
+        "loser": "ts035-r2b",
+        "observed": [
+          "ts035-r1b",
+          "ts035-r2a"
+        ],
+        "winner": "ts035-r2a"
+      },
+      "result": "PASS"
+    },
+    "round3_one_winner_one_rejection": {
+      "evidence": {
+        "codes": {
+          "A": 200,
+          "B": 409
+        },
+        "revision": "-8404917026913625319"
+      },
+      "result": "PASS"
+    },
+    "round3_rejected_request_failure_status": {
+      "evidence": {
+        "loser": "B",
+        "response": "detail\":\"a precondition guard did not match; nothing was written, so re-read the row and recompose the request rather than retrying it\",\"expected_version\":\"-8404917026913625319\",\"item_index\":0,\"item_issue_id\":\"ts035-root\",\"item_kind\":\"update\",\"param\":\"items[0].update.expected_version\",\"request_id\":\"fb080066-000013\",\"status\":409,\"title\":\"Conflict\"}\n",
+        "status": 409
+      },
+      "result": "PASS"
+    },
+    "round3_root_metadata_records_winner": {
+      "evidence": {
+        "ts035_epoch": "round3-A"
+      },
+      "result": "PASS"
+    },
+    "round3_root_revision_changed": {
+      "evidence": {
+        "after": "1584673908475065227",
+        "before": "-8404917026913625319"
+      },
+      "result": "PASS"
+    },
+    "round3_winner_edge_only": {
+      "evidence": {
+        "loser": "ts035-r3b",
+        "observed": [
+          "ts035-r1b",
+          "ts035-r2a",
+          "ts035-r3a"
+        ],
+        "winner": "ts035-r3a"
+      },
+      "result": "PASS"
+    },
+    "round4_one_winner_one_rejection": {
+      "evidence": {
+        "codes": {
+          "A": 200,
+          "B": 409
+        },
+        "revision": "1584673908475065227"
+      },
+      "result": "PASS"
+    },
+    "round4_rejected_request_failure_status": {
+      "evidence": {
+        "loser": "B",
+        "response": "\"detail\":\"a precondition guard did not match; nothing was written, so re-read the row and recompose the request rather than retrying it\",\"expected_version\":\"1584673908475065227\",\"item_index\":0,\"item_issue_id\":\"ts035-root\",\"item_kind\":\"update\",\"param\":\"items[0].update.expected_version\",\"request_id\":\"fb080066-000017\",\"status\":409,\"title\":\"Conflict\"}\n",
+        "status": 409
+      },
+      "result": "PASS"
+    },
+    "round4_root_metadata_records_winner": {
+      "evidence": {
+        "ts035_epoch": "round4-A"
+      },
+      "result": "PASS"
+    },
+    "round4_root_revision_changed": {
+      "evidence": {
+        "after": "-1037162531237456161",
+        "before": "1584673908475065227"
+      },
+      "result": "PASS"
+    },
+    "round4_winner_edge_only": {
+      "evidence": {
+        "loser": "ts035-r4b",
+        "observed": [
+          "ts035-r1b",
+          "ts035-r2a",
+          "ts035-r3a",
+          "ts035-r4a"
+        ],
+        "winner": "ts035-r4a"
+      },
+      "result": "PASS"
+    },
+    "selected_http_route_rejects_unauthenticated_reader": {
+      "evidence": 401,
+      "result": "PASS"
+    }
+  },
+  "id": "TS-BEADS-035-GUARDED-RACE-20261029-001",
+  "new_provider_effect": "NONE",
+  "not_qualified": [
+    "Universal causal writer exclusivity including privileged native bd/Dolt shell",
+    "Native authorization of caller's Product authority or no-duplicate effects",
+    "Multi-replica or remote Dolt concurrency, real provider ACK loss",
+    "Global Product revision/event-count/hash-chain equivalence",
+    "Product acceptance, integration, migration or Kernel retirement"
+  ],
+  "rounds": [
+    {
+      "loser": "A",
+      "rejected_edge_absent": true,
+      "revision": "-5689250552097565823",
+      "root_after_revision": "-5894314993370318538",
+      "round": 1,
+      "winner": "B",
+      "winner_edge": "ts035-r1b",
+      "writer_start_ns": {
+        "A": 1793300041967505755,
+        "B": 1793300041967500928
+      },
+      "writer_status": {
+        "A": 409,
+        "B": 200
+      }
+    },
+    {
+      "loser": "B",
+      "rejected_edge_absent": true,
+      "revision": "-5894314993370318538",
+      "root_after_revision": "-8404917026913625319",
+      "round": 2,
+      "winner": "A",
+      "winner_edge": "ts035-r2a",
+      "writer_start_ns": {
+        "A": 1793300042190303943,
+        "B": 1793300042190300068
+      },
+      "writer_status": {
+        "A": 200,
+        "B": 409
+      }
+    },
+    {
+      "loser": "B",
+      "rejected_edge_absent": true,
+      "revision": "-8404917026913625319",
+      "root_after_revision": "1584673908475065227",
+      "round": 3,
+      "winner": "A",
+      "winner_edge": "ts035-r3a",
+      "writer_start_ns": {
+        "A": 1793300042414460934,
+        "B": 1793300042414444925
+      },
+      "writer_status": {
+        "A": 200,
+        "B": 409
+      }
+    },
+    {
+      "loser": "B",
+      "rejected_edge_absent": true,
+      "revision": "1584673908475065227",
+      "root_after_revision": "-1037162531237456161",
+      "round": 4,
+      "winner": "A",
+      "winner_edge": "ts035-r4a",
+      "writer_start_ns": {
+        "A": 1793300042632015200,
+        "B": 1793300042632041774
+      },
+      "writer_status": {
+        "A": 200,
+        "B": 409
+      }
+    }
+  ],
+  "runtime": {
+    "beads": "v1.3.1",
+    "dolt": "v2.2.0",
+    "rounds": 4,
+    "store": "disposable_loopback_Dolt_SQL_Server",
+    "writer_processes_per_round": 2
+  },
+  "shared_Dolt_effect": "NONE",
+  "status": "PASS_NATIVE_CONCURRENT_GUARDED_CAUSAL_WRITER_WITH_PRIVILEGED_BOUNDARY_OPEN"
+}
+
+END-MEMBER
+END-BUNDLE
