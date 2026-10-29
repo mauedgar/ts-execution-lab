@@ -1,0 +1,115 @@
+name: TS Beads 030 Original Product Kernel A vs Beads B Closure Recipe
+on:
+  push:
+    branches: [experiment/beads-030-b-first-consumer-parity-20261029-001]
+    paths: [.github/workflows/ts-beads-030-b-first-consumer-parity.yml]
+permissions:
+  contents: write
+jobs:
+  actual-kernel-vs-native-beads:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: B-first closure Recipe parity with actual Product Kernel A and native Beads B
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $product='d4154bd43f26515c39a41be974e462a0c7406a2d'
+          $tree='cbfb71ad8632047e8e64fe2665d8614d835a2c8b'
+          $shared='1f72d68797114170a97fee27641858f2e55a4571'
+          $head=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $head -cne $product){throw ('PRODUCT_IDENTITY_CHANGED='+$head)}
+          $commit=(& gh api ('repos/mauedgar/tecnotron-ai/git/commits/'+$product)|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or [string]$commit.tree.sha -cne $tree){throw 'PRODUCT_TREE_CHANGED'}
+          $sot=(& gh api 'repos/mauedgar/tecnotron-ai/contents/docs/SOURCE_OF_TRUTH.md?ref=tools'|Out-String)|ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or $sot.sha -cne 'dd8d34a7e3ef3094805d014f9e59741d2c553957'){throw 'PRODUCT_SOT_BLOB_CHANGED'}
+          $remote='https://github.com/mauedgar/ts-execution-lab.git'
+          $observed=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $observed -cne $shared){throw ('SHARED_DOLT_DRIFT='+$observed)}
+          $folder=Join-Path ([IO.Path]::GetPathRoot($env:RUNNER_TEMP)) ('ob30'+$env:GITHUB_RUN_ID)
+          if(Test-Path $folder){throw 'DISPOSABLE_PATH_EXISTS'}
+          New-Item -ItemType Directory $folder|Out-Null
+          $zip=Join-Path $folder 'beads.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip' -OutFile $zip
+          if(((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '48cd82e1d3e311c9bf9a5d6d67ad1a8542ae13d4e20c5bfb527656c5e666af76'){throw 'BEADS_BINARY_PIN_FAIL'}
+          $bin=Join-Path $folder 'bin'
+          Expand-Archive -LiteralPath $zip -DestinationPath $bin
+          $env:BD_BIN=Get-ChildItem -LiteralPath $bin -Recurse -Filter bd.exe -File|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $env:BD_BIN){throw 'BEADS_BINARY_MISSING'}
+          $doltArchive=Join-Path $folder 'dolt.zip'
+          Invoke-WebRequest -Uri 'https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip' -OutFile $doltArchive
+          if(((Get-FileHash $doltArchive -Algorithm SHA256).Hash.ToLowerInvariant()) -cne '7a4be662d5548bc63ae4ab6d8d93daa2a6681f3e076817908ac4a08d782eb6f6'){throw 'DOLT_BINARY_PIN_FAIL'}
+          $doltUnpacked=Join-Path $folder 'dolt'
+          Expand-Archive -LiteralPath $doltArchive -DestinationPath $doltUnpacked
+          $doltExe=Get-ChildItem -LiteralPath $doltUnpacked -Recurse -File -Filter dolt.exe|Select-Object -First 1 -ExpandProperty FullName
+          if(-not $doltExe){throw 'DOLT_BINARY_MISSING'}
+          $sqlRoot=Join-Path $folder 'sql'
+          New-Item -ItemType Directory $sqlRoot|Out-Null
+          $env:BEADS_DOLT_SERVER_MODE='1'
+          $env:BEADS_DOLT_SERVER_HOST='127.0.0.1'
+          $env:BEADS_DOLT_SERVER_PORT=[string](34000+([long]$env:GITHUB_RUN_ID%19000))
+          $server=Start-Process -FilePath $doltExe -WorkingDirectory $sqlRoot -ArgumentList @('sql-server','--port',$env:BEADS_DOLT_SERVER_PORT) -PassThru -RedirectStandardOutput (Join-Path $folder 'sql-stdout.log') -RedirectStandardError (Join-Path $folder 'sql-stderr.log') -WindowStyle Hidden
+          Write-Output ('TS_BEADS030_DISPOSABLE_DOLT_SERVER_PID='+$server.Id)
+          Start-Sleep -Seconds 3
+          if($server.HasExited){throw ('DISPOSABLE_DOLT_SERVER_FAILED='+$server.ExitCode)}
+          $lab=Join-Path $folder 'lab'
+          New-Item -ItemType Directory $lab|Out-Null
+          & git -C $lab init -q
+          if($LASTEXITCODE -ne 0 -or ((& git -C $lab remote|Out-String).Trim()) -ne ''){throw 'LAB_HAS_REMOTE'}
+          $productClone=Join-Path $folder 'product'
+          & git clone -q --no-checkout 'https://github.com/mauedgar/tecnotron-ai.git' $productClone
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_CLONE_FAILED'}
+          & git -C $productClone checkout -q --detach $product
+          if($LASTEXITCODE -ne 0){throw 'EXACT_PRODUCT_COMMIT_CHECKOUT_FAILED'}
+          $actualClone=(& git -C $productClone rev-parse HEAD|Out-String).Trim()
+          $actualTree=(& git -C $productClone rev-parse 'HEAD^{tree}'|Out-String).Trim()
+          if($actualClone -cne $product -or $actualTree -cne $tree){throw 'PRODUCT_CHECKOUT_IDENTITY_MISMATCH'}
+          & npm.cmd --prefix $productClone ci --ignore-scripts --no-audit --no-fund
+          if($LASTEXITCODE -ne 0){throw 'READONLY_PRODUCT_ZOD_DEPENDENCY_INSTALL_FAILED'}
+          $env:PRODUCT_ROOT=$productClone
+          $env:LAB_ROOT=$lab
+          $env:PROVIDER_ROOT=Join-Path $folder 'isolated-independent-synthetic-provider'
+          $env:A_RESULT=Join-Path $folder 'A-original.json'
+          $env:B_RESULT=Join-Path $folder 'B-original.json'
+          $env:A_KERNEL_ROOT=Join-Path $folder 'Kernel-A'
+          $env:RESULT_PATH=$env:B_RESULT
+          $script=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-030-PARITY-20261029-001/consumer030-B.mjs'
+          $scriptA=Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-030-PARITY-20261029-001/consumer030-A.mjs'
+          & node --check $scriptA
+          if($LASTEXITCODE -ne 0){throw 'A_SYNTAX_ERROR'}
+          & node $scriptA
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_PRODUCT_KERNEL_A_FAILED'}
+          & node --check $script
+          if($LASTEXITCODE -ne 0){throw 'NODE_SYNTAX_FAIL'}
+          & node $script
+          if($LASTEXITCODE -ne 0){throw ('NATIVE_CAS_SCRIPT_EXIT='+$LASTEXITCODE)}
+          $receipt=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
+          if($receipt.status -cne 'PASS_B_ORIGINAL_PRODUCT_RECIPE_NATIVE_BEADS_PENDING_AND_NEGATIVES' -or $receipt.Product_effect -cne 'NONE' -or $receipt.check.Count -lt 22){throw 'B_BEADS_ORIGINAL_RECEIPT_NOT_QUALIFIED'}
+          $env:RESULT_PATH=Join-Path $folder 'COMPARE-original.json'
+          & python (Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-030-PARITY-20261029-001/compare030.py')
+          if($LASTEXITCODE -ne 0){throw 'SAME_CONSUMER_PARITY_FAILED'}
+          $comp=Get-Content -Raw $env:RESULT_PATH|ConvertFrom-Json
+          if($comp.status -cne 'PASS_B_FIRST_SAME_PRODUCT_CONSUMER_SEMANTIC_PARITY_WITH_LIMITATIONS'){throw 'PARITY_ORIGINAL_RESULT_INVALID'}
+          & python (Join-Path $env:GITHUB_WORKSPACE 'experiments/TS-BEADS-030-PARITY-20261029-001/materialize030.py')
+          if($LASTEXITCODE -ne 0){throw 'TXT_CARRIER_030_FAILED'}
+          $carrier='transport/TS-BEADS-030-PARITY-20261029-001/EVIDENCE_CARRIER.txt'
+          & git add -- $carrier
+          if($LASTEXITCODE -ne 0){throw 'TXT_STAGE_FAILED'}
+          if(((git diff --cached --name-only|Out-String).Trim()) -cne $carrier){throw 'UNEXPECTED_WRITE_SET'}
+          & git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m 'research(beads 030): same Product Kernel and native Beads Recipe parity evidence'
+          if($LASTEXITCODE -ne 0){throw 'TXT_GIT_COMMIT_FAILED'}
+          & git push origin HEAD:refs/heads/experiment/beads-030-b-first-consumer-parity-20261029-001
+          if($LASTEXITCODE -ne 0){throw 'TXT_PUBLISH_UNKNOWN_NO_RETRY'}
+          Write-Output ('TS_BEADS030_PUBLISHED_COMMIT='+((git rev-parse HEAD|Out-String).Trim()))
+          Write-Output ('TS_BEADS030_TXT_BLOB='+((git rev-parse ('HEAD:'+$carrier)|Out-String).Trim()))
+          $afterDolt=((& git ls-remote $remote refs/dolt/data|Out-String).Trim() -split ([char]9))[0]
+          $afterProduct=((& git ls-remote 'https://github.com/mauedgar/tecnotron-ai.git' refs/heads/tools|Out-String).Trim() -split ([char]9))[0]
+          if($LASTEXITCODE -ne 0 -or $afterDolt -cne $shared -or $afterProduct -cne $product){throw 'PRODUCT_OR_SHARED_DOLT_CHANGED'}
+          Write-Output ('TS_BEADS030_NO_EXTERNAL_EFFECT=PASS;product='+$afterProduct+';dolt='+$afterDolt)
