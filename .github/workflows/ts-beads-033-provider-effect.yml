@@ -1,0 +1,42 @@
+name: TS Beads 033 External Provider Identity
+on:
+  push:
+    branches: [experiment/beads-033-provider-effect-identity-20261029-001]
+    paths: [.github/workflows/ts-beads-033-provider-effect.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  external-provider-effect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Provider-native effect with durable external artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "experiment/beads-033-provider-effect-identity-20261029-001"
+          mkdir -p "$RUNNER_TEMP/ts-beads-033-provider"
+          python3 - <<'PY'
+          import os,hashlib,json,pathlib
+          attempt="TS-BEADS-033-PROVIDER-20261029-001/ATTEMPT-001"
+          subject="mauedgar/ts-execution-lab@"+os.environ["GITHUB_SHA"]
+          request={"attempt":attempt,"subject":subject,"action":"UPLOAD_IMMUTABLE_PROVIDER_ARTIFACT"}
+          receipt={"schema":"TS-BEADS-033-PROVIDER-RECEIPT/1",
+            "attempt":attempt,"subject":subject,
+            "run_id":os.environ["GITHUB_RUN_ID"],
+            "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+            "workflow":os.environ["GITHUB_WORKFLOW"],
+            "request_sha256":hashlib.sha256(json.dumps(request,sort_keys=True,separators=(",",":")).encode()).hexdigest(),
+            "effect":"PROVIDER_NATIVE_ARTIFACT_WRITE","Product_effect":"NONE","shared_Dolt_effect":"NONE"}
+          out=pathlib.Path(os.environ["RUNNER_TEMP"])/"ts-beads-033-provider"/"PROVIDER_RECEIPT.json"
+          with out.open("x",encoding="utf-8") as f:f.write(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
+          print("TS_BEADS033_PROVIDER_IDENTITY="+json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Persist provider-native effect receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads-033-provider-attempt-001
+          path: ${{ runner.temp }}/ts-beads-033-provider/PROVIDER_RECEIPT.json
+          if-no-files-found: error
+          retention-days: 7
