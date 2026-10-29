@@ -1,0 +1,70 @@
+name: TS Beads 034 B-first UNKNOWN Provider Join
+on:
+  push:
+    branches: [experiment/beads-034-provider-unknown-native-join-20261029-001]
+    paths: [.github/workflows/ts-beads-034-unknown-provider-join.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  isolated-unknown-join:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconcile original 033 real provider receipt into disposable native Beads (attempt 1)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=experiment/beads-034-provider-unknown-native-join-20261029-001
+          product=d4154bd43f26515c39a41be974e462a0c7406a2d
+          tree=cbfb71ad8632047e8e64fe2665d8614d835a2c8b
+          shared=1f72d68797114170a97fee27641858f2e55a4571
+          test "$(git branch --show-current)" = "$branch"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$product"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
+          scratch="$RUNNER_TEMP/ts-beads-034-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt" "$scratch/ts034"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export LAB_ROOT="$scratch/lab"
+          export RUNNER_TEMP="$scratch"
+          export PRODUCT_ROOT="$scratch/product"
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$PRODUCT_ROOT"
+          git -C "$PRODUCT_ROOT" checkout -q --detach "$product"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse HEAD)" = "$product"
+          test "$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')" = "$tree"
+          test "$(git -C "$PRODUCT_ROOT" hash-object docs/SOURCE_OF_TRUTH.md)" = dd8d34a7e3ef3094805d014f9e59741d2c553957
+          test "$(git -C "$PRODUCT_ROOT" hash-object scripts/review_txt_carrier.py)" = 96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4
+          script=experiments/TS-BEADS-034-UNKNOWN-JOIN-20261029-001/native034.py
+          python3 -m py_compile "$script"
+          python3 -m py_compile experiments/TS-BEADS-034-UNKNOWN-JOIN-20261029-001/materialize034.py
+          python3 "$script" prepare
+          python3 "$script" join
+          python3 "$script" inspect
+          export RESULT_PATH="$scratch/ts034/events.json"
+          python3 experiments/TS-BEADS-034-UNKNOWN-JOIN-20261029-001/materialize034.py
+          out=transport/TS-BEADS-034-UNKNOWN-JOIN-20261029-001/EVIDENCE_CARRIER.txt
+          test -f "$out"
+          git add -- "$out"
+          test "$(git diff --cached --name-only)" = "$out"
+          git -c user.name=ts-beads-experimental -c user.email=ts-beads-experimental@users.noreply.github.com commit -m "research(beads 034): real provider read-only UNKNOWN recovery original evidence"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "TS_BEADS034_PUBLISHED_COMMIT=$(git rev-parse HEAD)"
+          echo "TS_BEADS034_TXT_BLOB=$(git rev-parse HEAD:$out)"
+          test "$(git ls-remote https://github.com/mauedgar/tecnotron-ai.git refs/heads/tools | cut -f1)" = "$product"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = "$shared"
+          echo "TS_BEADS034_NO_PRODUCT_EFFECT=PASS;ORIGINAL_PROVIDER_033_REPLAY=NONE"
