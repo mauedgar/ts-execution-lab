@@ -1,0 +1,502 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 f6d052d8d411410f144e32afaf92e17df4b843f3c843acdd62b26801dc7875ba
+MANIFEST-BYTES 790
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":313,"path":"README.txt","sha256":"12a5967aa6b52f31ca2a78ba4f5757a43db6d2cef14041bf09f7de63a04b18b8"},{"byte_length":3988,"path":"control/PLAN.md","sha256":"4438a970a2936ebc8989bff9f78aa75f3b801cf94246dcc460f2f620fb88bf1c"},{"byte_length":2170,"path":"original/A_KERNEL.json","sha256":"21e4ef7c7697758208dbb3d0db531ec7efea1436e567f06c85bd18fc63a4a062"},{"byte_length":7599,"path":"original/B_BEADS.json","sha256":"ec90186e86b6f29cc5cda7f0a532b0597bd2f06372ba4284acf17776abf1941a"},{"byte_length":4776,"path":"original/RESULT030.json","sha256":"d36565472da4dd2dc37dde8e7440fe70ec10ab0cea41f8b9382880875382f32c"}],"source_archive":{"entry_count":5,"sha256":"b0fe29d3c98a986343c8994d0d6e103669282ffb83ed88e38c924b4da0e20bd6","size":30720}}
+MEMBER {"byte_length":313,"path":"README.txt","sha256":"12a5967aa6b52f31ca2a78ba4f5757a43db6d2cef14041bf09f7de63a04b18b8"}
+NONPRODUCT Beads 030 original architecture comparison.
+Exact GitHub Actions run: 40882306183
+Executable Git source: 9d37dda92ec5e3ba66e827ee0b77b5ebc844f603
+No Product effect. Original attempt executed once. No credentials in this carrier.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":3988,"path":"control/PLAN.md","sha256":"4438a970a2936ebc8989bff9f78aa75f3b801cf94246dcc460f2f620fb88bf1c"}
+# Beads 030 | Control experimental — B-first same Product closure consumer
+
+**Date:** 2026-10-29. **Authority:** Experimental Control for Tecnotron Beads research only. User selected **B as the architectural research priority**; not a Product adoption, grant, Phase 2, TaskCycle admission, Kernel removal or permission to change tools Product.
+
+**Exact Product SOT:** `mauedgar/tecnotron-ai:tools@d4154bd43f26515c39a41be974e462a0c7406a2d`, tree `cbfb71ad8632047e8e64fe2665d8614d835a2c8b`; `docs/SOURCE_OF_TRUTH.md` blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`, current state blob `0d8a6426f51020d51d74bfb50dc8702a07f02837`. Lab main `b30241201d07a9590e1e845abe767cdcf9921479`, shared Dolt `refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571`.
+
+**Previous evidence:** 022 original Product recipe was adapted in-memory with 15 anchored sync-to-async substitutions on a native Beads/Dolt store, measured 127 vs 73 HTTP calls under matched internal-B workload and verified UNKNOWN / ACK / pending obligations. 029 verified current Kernel 36,715 bytes / four source files, adapter 12,020 bytes, and comparison A/B **not performance-comparable** from the previous experiments. 023–028 proved privileged and misconfigured auth bypass, so causal graph authority is **not** qualified even after this parity exercise.
+
+## B-first experiment, same Product semantic consumer
+
+A = **original unmodified** `src/operational-spine-v0/recipes/reconcile-and-close-taskcycle.js` running with actual `FilesystemStateStore` and `createStateKernelTaskCycleLifecycle`; in a fresh isolated home, real event journal and state history.
+
+B = **same original Product recipe** adapted *in memory* with the 022 verified 15 substitutions, running against local Beads v1.3.1/Dolt v2.2.0 native HTTP GET revision and guarded atomic batch. The B harness reuses the bounded 022 source but pins the **current** Product exact commit and times one positive execute separately. No code in Product is changed.
+
+**Same input family / competing semantics:** five PENDING obligations (review, Developer acceptance, integration, publication, lifecycle reconciliation), identical synthetic evidence/authority refs and original Recipe `req()` builder, TaskCycle ACTIVE and attempt RUNNING; full positive closure and authority attachment; un-reconciled attempt UNKNOWN blocks; synthetic wrong-ACK after one obligation remains CONFIRMED without close; concurrent attempt race aborts with NONE; terminal repeat denied. Also reproduce original source finding: Developer REJECTED and pre-satisfied obligations may yield READY in synthetic state (not proof of real historical reachable Product failure).
+
+**Equality constraints:** compare only normalized outcomes and authority IDs. Kernel uses a **global event history**; Beads test uses a **per-taskcycle experimental epoch**. Event IDs/revision counters are not equivalent and cannot be normalized into a claim of complete Product parity. Timings are **one cold positive sample** on the same runner, with instrumented Kernel read/verify/mutate counts and B HTTP GET/batch/write-item counts, not a production performance measurement. Script/test LOC does not prove removed Product maintenance cost.
+
+**Execution:** isolated Windows runner with pinned vendor binaries and hashes, read-only checkout Product at exact SHA/tree, npm ci, no remote in test git. Original Node receipts `A.json`, `B.json`; source-backed `COMPARE.json`; all exact in `IR-TXT-CARRIER/1` created/verified/extracted via Product `scripts/review_txt_carrier.py` blob `96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4`; Git published carrier readback checked. No ZIP consumer carrier or external provider effect.
+
+**Failure policy:** preserve each source/run identity and error; repair only exact observed fixture defect. No replay of 022/029 effects. B Product adoption **remains blocked** until global history/effect reconciliation, all native graph writers and real provider UNKNOWN are independently qualified.
+
+END-MEMBER
+MEMBER {"byte_length":2170,"path":"original/A_KERNEL.json","sha256":"21e4ef7c7697758208dbb3d0db531ec7efea1436e567f06c85bd18fc63a4a062"}
+{
+  "id": "TS-BEADS-030-A-KERNEL-REFERENCE-20261029-001",
+  "status": "PASS_A_ACTUAL_KERNEL_SAME_RECIPE_POSITIVE_AND_NEGATIVES",
+  "Product_effect": "NONE",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": [
+    "original_Kernel_preflight_READY",
+    "original_Kernel_closure_PASS_CONFIRMED",
+    "original_Kernel_all_five_obligations_SATISFIED",
+    "original_Kernel_authority_refs_reconciled",
+    "original_Kernel_terminal_replay_denied",
+    "original_Kernel_UNKNOWN_blocks",
+    "original_Kernel_lost_ack_effect_CONFIRMED",
+    "original_Kernel_ACK_partial_not_closed",
+    "original_Kernel_CAS_race_preserves_all_TaskCycle_obligations",
+    "original_Kernel_presatisfied_REJECTED_gap_reproduced"
+  ],
+  "product_recipe_sha256": "cd07ef9243b05b04021210e745069f9b397ca21d8e696afb536969b0a4e1ce5f",
+  "measurements": {
+    "positive": {
+      "elapsed_ms": 32.554781,
+      "store_calls": {
+        "read": 56,
+        "verify": 16,
+        "mutate": 6
+      },
+      "status": "PASS",
+      "effect_state": "CONFIRMED",
+      "final_state": "CLOSED",
+      "satisfied": 5,
+      "authority_ids": [
+        "authority:developer-001",
+        "authority:effect-001",
+        "authority:reviewer-001"
+      ],
+      "repeated_status": "FAIL",
+      "initial_global_revision": 8,
+      "final_global_revision": 14,
+      "kernel_event_count": 14
+    },
+    "negative": {
+      "unknown": {
+        "status": "BLOCKED",
+        "reason": "UNKNOWN_EXECUTION_ATTEMPT_REQUIRES_RECONCILIATION"
+      },
+      "ack": {
+        "status": "FAIL",
+        "effect_state": "CONFIRMED",
+        "satisfied": 1
+      },
+      "race": {
+        "status": "UNKNOWN",
+        "effect_state": "UNKNOWN",
+        "remaining": 5
+      },
+      "presatisfied_developer_rejected": {
+        "status": "READY",
+        "reaches_valid_Kernel_snapshot": true,
+        "note": "Fixture directly satisfies all obligations using native Kernel methods; not evidence of legitimate Product historical transition"
+      }
+    },
+    "source": {
+      "original_product_recipe_bytes": 36279,
+      "original_Kernel_source_present": true,
+      "Product_installed_files_modified": 0
+    }
+  }
+}
+
+END-MEMBER
+MEMBER {"byte_length":7599,"path":"original/B_BEADS.json","sha256":"ec90186e86b6f29cc5cda7f0a532b0597bd2f06372ba4284acf17776abf1941a"}
+{
+  "id": "TS-BEADS-030-B-FIRST-CONSUMER-PARITY-20261029-001",
+  "status": "PASS_B_ORIGINAL_PRODUCT_RECIPE_NATIVE_BEADS_PENDING_AND_NEGATIVES",
+  "authority": "NONE_PRODUCT",
+  "Product_effect": "NONE",
+  "shared_Dolt_effect": "NONE",
+  "Product_sha": "d4154bd43f26515c39a41be974e462a0c7406a2d",
+  "Product_tree": "cbfb71ad8632047e8e64fe2665d8614d835a2c8b",
+  "check": [
+    {
+      "key": "original_product_consumer_source_loaded_and_transform_anchored",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "isolated_Beads_git_has_no_remote",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-pending-root",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-pending-gate",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-ack-root",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-ack-gate",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-sat-root",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_created_ts022-sat-gate",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_Beads_server_health",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "original_Product_pending_developer_REJECTED_is_BLOCKED",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "original_Product_presatisfied_developer_REJECTED_returns_READY",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "Beads_first_adapted_pending_rejected_is_BLOCKED",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "Beads_first_adapted_missing_developer_evidence_BLOCKED",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "unmodified_Product_pending_competent_fixture_READY",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "adapted_Product_real_pending_obligation_preflight_READY",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "pending_unreconciled_UNKNOWN_blocks_original_recipe",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "pending_after_synthetic_reconciliation_READY",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "GET_revision_scoped_causal_race_rejected_without_partial_native_effect",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "GET_revision_causal_race_kept_all_obligations_pending",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "actual_Product_consumer_full_pending_obligations_PASS",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "five_original_Product_obligations_satisfied",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "original_Product_reconciliation_RESOLVED",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_aggregate_closed_all_obligations_terminal",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_aggregate_authority_refs_attached_from_competent_fixture",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_revision_and_event_six_step_correspondence",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "terminal_reexecution_denied",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "ack_loss_fixture_preflight_READY",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "native_pending_obligation_wrong_ack_classified_CONFIRMED",
+      "result": "PASS",
+      "kind": "negative"
+    },
+    {
+      "key": "partial_native_obligation_effect_preserved_not_replayed",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "independent_native_process_terminal_root_closed",
+      "result": "PASS",
+      "kind": "positive"
+    },
+    {
+      "key": "independent_native_process_partial_root_still_open",
+      "result": "PASS",
+      "kind": "positive"
+    }
+  ],
+  "negative": [
+    {
+      "type": "INDEPENDENT_UNMODIFIED_PRODUCT_AUTHORITY_NEGATIVE",
+      "pending_rejected": {
+        "status": "BLOCKED",
+        "reason": "OBLIGATION_SOURCE_NOT_COMPETENT:DEVELOPER_ACCEPTANCE:developer_acceptance"
+      },
+      "presatisfied_rejected": {
+        "status": "READY"
+      },
+      "outcome": "SOURCE_CONSUMER_BYPASSES_ACCEPTED_DISPOSITION_AFTER_OBLIGATION_PREMARKED_SATISFIED",
+      "boundary": "Synthetic snapshots with pre-satisfied obligations; no evidence of real reachable historical Product misuse"
+    },
+    {
+      "type": "DIRECT_GET_REVISION_CAUSAL_RACE",
+      "status": "FAIL",
+      "effect_state": "NONE",
+      "native_remaining": 5
+    },
+    {
+      "type": "PENDING_OBLIGATION_WRONG_ACK_EXACT_EFFECT",
+      "status": "FAIL",
+      "effect_state": "CONFIRMED",
+      "reason": "LIFECYCLE_MUTATION_EFFECT_CONFIRMED_BUT_UNACKNOWLEDGED:RECEIPT_CORRESPONDENCE_MISMATCH",
+      "native_obligations_satisfied": [
+        "CANONICAL_INTEGRATION"
+      ],
+      "native_state": "ACTIVE"
+    }
+  ],
+  "metrics": {
+    "native_calls": {
+      "reads": 75,
+      "batches": 12,
+      "metadata_token_reads": 0,
+      "write_items": 21,
+      "total_api_calls": 87
+    },
+    "consumer_source": {
+      "original_bytes": 36279,
+      "experimental_bytes": 36369,
+      "inserted_or_replaced_anchors": 15,
+      "added_lines": 0,
+      "extra_code_modules_added_in_Product": 0
+    },
+    "readset_probe": {
+      "native_get_root_keys": [
+        "comment_count",
+        "created_at",
+        "created_by",
+        "dependency_count",
+        "dependent_count",
+        "description",
+        "id",
+        "issue_type",
+        "metadata",
+        "priority",
+        "revision",
+        "status",
+        "title",
+        "updated_at"
+      ],
+      "root_get_revision_value": "4420704144919082003",
+      "root_guard_token": "4420704144919082003",
+      "native_get_gate_keys": [
+        "comment_count",
+        "created_at",
+        "created_by",
+        "dependency_count",
+        "dependent_count",
+        "description",
+        "id",
+        "issue_type",
+        "metadata",
+        "priority",
+        "revision",
+        "status",
+        "title",
+        "updated_at"
+      ],
+      "gate_get_revision_value": "-6927959666208134471",
+      "gate_guard_token": "-6927959666208134471"
+    },
+    "incremental_race_test_native_calls": {
+      "reads": 11,
+      "batches": 3
+    },
+    "B_only_positive_execute": {
+      "elapsed_ms": 739.650139,
+      "reads": 31,
+      "batches": 6,
+      "write_items": 13,
+      "Product_original_recipe_sha256": "cd07ef9243b05b04021210e745069f9b397ca21d8e696afb536969b0a4e1ce5f"
+    },
+    "efficiency": {
+      "token_acquisition_extra_batches_per_readset": 0,
+      "direct_native_GET_root_revision_valid": true,
+      "direct_native_GET_gate_revision_valid": true,
+      "row_tokens_from_GET_not_an_external_ledger": true,
+      "baseline_022_HTTP_calls": 127,
+      "baseline_022_extra_token_batches": 54
+    },
+    "full_original_pending_obligations": true,
+    "original_authority_negative_qualified_independently": true
+  },
+  "semantics": "EXPERIMENTAL_PER_TASKCYCLE_EPOCH_NOT_PRODUCT_GLOBAL_REVISION",
+  "scope": "ACTUAL_PRODUCT_RECONCILE_AND_CLOSE_RECIPE_MEMORY_ADAPTED;NO_PRODUCT_FILE_CHANGED",
+  "disposition": "BEADS_FIRST_CANDIDATE_NOT_PRODUCT_ADOPTION"
+}
+
+END-MEMBER
+MEMBER {"byte_length":4776,"path":"original/RESULT030.json","sha256":"d36565472da4dd2dc37dde8e7440fe70ec10ab0cea41f8b9382880875382f32c"}
+{
+  "Product_effect": "NONE",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": {
+    "ACK_loss_preserves_partial_CONFIRMED_A_and_B": "PASS",
+    "B_real_durable_terminal_CLI_readback": "PASS",
+    "UNKNOWN_blocks_A_and_B": "PASS",
+    "both_exact_native_CAS_audited": "PASS",
+    "both_real_positive_pass_confirmed": "PASS",
+    "causal_race_preserves_TaskCycle_A_and_B_with_classification_recorded": "PASS",
+    "competent_authority_attached_same_semantics": "PASS",
+    "five_obligations_and_close_A_and_B": "PASS",
+    "no_Product_mutation": "PASS",
+    "original_presatisfied_REJECTED_authority_gap_not_fixed": "PASS",
+    "same_original_Product_recipe_sha256": "PASS",
+    "terminal_replay_refused_A_and_B": "PASS"
+  },
+  "comparisons": {
+    "A_original_state_kernel": {
+      "authority_ids": [
+        "authority:developer-001",
+        "authority:effect-001",
+        "authority:reviewer-001"
+      ],
+      "effect_state": "CONFIRMED",
+      "events": 14,
+      "final_state": "CLOSED",
+      "negative": {
+        "ack": {
+          "effect_state": "CONFIRMED",
+          "satisfied": 1,
+          "status": "FAIL"
+        },
+        "presatisfied_developer_rejected": {
+          "note": "Fixture directly satisfies all obligations using native Kernel methods; not evidence of legitimate Product historical transition",
+          "reaches_valid_Kernel_snapshot": true,
+          "status": "READY"
+        },
+        "race": {
+          "effect_state": "UNKNOWN",
+          "remaining": 5,
+          "status": "UNKNOWN"
+        },
+        "unknown": {
+          "reason": "UNKNOWN_EXECUTION_ATTEMPT_REQUIRES_RECONCILIATION",
+          "status": "BLOCKED"
+        }
+      },
+      "obligations_satisfied": 5,
+      "single_execute_ms": 32.554781,
+      "status": "PASS",
+      "store_calls": {
+        "mutate": 6,
+        "read": 56,
+        "verify": 16
+      }
+    },
+    "B_native_Beads_port": {
+      "effect_state": "CONFIRMED",
+      "native_GET": 31,
+      "native_batch": 6,
+      "native_get_revision": "per_issue_tokens_no_extra_batch",
+      "native_termination": "readback_CLI_passed",
+      "native_write_items": 13,
+      "original_test_checks": 31,
+      "single_execute_ms": 739.650139,
+      "status": "PASS"
+    },
+    "benchmarks_not_equivalent": {
+      "A_is_sync_FS_event_journal": true,
+      "B_first_priority": "DO_NOT_RECLASSIFY_AS_PRODUCT_ADOPTION",
+      "B_is_async_local_Beads_Dolt_HTTP": true,
+      "causal_graph_full_writer_exclusivity": "NOT_QUALIFIED",
+      "consumer_context": "same original Product recipe and same evidence rules, different authorized native storage boundaries",
+      "global_history_equivalence": "NOT_QUALIFIED",
+      "no_external_provider_unknown": "synthetic UNKNOWN/ACK only",
+      "no_measured_net_deletion": true,
+      "no_security_equivalence": "023-028 native privileged graph write bypass not remediated",
+      "not_a_production_latency_winner": true,
+      "race_effect_classification": {
+        "A_global_Kernel": "UNKNOWN",
+        "B_scoped_Beads": "NONE",
+        "reason": "Global Kernel version changed due to concurrent attempt UNKNOWN; B batch refused on causal gate row revision",
+        "same_effect_state": false
+      },
+      "runtime_sample_size_each": 1,
+      "semantic_authority_REJECTED_source_gap": "REPRODUCED_IN_BOTH"
+    },
+    "same_recipe_source": {
+      "Product_installed_modules_changed": 0,
+      "async_adapted_bytes": 36369,
+      "in_memory_anchor_substitutions": 15,
+      "original_bytes": 36279
+    }
+  },
+  "id": "TS-BEADS-030-B-FIRST-CONSUMER-PARITY-20261029-001",
+  "limitations": [
+    "Only one cold timed positive execution each; source instrumented but not a performance study",
+    "Original Product Kernel uses global event journal; B relies on scoped synthetic epoch, not equivalent history",
+    "Synthetic authority fixture; no historical legitimate reachability of rejected Developer after satisfied",
+    "B tested only adapted in-memory Product consumer with native Beads; no installed Product consumer migration",
+    "Writer-exclusivity bypass remains material, no real external provider UNKNOWN or multi-host recovery",
+    "No net Product code deletion or maintenance advantage established"
+  ],
+  "original_recipe_sha256": "cd07ef9243b05b04021210e745069f9b397ca21d8e696afb536969b0a4e1ce5f",
+  "product_sha": "d4154bd43f26515c39a41be974e462a0c7406a2d",
+  "product_tree": "cbfb71ad8632047e8e64fe2665d8614d835a2c8b",
+  "shared_Dolt_effect": "NONE",
+  "source_artifacts": {
+    "A_sha256": "21e4ef7c7697758208dbb3d0db531ec7efea1436e567f06c85bd18fc63a4a062",
+    "B_sha256": "ec90186e86b6f29cc5cda7f0a532b0597bd2f06372ba4284acf17776abf1941a"
+  },
+  "status": "PASS_B_FIRST_SHARED_TASKCYCLE_OUTCOMES_EFFECT_CLASSIFICATION_DIVERGENCE"
+}
+
+END-MEMBER
+END-BUNDLE
