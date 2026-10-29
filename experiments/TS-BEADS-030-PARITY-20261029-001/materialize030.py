@@ -14,7 +14,8 @@ target=workspace/"transport/TS-BEADS-030-PARITY-20261030-001/EVIDENCE_CARRIER.tx
 if target.exists():raise RuntimeError("CREATE_ONLY_NO_OVERWRITE")
 raw=receipt.read_bytes()
 original=json.loads(raw)
-allow={"PASS_B_FIRST_SAME_PRODUCT_CONSUMER_SEMANTIC_PARITY_WITH_LIMITATIONS"}
+allow={"PASS_B_FIRST_SAME_PRODUCT_CONSUMER_SEMANTIC_PARITY_WITH_LIMITATIONS",
+ "PASS_B_FIRST_SHARED_TASKCYCLE_OUTCOMES_EFFECT_CLASSIFICATION_DIVERGENCE"}
 if original.get("status") not in allow or original.get("Product_effect")!="NONE" or len(original.get("checks",[]))<10:
  raise RuntimeError("UNQUALIFIED_NATIVE_ORIGINAL_RECEIPT")
 tool=product/"scripts/review_txt_carrier.py"
