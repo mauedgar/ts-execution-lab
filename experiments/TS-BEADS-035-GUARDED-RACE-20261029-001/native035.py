@@ -5,26 +5,31 @@ No Product, shared Dolt or external provider effect.
 Never exercises privileged alternate writer bypass already found in 028.
 """
 from __future__ import annotations
-import json,os,pathlib,secrets,subprocess,sys,time,urllib.request,urllib.error
+import atexit,json,os,pathlib,secrets,socket,subprocess,sys,time,urllib.request,urllib.error
 from urllib.parse import quote
 
 BD=pathlib.Path(os.environ["BD_BIN"]).resolve()
+DOLT=pathlib.Path(os.environ["DOLT_BIN"]).resolve()
 LAB=pathlib.Path(os.environ["LAB_ROOT"]).resolve()
 BASE=pathlib.Path(os.environ["TS035_BASE"]).resolve()
 OUT=pathlib.Path(os.environ["RESULT_PATH"]).resolve()
 PORT=31000+(int(os.environ.get("GITHUB_RUN_ID","35"))%22000)
 HOST="http://127.0.0.1:"+str(PORT)
+SQLPORT=24000+(int(os.environ.get("GITHUB_RUN_ID","35"))%13000)
 N=4
 ROOT="ts035-root"
 TOKEN=secrets.token_urlsafe(32)
 E=dict(os.environ)
 E.update({"BEADS_DIR":str(LAB/".beads"),"BD_NO_PUSH":"1","BD_DOLT_AUTO_PUSH":"false",
-          "BD_DOLT_AUTO_COMMIT":"on","BEADS_ACTOR":"TS-BEADS-035-NONPRODUCT",
+          "BD_DOLT_AUTO_COMMIT":"on",
+          "BEADS_DOLT_SERVER_MODE":"1","BEADS_DOLT_SERVER_HOST":"127.0.0.1",
+          "BEADS_DOLT_SERVER_PORT":str(SQLPORT),"BEADS_DOLT_SERVER_USER":"root",
+          "BEADS_ACTOR":"TS-BEADS-035-NONPRODUCT",
           "BD_NON_INTERACTIVE":"1","NO_COLOR":"1","GIT_TERMINAL_PROMPT":"0"})
 R={"id":"TS-BEADS-035-GUARDED-RACE-20261029-001","status":"RUNNING",
    "authority":"EXPERIMENTAL_CONTROL_ONLY","Product_effect":"NONE",
    "shared_Dolt_effect":"NONE","new_provider_effect":"NONE",
-   "runtime":{"beads":"v1.3.1","dolt":"v2.2.0","store":"disposable_embedded",
+   "runtime":{"beads":"v1.3.1","dolt":"v2.2.0","store":"disposable_loopback_Dolt_SQL_Server",
               "rounds":N,"writer_processes_per_round":2},
    "checks":{},"rounds":[],"not_qualified":[
      "Universal causal writer exclusivity including privileged native bd/Dolt shell",
@@ -117,13 +122,39 @@ def worker(roundno,side,revision):
                                  sort_keys=True)+"\n")
     print("TS035_WORKER_"+side+"="+str(code))
 
+def launch_dolt():
+    sql_dir=BASE/"sql"
+    sql_dir.mkdir()
+    logfile=BASE/"dolt-sql-server.log"
+    stream=logfile.open("w")
+    p=subprocess.Popen([str(DOLT),"sql-server","--host","127.0.0.1","--port",str(SQLPORT)],
+                       cwd=sql_dir,stdout=stream,stderr=subprocess.STDOUT)
+    def cleanup():
+        if p.poll() is None:
+            p.terminate()
+            try:p.wait(timeout=8)
+            except subprocess.TimeoutExpired:p.kill();p.wait(timeout=5)
+        stream.close()
+    atexit.register(cleanup)
+    for i in range(100):
+        if p.poll() is not None:
+            stream.flush()
+            raise RuntimeError("DOLT_SQL_SERVER_EARLY_EXIT:"+logfile.read_text(errors="replace")[-1200:])
+        try:
+            with socket.create_connection(("127.0.0.1",SQLPORT),timeout=.3):return p
+        except OSError:
+            time.sleep(.15)
+    raise RuntimeError("DOLT_SQL_SERVER_NOT_READY")
+
 def main():
     assert not LAB.exists() and not BASE.exists(),"NONEMPTY_ATTEMPT_WORKSPACE"
     BASE.mkdir(parents=True)
     LAB.mkdir(parents=True)
     subprocess.run(["git","init","-q",str(LAB)],check=True,timeout=10)
     check("isolated_git_no_remote",git_remote())
-    command("init","--quiet","--stealth","--skip-agents","--skip-hooks","--non-interactive")
+    launch_dolt()
+    check("loopback_dolt_SQL_server_available",True,SQLPORT)
+    command("init","--server","--quiet","--stealth","--skip-agents","--skip-hooks","--non-interactive")
     check("beads_initialized_successfully",True)
     command("create","TS035 causal graph root","--id",ROOT,"--force","--type","task",
             "--description","NONPRODUCT_GUARDED_CONCURRENT_RACE")
@@ -140,7 +171,10 @@ def main():
                             cwd=LAB,env=E,stdout=log,stderr=subprocess.STDOUT)
     try:
         for i in range(90):
-            if server.poll() is not None:raise RuntimeError("NATIVE_HTTP_EARLY_EXIT")
+            if server.poll() is not None:
+                log.flush()
+                diagnosis=(BASE/"beads-http.log").read_text(errors="replace")[-1300:]
+                raise RuntimeError("NATIVE_HTTP_EARLY_EXIT:"+diagnosis.replace(TOKEN,"[REDACTED]"))
             try:
                 if request("/healthz")[0]==200:break
             except Exception:pass
