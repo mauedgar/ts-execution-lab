@@ -1,0 +1,12 @@
+# Execution Engineering control surface. Informational-only and Product authority NONE.
+scripts:
+  setup: |
+    echo "[TS] Workspace visible. Experiments, evidence capture and agents remain explicit."
+
+defaultTabs:
+  - title: '01 · TS · Control'
+    command: 'echo "[TS/Control] Reconstruct, reobserve, bound and preserve exact identities before effects."'
+  - title: '02 · TS · Experiment'
+    command: 'echo "[TS/Experiment] Run only a bounded authorized experiment; Product authority remains NONE."'
+  - title: '03 · TS · Evidence'
+    command: 'echo "[TS/Evidence] Persist request, binding, result, effect and receipt before returning control."'
