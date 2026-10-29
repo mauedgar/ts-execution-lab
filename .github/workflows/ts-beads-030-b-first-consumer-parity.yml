@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.23.3
-      - name: Attempt 3 compare real Product Kernel and B including measured race disposition
+      - name: Attempt 4 preserve Kernel UNKNOWN vs Beads NONE in exact same-consumer experiment
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
