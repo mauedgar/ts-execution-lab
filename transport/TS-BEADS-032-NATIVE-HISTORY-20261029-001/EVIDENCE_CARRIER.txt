@@ -1,0 +1,239 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 6e6a7cca3b66e4f968ea2eac9f8b95896f64a8ac8cd3a8c4231eeeaf2cf7bdf7
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":304,"path":"README.txt","sha256":"19663107f5f2f152cde295d17b68793eaffdf0fa981096cdae9bb042d401368d"},{"byte_length":3355,"path":"control/PLAN.md","sha256":"a1d9fb9fa1ff427cbbd88501dc4634ea08134ad78ee34f6c10b107c306d02c14"},{"byte_length":4841,"path":"original/RESULT032.json","sha256":"3163aedd5a41a11a1f27bdb933950a8b219b925db1e785263947d1125ab2cd66"}],"source_archive":{"entry_count":3,"sha256":"9defab8aee4fbbeff9ea63e38d06af8e764156dedf0bb831e7e2550893df6c48","size":20480}}
+MEMBER {"byte_length":304,"path":"README.txt","sha256":"19663107f5f2f152cde295d17b68793eaffdf0fa981096cdae9bb042d401368d"}
+NONPRODUCT Beads 032 isolated native history checkpoint.
+Exact GitHub Actions run: 40928581506
+Executable Git source: cbcf93891727bdfa6757889e6f12710826013f3d
+No Product/shared-Dolt/provider effect. Original attempt executed once.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":3355,"path":"control/PLAN.md","sha256":"a1d9fb9fa1ff427cbbd88501dc4634ea08134ad78ee34f6c10b107c306d02c14"}
+# TS Beads 032 — B-first native history checkpoint
+
+**ID:** `TS-BEADS-032-NATIVE-HISTORY-20261029-001`
+
+**Authority:** `EXPERIMENTAL_CONTROL_ONLY`. No Product authority, TaskCycle, Developer grant, Independent Review, acceptance, integration, Phase 2 or canonical adoption is created by this experiment.
+
+## Frozen read-only references
+
+- Product: `mauedgar/tecnotron-ai:tools@d4154bd43f26515c39a41be974e462a0c7406a2d`, tree `cbfb71ad8632047e8e64fe2665d8614d835a2c8b`.
+- Product SOT blob: `dd8d34a7e3ef3094805d014f9e59741d2c553957`.
+- Shared native Dolt ref: `mauedgar/ts-execution-lab:refs/dolt/data@1f72d68797114170a97fee27641858f2e55a4571`; it must remain unchanged.
+- Predecessor terminal receipt: `TS-BEADS-031-B-FIRST-HISTORY-20261029-001` at `f88ea6809b58b2900209a565fc340359db9cc0dc`; run `40907329055` is terminal and must not be replayed.
+- Beads release: v1.3.1, tag target commit `c1c4b642ac1c08d8c828007a1c2f96e47e43ef7c`.
+- Dolt release: v2.2.0.
+
+## Question
+
+Empirically qualify the **native Beads B history path** that 031 left open:
+
+1. with `dolt.auto-commit=on`, does each successful isolated native Beads write advance the native Dolt commit identity;
+2. does `bd history <id>` expose distinct persisted snapshots for those writes;
+3. can `bd show --as-of <commit>` replay the prior issue state;
+4. do current state and history remain readable from fresh Beads CLI processes after the writes.
+
+This is an adequacy/history experiment, **not a claim of equivalence** to Tecnotron Kernel's global hash-linked event journal.
+
+## Bounded fixture
+
+Use a fresh disposable Git directory and Beads embedded Dolt store only. No remote is configured. Set:
+
+- `BD_DOLT_AUTO_COMMIT=on`
+- `BD_DOLT_AUTO_PUSH=false`
+- `BD_NO_PUSH=1`
+- `BEADS_ACTOR=TS-BEADS-032-NONPRODUCT`
+
+Perform exactly two synthetic issue writes:
+
+1. create `ts032-history-root` with description `TS032-V1`;
+2. update the same issue to description `TS032-V2`.
+
+For each write, record `bd vc status --json` commit identity and `bd history --json`. Then read V1 and V2 through `bd show --as-of` using the observed native commit hashes and re-read current state/history in later CLI processes.
+
+## PASS ceiling
+
+`PASS_NATIVE_HISTORY_AUTOCOMMIT_AND_ASOF_REPLAY` requires all of:
+
+- Product/tools and shared Dolt refs unchanged before and after;
+- isolated experiment Git has no remote;
+- initial, create and update native commit identities are non-empty and each write advances HEAD;
+- history contains distinct commit snapshots for V1 and V2;
+- as-of replay at the V1 commit returns V1;
+- as-of replay at the V2 commit and fresh current read return V2;
+- later fresh-process history preserves both commit identities;
+- Product effect, shared Dolt effect and provider effect are all `NONE`.
+
+## Explicit non-claims
+
+This experiment does **not** qualify:
+
+- semantic equivalence to Kernel global revision/hash-chain/event-count invariants;
+- real external provider effect identity, lost ACK, UNKNOWN recovery or no-duplicate dispatch;
+- exclusive causal writer under privileged `bd`/Dolt access;
+- production admission, installed Product integration, Kernel removal or Product architecture adoption.
+
+After a PASS, the next independent B-first research priority may be a **separate** real-provider/effect-identity experiment under tooling that authorizes the exact bounded fixture.
+
+END-MEMBER
+MEMBER {"byte_length":4841,"path":"original/RESULT032.json","sha256":"3163aedd5a41a11a1f27bdb933950a8b219b925db1e785263947d1125ab2cd66"}
+{
+  "Product_effect": "NONE",
+  "Product_subject": "d4154bd43f26515c39a41be974e462a0c7406a2d",
+  "Product_tree": "cbfb71ad8632047e8e64fe2665d8614d835a2c8b",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": {
+    "asof_v1_replays_v1": {
+      "evidence": "TS032-V1",
+      "result": "PASS"
+    },
+    "asof_v2_replays_v2": {
+      "evidence": "TS032-V2",
+      "result": "PASS"
+    },
+    "beads_init_completed": {
+      "evidence": "bd init exit=0; embedded storage layout intentionally not assumed",
+      "result": "PASS"
+    },
+    "create_auto_commit_advanced_head": {
+      "evidence": {
+        "after": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+        "before": "nmkdn9ipiplc8kvsnl2vdqop65mijvti"
+      },
+      "result": "PASS"
+    },
+    "create_returned_exact_issue": {
+      "evidence": "ts032-history-root",
+      "result": "PASS"
+    },
+    "create_vc_head_matches_v1_history_commit": {
+      "evidence": {
+        "history": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+        "vc": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd"
+      },
+      "result": "PASS"
+    },
+    "fresh_process_current_read_1_is_v2": {
+      "evidence": "TS032-V2",
+      "result": "PASS"
+    },
+    "fresh_process_current_read_2_is_v2": {
+      "evidence": "TS032-V2",
+      "result": "PASS"
+    },
+    "fresh_process_history_preserves_both_write_commits": {
+      "evidence": {
+        "observed_count": 2,
+        "required": [
+          "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+          "26gdn7svf0s772f0tk6f1e8e7a47ripp"
+        ]
+      },
+      "result": "PASS"
+    },
+    "history_after_create_contains_v1_snapshot": {
+      "evidence": 1,
+      "result": "PASS"
+    },
+    "history_after_update_contains_v1_snapshot": {
+      "evidence": [
+        "TS032-V2",
+        "TS032-V1"
+      ],
+      "result": "PASS"
+    },
+    "history_after_update_contains_v2_snapshot": {
+      "evidence": [
+        "TS032-V2",
+        "TS032-V1"
+      ],
+      "result": "PASS"
+    },
+    "history_has_distinct_per_write_commits": {
+      "evidence": {
+        "entries": 2,
+        "v1": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+        "v2": "26gdn7svf0s772f0tk6f1e8e7a47ripp"
+      },
+      "result": "PASS"
+    },
+    "isolated_git_has_no_remote_after_writes": {
+      "evidence": "",
+      "result": "PASS"
+    },
+    "isolated_git_has_no_remote_before_init": {
+      "evidence": "",
+      "result": "PASS"
+    },
+    "update_auto_commit_advanced_head": {
+      "evidence": {
+        "after": "26gdn7svf0s772f0tk6f1e8e7a47ripp",
+        "before": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd"
+      },
+      "result": "PASS"
+    },
+    "update_returned_exact_issue": {
+      "evidence": "ts032-history-root",
+      "result": "PASS"
+    },
+    "update_vc_head_matches_v2_history_commit": {
+      "evidence": {
+        "history": "26gdn7svf0s772f0tk6f1e8e7a47ripp",
+        "vc": "26gdn7svf0s772f0tk6f1e8e7a47ripp"
+      },
+      "result": "PASS"
+    }
+  },
+  "disposition": "B_FIRST_NATIVE_HISTORY_QUALIFIED_EXPERIMENTAL_ONLY",
+  "id": "TS-BEADS-032-NATIVE-HISTORY-20261029-001",
+  "measurements": {
+    "base_commit": "nmkdn9ipiplc8kvsnl2vdqop65mijvti",
+    "base_vc_status": {
+      "branch": "main",
+      "commit": "nmkdn9ipiplc8kvsnl2vdqop65mijvti",
+      "schema_version": 1
+    },
+    "bd_processes": 13,
+    "create_commit": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+    "create_vc_status": {
+      "branch": "main",
+      "commit": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+      "schema_version": 1
+    },
+    "history_after_create_entries": 1,
+    "history_after_update_entries": 2,
+    "history_later_entries": 2,
+    "update_commit": "26gdn7svf0s772f0tk6f1e8e7a47ripp",
+    "update_vc_status": {
+      "branch": "main",
+      "commit": "26gdn7svf0s772f0tk6f1e8e7a47ripp",
+      "schema_version": 1
+    },
+    "v1_history_commit": "3jv8ctps7mi3la2uh8cmoaknnl4sofdd",
+    "v2_history_commit": "26gdn7svf0s772f0tk6f1e8e7a47ripp"
+  },
+  "next": "Separate real-provider/effect-identity experiment; preserve no-replay and exact effect identity. Kernel hash-chain semantic equivalence remains NOT_QUALIFIED.",
+  "not_qualified": [
+    "Semantic equivalence to Kernel global revision/hash-chain/event-count invariants",
+    "Real independent external provider effect identity, lost ACK and UNKNOWN recovery without duplicate dispatch",
+    "Native exclusive causal writer under privileged alternate bd/Dolt access",
+    "Production admission, installed Product integration and Kernel removal"
+  ],
+  "provider_effect": "NONE",
+  "runtime": {
+    "auto_commit": "on",
+    "auto_push": false,
+    "beads": "v1.3.1",
+    "dolt": "v2.2.0",
+    "process_model": "fresh_bd_process_per_command",
+    "storage_mode": "embedded_dolt_disposable"
+  },
+  "shared_Dolt_effect": "NONE",
+  "shared_Dolt_ref": "1f72d68797114170a97fee27641858f2e55a4571",
+  "status": "PASS_NATIVE_HISTORY_AUTOCOMMIT_AND_ASOF_REPLAY"
+}
+
+END-MEMBER
+END-BUNDLE
