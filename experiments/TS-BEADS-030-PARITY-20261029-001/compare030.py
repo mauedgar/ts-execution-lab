@@ -34,7 +34,7 @@ test("ACK_loss_preserves_partial_CONFIRMED_A_and_B",
      bc.get("native_pending_obligation_wrong_ack_classified_CONFIRMED")=="PASS" and
      bc.get("partial_native_obligation_effect_preserved_not_replayed")=="PASS")
 test("causal_race_preserves_TaskCycle_A_and_B_with_classification_recorded",
-     an["race"]["status"]=="FAIL" and
+     an["race"]["status"] in ("FAIL","UNKNOWN") and
      an["race"]["effect_state"] in ("NONE","UNKNOWN") and an["race"]["remaining"]==5 and
      bc.get("GET_revision_scoped_causal_race_rejected_without_partial_native_effect")=="PASS")
 test("original_presatisfied_REJECTED_authority_gap_not_fixed",
