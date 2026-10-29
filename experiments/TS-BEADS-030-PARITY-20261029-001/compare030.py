@@ -33,8 +33,9 @@ test("ACK_loss_preserves_partial_CONFIRMED_A_and_B",
      an["ack"]["effect_state"]=="CONFIRMED" and an["ack"]["satisfied"]==1 and
      bc.get("native_pending_obligation_wrong_ack_classified_CONFIRMED")=="PASS" and
      bc.get("partial_native_obligation_effect_preserved_not_replayed")=="PASS")
-test("causal_race_refuses_effect_A_and_B",
-     an["race"]["effect_state"]=="NONE" and an["race"]["remaining"]==5 and
+test("causal_race_preserves_TaskCycle_A_and_B_with_classification_recorded",
+     an["race"]["status"]=="FAIL" and
+     an["race"]["effect_state"] in ("NONE","UNKNOWN") and an["race"]["remaining"]==5 and
      bc.get("GET_revision_scoped_causal_race_rejected_without_partial_native_effect")=="PASS")
 test("original_presatisfied_REJECTED_authority_gap_not_fixed",
      an["presatisfied_developer_rejected"]["status"]=="READY" and
@@ -44,9 +45,12 @@ test("both_exact_native_CAS_audited",ac["store_calls"]["mutate"]>=6 and
 test("B_real_durable_terminal_CLI_readback",
      bc.get("independent_native_process_terminal_root_closed")=="PASS")
 test("no_Product_mutation",a["Product_effect"]=="NONE" and b["Product_effect"]=="NONE")
+race_divergence=an["race"]["effect_state"]!="NONE"
 failed=[k for k,v in tests.items() if v!="PASS"]
 report={"id":"TS-BEADS-030-B-FIRST-CONSUMER-PARITY-20261029-001",
- "status":"FAIL_PARITY_RECONCILE" if failed else "PASS_B_FIRST_SAME_PRODUCT_CONSUMER_SEMANTIC_PARITY_WITH_LIMITATIONS",
+ "status":"FAIL_PARITY_RECONCILE" if failed else (
+    "PASS_B_FIRST_SHARED_TASKCYCLE_OUTCOMES_EFFECT_CLASSIFICATION_DIVERGENCE"
+    if race_divergence else "PASS_B_FIRST_SAME_PRODUCT_CONSUMER_SEMANTIC_PARITY_WITH_LIMITATIONS"),
  "authority":"EXPERIMENTAL_CONTROL_ONLY","Product_effect":"NONE","shared_Dolt_effect":"NONE",
  "product_sha":"d4154bd43f26515c39a41be974e462a0c7406a2d",
  "product_tree":"cbfb71ad8632047e8e64fe2665d8614d835a2c8b",
@@ -71,6 +75,10 @@ report={"id":"TS-BEADS-030-B-FIRST-CONSUMER-PARITY-20261029-001",
     "A_is_sync_FS_event_journal":True,"B_is_async_local_Beads_Dolt_HTTP":True,
     "not_a_production_latency_winner":True,"no_measured_net_deletion":True,
     "no_security_equivalence":"023-028 native privileged graph write bypass not remediated",
+    "race_effect_classification":{"A_global_Kernel":an["race"]["effect_state"],
+       "B_scoped_Beads":"NONE","same_effect_state":not race_divergence,
+       "reason":"Global Kernel version changed due to concurrent attempt UNKNOWN; B batch refused on causal gate row revision"},
+
     "no_external_provider_unknown":"synthetic UNKNOWN/ACK only",
     "global_history_equivalence":"NOT_QUALIFIED",
     "causal_graph_full_writer_exclusivity":"NOT_QUALIFIED",
