@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - name: Qualify native Beads auto-commit history and as-of replay
+      - name: Qualify native Beads auto-commit history and as-of replay (attempt 2 harness repair)
         shell: bash
         run: |
           set -euo pipefail
