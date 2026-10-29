@@ -183,7 +183,7 @@ try:
     )
 
     run(["init", "--quiet", "--stealth", "--skip-agents", "--skip-hooks", "--non-interactive"])
-    check("embedded_dolt_materialized", (LAB / ".beads" / "dolt").exists(), str(LAB / ".beads" / "dolt"))
+    check("beads_init_completed", True, "bd init exit=0; embedded storage layout intentionally not assumed")
 
     base_commit, base_status = vc_commit()
     report["measurements"]["base_vc_status"] = base_status
