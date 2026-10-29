@@ -1,0 +1,72 @@
+IR-TXT-CARRIER/1
+MANIFEST-SHA256 0664a9b9ba8a0c506fe703f44f31e195a159cca6633c645b2544d73026260b3c
+MANIFEST-BYTES 533
+{"format":"IR-TXT-CARRIER/1","members":[{"byte_length":313,"path":"README.txt","sha256":"7c583d8322e7424f8fa3ac0597b9691ad9a861add23805120f8b47fa247b721b"},{"byte_length":1241,"path":"control/PLAN.md","sha256":"7d8a36638daca0202b26bfcafee0465e5bf221874600e548ba6fe8d058fccec5"},{"byte_length":2971,"path":"original/RESULT031.json","sha256":"d948c1c6c3507df800aac074a35f048a3a67fd235248afe1f676adab45bea84a"}],"source_archive":{"entry_count":3,"sha256":"7bf26d75acc21252e8c043f48a5200c2dafcdb4fac4ada0c1f69d060a0a23892","size":10240}}
+MEMBER {"byte_length":313,"path":"README.txt","sha256":"7c583d8322e7424f8fa3ac0597b9691ad9a861add23805120f8b47fa247b721b"}
+NONPRODUCT Beads 031 original architecture comparison.
+Exact GitHub Actions run: 40907329055
+Executable Git source: 98b2cbebecf21980cbe84cfeba29129774743375
+No Product effect. Original attempt executed once. No credentials in this carrier.
+Native format: IR-TXT-CARRIER/1. No Product Independent Review or grant.
+
+END-MEMBER
+MEMBER {"byte_length":1241,"path":"control/PLAN.md","sha256":"7d8a36638daca0202b26bfcafee0465e5bf221874600e548ba6fe8d058fccec5"}
+# TS Beads 031 — B-first audit, provider identity, UNKNOWN and alternate writer
+
+**Authority:** Experimental Control only, no Product adoption. Product frozen read-only at `mauedgar/tecnotron-ai:tools@d4154bd43f26515c39a41be974e462a0c7406a2d` tree `cbfb71ad8632047e8e64fe2665d8614d835a2c8b`; SOT blob `dd8d34a7e3ef3094805d014f9e59741d2c553957`. Shared Dolt ref `1f72d68797114170a97fee27641858f2e55a4571` must stay unchanged.
+
+Reproduce on isolated native Beads v1.3.1/Dolt v2.2.0: (1) audit/history and restart readback, (2) frozen external-effect identity as synthetic provider receipt and UNKNOWN reconciliation without retry, (3) causal guard with concurrent gate revision, (4) bypass by privileged direct dependency writer and classification of limits. Use one bounded native Actions attempt and Product-qualified IR-TXT-CARRIER/1. No new state kernel, scheduler, remote provider claim, adoption or TaskCycle.
+
+**Evidence limits:** A local mock or immutable receipt is not a true remote provider; Dolt history requires explicit audit qualification and not an assumption of automatic Product event journal. No privileged writer confinement is proven merely by a secure launcher. Distinguish true native results from simulated evidence.
+
+END-MEMBER
+MEMBER {"byte_length":2971,"path":"original/RESULT031.json","sha256":"d948c1c6c3507df800aac074a35f048a3a67fd235248afe1f676adab45bea84a"}
+{
+  "Product_effect": "NONE",
+  "Product_subject": "d4154bd43f26515c39a41be974e462a0c7406a2d",
+  "Product_tree": "cbfb71ad8632047e8e64fe2665d8614d835a2c8b",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "checks": {
+    "A_kernel_hash_chained_event_replay_source": "PASS",
+    "A_original_Kernel_event_count_14": "PASS",
+    "B_native_Beads_no_original_Product_module_mutation": "PASS",
+    "B_native_CLI_terminal_readback_qualified": "PASS",
+    "Dolt_history_not_automatically_proven_by_procedure_source": "PASS",
+    "historical_privileged_writable_graph_path_confirmed": "PASS",
+    "historical_unprotected_alternate_service_confirmed": "PASS",
+    "native_dolt_explicit_commit_procedure_source": "PASS",
+    "no_new_Product_or_shared_Dolt_effect": "PASS",
+    "no_real_remote_provider_receipt_available_in_evidence": "PASS",
+    "original_Kernel_race_UNKNOWN_versus_B_NONE_preserved": "PASS",
+    "same_consumer_original_recipe_hash_A_B": "PASS"
+  },
+  "disposition": "B_FIRST_DESIGN_CONTINUES_EXPERIMENTAL_ONLY",
+  "id": "TS-BEADS-031-B-FIRST-AUDIT-UNKNOWN-BOUNDARY-20261029-001",
+  "native_runtime_new_attempt": "NOT_PERFORMED_AFTER_TOOL_SECURITY_BLOCKED_FIXTURE_PUBLICATION",
+  "next": "Separate bounded native Dolt checkpoint and external effect/provider qualification under tooling that authorizes exact fixture; no unverified PASS",
+  "not_qualified": [
+    "Automatic Beads native per-operation historical commit equivalence to Kernel hash-chained journal",
+    "Real independent external provider effect identity, ACK loss and UNKNOWN reconciliation without duplicate dispatch",
+    "Native exclusive causal writer under privileged alternate BD/Dolt access",
+    "Provider recovery across actual restart/outage, production admission and installed Product integration"
+  ],
+  "observations": {
+    "A_event_journal": "Original Kernel source verifies hash-linked events against HEAD and replay",
+    "B_native_history": "Dolt supports explicit SQL commit; 030 B readback confirms native state, NOT journal parity",
+    "effect_UNKNOWN": "030 synthetic attempt UNKNOWN blocks, ACK-loss carries confirmed partial write, no real provider",
+    "effect_classification_divergence": "A UNKNOWN/UNKNOWN versus B FAIL/NONE under related gate-race",
+    "writer_bypass": "028 native privileged CLI/alternate serve can add graph edge without root revision"
+  },
+  "shared_Dolt_effect": "NONE",
+  "source_provenance": {
+    "A_original_kernel_sha256": "21e4ef7c7697758208dbb3d0db531ec7efea1436e567f06c85bd18fc63a4a062",
+    "B_original_beads_sha256": "ec90186e86b6f29cc5cda7f0a532b0597bd2f06372ba4284acf17776abf1941a",
+    "Dolt_v2_2_0_commit_procedure_git_blob": "00d064481f34feb33dfb240d8056df3ecad83e04",
+    "Product_Kernel_store_blob": "f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a",
+    "source_receipts": "028 and 030 immutable original Git-persisted verified carriers"
+  },
+  "status": "PASS_SOURCE_AND_HISTORICAL_EVIDENCE_AUDIT_WITH_NATIVE_AND_PROVIDER_GATES_OPEN"
+}
+
+END-MEMBER
+END-BUNDLE
