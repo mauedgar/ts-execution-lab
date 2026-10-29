@@ -1,0 +1,59 @@
+name: TS Beads 030 Postpublication Git TXT Verification
+on:
+  push:
+    branches: [experiment/beads-030-b-first-consumer-parity-20261029-001]
+    paths: [.github/workflows/ts-beads-030-persisted-txt-check.yml]
+permissions:
+  contents: read
+jobs:
+  verify-frozen-030-original-results:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reacquire exact Git-persisted carrier with Product-qualified verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref=11934b997c5c466dd480e914df535f928a7b12d1
+          product=d4154bd43f26515c39a41be974e462a0c7406a2d
+          txt=transport/TS-BEADS-030-PARITY-20261029-001/EVIDENCE_CARRIER.txt
+          scratch="$RUNNER_TEMP/ts-beads-030-git-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          test "$(git rev-parse "$ref:$txt")" = 7a249a61fb16026ae507b7a702778a6656db916e
+          git show "$ref:$txt" > "$scratch/persisted.txt"
+          echo "e88a5ab182c4d1f34b5221568b27e997c2b8b41acc073f9b6577a90156a637be  $scratch/persisted.txt" | sha256sum -c -
+          test "$(wc -c < "$scratch/persisted.txt" | tr -d ' ')" = 20485
+          git clone -q --no-checkout https://github.com/mauedgar/tecnotron-ai.git "$scratch/product"
+          git -C "$scratch/product" checkout -q --detach "$product"
+          test "$(git -C "$scratch/product" hash-object scripts/review_txt_carrier.py)" = 96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4
+          tool="$scratch/product/scripts/review_txt_carrier.py"
+          python3 "$tool" verify "$scratch/persisted.txt" --report "$scratch/verify.json"
+          python3 "$tool" extract "$scratch/persisted.txt" --out "$scratch/recovered" --report "$scratch/extract.json"
+          python3 - "$scratch" <<'PY'
+          import hashlib,json,pathlib,sys
+          root=pathlib.Path(sys.argv[1])
+          for name in ("verify","extract"):
+              j=json.loads((root/(name+".json")).read_text())
+              assert j["status"]=="PASS" and j["member_payload_equivalence"]=="PASS"
+          sources={
+           "A_KERNEL.json":"21e4ef7c7697758208dbb3d0db531ec7efea1436e567f06c85bd18fc63a4a062",
+           "B_BEADS.json":"ec90186e86b6f29cc5cda7f0a532b0597bd2f06372ba4284acf17776abf1941a",
+           "RESULT030.json":"d36565472da4dd2dc37dde8e7440fe70ec10ab0cea41f8b9382880875382f32c"
+          }
+          for name,digest in sources.items():
+              b=(root/"recovered/original"/name).read_bytes()
+              assert hashlib.sha256(b).hexdigest()==digest
+          a=json.loads((root/"recovered/original/A_KERNEL.json").read_text())
+          b=json.loads((root/"recovered/original/B_BEADS.json").read_text())
+          c=json.loads((root/"recovered/original/RESULT030.json").read_text())
+          assert len(a["checks"])==10 and len(b["check"])==31 and len(c["checks"])==12
+          assert c["status"]=="PASS_B_FIRST_SHARED_TASKCYCLE_OUTCOMES_EFFECT_CLASSIFICATION_DIVERGENCE"
+          assert c["Product_effect"]=="NONE"
+          assert c["comparisons"]["benchmarks_not_equivalent"]["race_effect_classification"]["same_effect_state"] is False
+          print("TS_BEADS030_PERSISTED_GIT_TXT=PASS;bytes=20485;five_members=VERIFIED;A_B_COMPARE=EXACT;Product=NONE")
+          PY
