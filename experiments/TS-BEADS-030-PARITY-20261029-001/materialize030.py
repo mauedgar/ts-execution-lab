@@ -10,7 +10,7 @@ def cli(*arg):
 workspace=Path(os.environ["GITHUB_WORKSPACE"])
 product=Path(os.environ["PRODUCT_ROOT"])
 receipt=Path(os.environ["RESULT_PATH"])
-target=workspace/"transport/TS-BEADS-030-PARITY-20261030-001/EVIDENCE_CARRIER.txt"
+target=workspace/"transport/TS-BEADS-030-PARITY-20261029-001/EVIDENCE_CARRIER.txt"
 if target.exists():raise RuntimeError("CREATE_ONLY_NO_OVERWRITE")
 raw=receipt.read_bytes()
 original=json.loads(raw)
@@ -25,7 +25,7 @@ items={
  "original/RESULT030.json":raw,
  "original/A_KERNEL.json":Path(os.environ["A_RESULT"]).read_bytes(),
  "original/B_BEADS.json":Path(os.environ["B_RESULT"]).read_bytes(),
- "control/PLAN.md":(workspace/"experiments/TS-BEADS-030-PARITY-20261030-001/PLAN.md").read_bytes(),
+ "control/PLAN.md":(workspace/"experiments/TS-BEADS-030-PARITY-20261029-001/PLAN.md").read_bytes(),
  "README.txt":("NONPRODUCT Beads 030 original architecture comparison.\n"
                "Exact GitHub Actions run: "+os.environ["GITHUB_RUN_ID"]+"\n"+
                "Executable Git source: "+os.environ["GITHUB_SHA"]+"\n"+
