@@ -1,0 +1,52 @@
+name: TS EE LLM Beads 040 native workgraph fixture
+on:
+  push:
+    branches:
+      - experiment/beads-llm-qualification-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm-beads-040.yml
+permissions:
+  contents: read
+jobs:
+  model-workgraph:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen fixture and run one isolated Beads-native graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = experiment/beads-llm-qualification-20261030-001
+          script=experiments/TS-EE-LLM-BEADS-040-20261030-001/native040.py
+          test "$(git hash-object "$script")" = eaeb5233ed7271053c3365d775cd2d239fd6fcb0
+          scratch="$RUNNER_TEMP/ts-ee-llm-beads040-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          export LAB_ROOT="$scratch/lab"
+          export RESULT_PATH="$scratch/ORIGINAL_RESULT040.json"
+          python3 -m py_compile "$script"
+          python3 "$script"
+          test -s "$RESULT_PATH"
+          cp "$RESULT_PATH" "$RUNNER_TEMP/ORIGINAL_RESULT040.json"
+          echo "TS_EE_LLM_BEADS040_RECEIPT_SHA256=$(sha256sum "$RESULT_PATH" | cut -d' ' -f1)"
+          echo "TS_EE_LLM_BEADS040_PRODUCT_EFFECT=NONE;MODEL_PROVIDER_EFFECT=NONE"
+      - name: Persist original receipt even when fixture fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm-beads040-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ORIGINAL_RESULT040.json
+          if-no-files-found: warn
+          retention-days: 30
