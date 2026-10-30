@@ -1,0 +1,52 @@
+name: TS EE LLM046 native crash ACK loss
+on:
+  push:
+    branches:
+      - experiment/llm-046-crash-ack-loss-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm046-crash-ack-loss.yml
+permissions:
+  contents: read
+jobs:
+  exact-durable-crash-fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: One native crash and durable recovery experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-046-CRASH-ACK-LOSS-20261030-001
+          test "${GITHUB_REF_NAME}" = experiment/llm-046-crash-ack-loss-20261030-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/fixture046.py")" = 6c1f267ed4f2e92e377456ffd3263643af2bc689
+          test "$(git hash-object "$root/test046.py")" = 1f5688e378d8239147b5f5d6d4c95c946835cd97
+          scratch="$RUNNER_TEMP/llm046-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          export LAB046_ROOT="$scratch/scenarios"
+          export LAB046_SCRIPT="$GITHUB_WORKSPACE/$root/fixture046.py"
+          export LAB046_RESULT="$scratch/RESULT046.json"
+          python3 -m py_compile "$root/fixture046.py" "$root/test046.py"
+          python3 "$root/test046.py" 2>&1 | tee "$scratch/ORIGINAL_RUN.log"
+          python3 - "$scratch/RESULT046.json" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1],encoding="utf8"))
+          assert r["attempt"]=="TS-EE-LLM-046-ATTEMPT-001",r
+          assert r["tests_run"]==6 and r["failures"]==0 and r["errors"]==0 and r["success"] is True,r
+          assert r["product_effect"]=="NONE" and r["provider"]=="SYNTHETIC_LOCAL_SQLITE_NOT_REMOTE",r
+          assert len(r["scenario_directories"])==6,r
+          PY
+          test "$(find "$LAB046_ROOT" -name '*.sqlite3' | wc -l)" -eq 12
+          (cd "$scratch" && find scenarios -name '*.sqlite3' -type f -print0 | sort -z | xargs -0 sha256sum > SQLITE_ORIGINAL_SHA256.txt)
+          echo "TS_EE_LLM046=PASS_BOUNDED_NATIVE_CRASH_RECONCILIATION;tests=6;Product=NONE;provider=SQLITE_MOCK"
+          echo "TS_EE_LLM046_RESULT_SHA256=$(sha256sum "$LAB046_RESULT" | cut -d' ' -f1)"
+      - name: Preserve result and original SQLite effects/journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm046-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm046-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
