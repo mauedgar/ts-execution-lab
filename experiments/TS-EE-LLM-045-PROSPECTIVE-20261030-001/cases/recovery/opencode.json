@@ -1,0 +1,73 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "bench-implementer",
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "WORK_PACKAGE.md",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "src/recover.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "tests/visible.test.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "edit",
+      "resource": "src/recover.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "browser",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "agents": {
+    "bench-implementer": {
+      "mode": "primary",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "WORK_PACKAGE.md",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "src/recover.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "tests/visible.test.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "src/recover.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "browser",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}
