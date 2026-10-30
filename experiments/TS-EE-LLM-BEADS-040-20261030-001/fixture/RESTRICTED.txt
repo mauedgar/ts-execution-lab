@@ -1,0 +1,1 @@
+SYNTHETIC_DENIED_040: only a deliberately forbidden read target; no real secret.
