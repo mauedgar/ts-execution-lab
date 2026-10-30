@@ -1,0 +1,84 @@
+name: TS EE LLM 043 independent contract oracle
+on:
+  push:
+    branches:
+      - experiment/llm-043-independent-oracle-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm-043-independent-oracle.yml
+permissions:
+  contents: read
+jobs:
+  four-fixed-candidates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Independently test exact original model commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          oracle=experiments/TS-EE-LLM-043-NATIVE-CODING-20261030-001/oracle
+          test "$(git hash-object "$oracle/oracle-implementation.test.mjs")" = e5da30fc5c1f6b2b8d1a172d8cd5ff738c98cf2f
+          test "$(git hash-object "$oracle/oracle-repair.test.mjs")" = 88a8698ebd78a4cf6159346af046e64100df3746
+          mkdir -p "$RUNNER_TEMP/llm043-independent"
+          result="$RUNNER_TEMP/llm043-independent/original-results.jsonl"
+          test ! -e "$result"
+          validate() {
+            id="$1"; sha="$2"; role="$3"; codeblob="$4"
+            localroot="$RUNNER_TEMP/llm043-independent/$id"
+            git cat-file -e "$sha^{commit}"
+            git worktree add --detach "$localroot" "$sha" >/dev/null
+            test "$(git -C "$localroot" rev-parse HEAD)" = "$sha"
+            if test "$role" = implementation; then
+              src=src/aggregate.mjs; testname=aggregate; oraclefile=oracle-implementation.test.mjs
+            else
+              src=src/select-latest.mjs; testname=select-latest; oraclefile=oracle-repair.test.mjs
+            fi
+            target="$localroot/experiments/TS-EE-LLM-043-NATIVE-CODING-20261030-001/$role"
+            test "$(git -C "$localroot" rev-parse "HEAD:experiments/TS-EE-LLM-043-NATIVE-CODING-20261030-001/$role/$src")" = "$codeblob"
+            original=0
+            node --test "$target/tests/$testname.test.mjs" > "$RUNNER_TEMP/llm043-independent/$id-original.log" 2>&1 || original=$?
+            independent=0
+            TARGET_DIR="$target" node --test "$GITHUB_WORKSPACE/$oracle/$oraclefile" > "$RUNNER_TEMP/llm043-independent/$id-oracle.log" 2>&1 || independent=$?
+            original_pass=$(grep '^# pass ' "$RUNNER_TEMP/llm043-independent/$id-original.log" | tail -1 | awk '{print $3}')
+            original_fail=$(grep '^# fail ' "$RUNNER_TEMP/llm043-independent/$id-original.log" | tail -1 | awk '{print $3}')
+            oracle_pass=$(grep '^# pass ' "$RUNNER_TEMP/llm043-independent/$id-oracle.log" | tail -1 | awk '{print $3}')
+            oracle_fail=$(grep '^# fail ' "$RUNNER_TEMP/llm043-independent/$id-oracle.log" | tail -1 | awk '{print $3}')
+            test "$original" = 0 && test "$original_pass" = 9 && test "$original_fail" = 0
+            test "$((oracle_pass+oracle_fail))" = 4
+            test -z "$(git -C "$localroot" status --porcelain)"
+            jq -nc --arg attempt "$id" --arg source_sha "$sha" --arg role "$role" --arg code_blob "$codeblob" \
+              --argjson baseline_tests_pass "$original_pass" --argjson baseline_tests_fail "$original_fail" \
+              --argjson oracle_tests_pass "$oracle_pass" --argjson oracle_tests_fail "$oracle_fail" \
+              --argjson oracle_exit "$independent" \
+              '{attempt,source_sha,role,code_blob,baseline_tests_pass,baseline_tests_fail,oracle_tests_pass,oracle_tests_fail,oracle_exit,product_effect:"NONE"}' >> "$result"
+            echo "LLM043_INDEPENDENT=$id;SOURCE=$sha;BASELINE=$original_pass/9;ORACLE_PASS=$oracle_pass;ORACLE_FAIL=$oracle_fail;ORACLE_EXIT=$independent;Product=NONE"
+          }
+          validate LLM043-D-I-001 0389345f3687ac3a6905d9584eee36c3feb7bd24 implementation 05de9fc91be009fb91d7234a0540e599f2fe901e
+          validate LLM043-M-I-001 1b25bff7ecd211691b2d634d17d6d3c463ded4b2 implementation 9b2cc6c85fe2bfdb1552f5d2c03eef3f711ef219
+          validate LLM043-D-R-001 e8242f27eaa680d0fd265ab9d296a1e35a16eb1b repair 2ebdf9412f1f5a387198ad1627854274fc5e7367
+          validate LLM043-M-R-001 ae0b3e03ad0eca1180ddf6802039b9052507c084 repair bbd38f2b4f1b6b2d931f60efc3eba5d8b115033a
+          test "$(wc -l < "$result")" = 4
+          echo "TS_EE_LLM043_ORACLE=COMPLETED_ALL_4_EXACT;CI_VALIDATED_ORACLE_INDEPENDENT;MODEL_DISPATCH=NONE;Product=NONE"
+          echo "TS_EE_LLM043_RESULTS_SHA256=$(sha256sum "$result" | cut -d' ' -f1)"
+      - name: Preserve exact independent logs and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm043-independent-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm043-independent/*.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve results JSONL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm043-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm043-independent/original-results.jsonl
+          if-no-files-found: warn
+          retention-days: 30
