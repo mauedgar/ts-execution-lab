@@ -1,0 +1,74 @@
+name: TS EE LLM044 independent corrective oracle
+on:
+  push:
+    branches:
+      - experiment/llm-044-independent-validator-20261030
+    paths:
+      - .github/workflows/ts-ee-llm044-independent.yml
+permissions:
+  contents: read
+jobs:
+  two-exact-candidates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Test original 9 and independent 4 against exact candidate blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-044-REPAIR-NEGATIVE-20261030-001
+          oracle=experiments/TS-EE-LLM-043-NATIVE-CODING-20261030-001/oracle
+          test "$(git hash-object "$oracle/oracle-implementation.test.mjs")" = e5da30fc5c1f6b2b8d1a172d8cd5ff738c98cf2f
+          test "$(git hash-object "$oracle/oracle-repair.test.mjs")" = 88a8698ebd78a4cf6159346af046e64100df3746
+          mkdir -p "$RUNNER_TEMP/llm044-validator"
+          result="$RUNNER_TEMP/llm044-validator/RESULTS.jsonl"
+          test ! -e "$result"
+          validate() {
+            id="$1"; sha="$2"; role="$3"; blob="$4"; src="$5"; testcase="$6"; oraclefile="$7"
+            dest="$RUNNER_TEMP/llm044-validator/$id"
+            git cat-file -e "$sha^{commit}"
+            git worktree add --detach "$dest" "$sha" >/dev/null
+            test "$(git -C "$dest" rev-parse HEAD)" = "$sha"
+            test "$(git -C "$dest" rev-parse "HEAD:$root/$role/$src")" = "$blob"
+            target="$dest/$root/$role"
+            set +e
+            node --test "$target/tests/$testcase.test.mjs" > "$RUNNER_TEMP/llm044-validator/$id-original.log" 2>&1
+            origexit=$?
+            TARGET_DIR="$target" node --test "$GITHUB_WORKSPACE/$oracle/$oraclefile" > "$RUNNER_TEMP/llm044-validator/$id-oracle.log" 2>&1
+            oracleexit=$?
+            set -e
+            originalpass=$(grep '^# pass ' "$RUNNER_TEMP/llm044-validator/$id-original.log" | tail -1 | awk '{print $3}')
+            oraclepass=$(grep '^# pass ' "$RUNNER_TEMP/llm044-validator/$id-oracle.log" | tail -1 | awk '{print $3}')
+            oraclefail=$(grep '^# fail ' "$RUNNER_TEMP/llm044-validator/$id-oracle.log" | tail -1 | awk '{print $3}')
+            test -z "$(git -C "$dest" status --porcelain)"
+            jq -nc --arg attempt "$id" --arg commit "$sha" --arg blob "$blob" --argjson original_pass "$originalpass" --argjson oracle_pass "$oraclepass" --argjson oracle_fail "$oraclefail" --argjson original_exit "$origexit" --argjson oracle_exit "$oracleexit" '{attempt,commit,blob,original_pass,oracle_pass,oracle_fail,original_exit,oracle_exit,product_effect:"NONE"}' >> "$result"
+            echo "LLM044_VALIDATION=$id;ORIGINAL=$originalpass/9;ORACLE_PASS=$oraclepass;ORACLE_FAIL=$oraclefail;ORIGINAL_EXIT=$origexit;ORACLE_EXIT=$oracleexit"
+            test "$origexit" = 0 && test "$oracleexit" = 0 && test "$originalpass" = 9 && test "$oraclepass" = 4 && test "$oraclefail" = 0
+          }
+          validate LLM044-DEEPSEEK-REPAIR-001 52961659a37a35a60e064c8eded6839ef3e37455 deepseek-implementation-repair 8ca824255275d134675ffe20e2bc38ec23f624e8 src/aggregate.mjs aggregate oracle-implementation.test.mjs
+          validate LLM044-MIMO-REPAIR-001 cf9e6ef5de48aa983d386ecbb9e1885f5a8979d6 mimo-repair-type-correction 6c37904c76f04b4384abe2ff14aa69a0800f490e src/select-latest.mjs select-latest oracle-repair.test.mjs
+          test "$(wc -l < "$result")" = 2
+          echo "TS_EE_LLM044_REPAIRS=PASS_INDEPENDENT_26_OF_26;PRODUCT=NONE"
+          echo "LLM044_RESULTS_SHA256=$(sha256sum "$result" | cut -d' ' -f1)"
+      - name: Preserve original native validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm044-independent-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm044-validator/*.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve exact results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm044-independent-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm044-validator/RESULTS.jsonl
+          if-no-files-found: warn
+          retention-days: 30
