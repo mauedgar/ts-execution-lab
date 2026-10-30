@@ -1,0 +1,58 @@
+name: TS EE LLM045 prospective fixed-red baseline
+on:
+  push:
+    branches:
+      - experiment/llm-045-prospective-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm045-baseline.yml
+permissions:
+  contents: read
+jobs:
+  prospective-red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Prove frozen baseline and independent oracle before models
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-045-PROSPECTIVE-20261030-001
+          for kind in recovery ready; do
+            node --check "$root/cases/$kind/src/"*.mjs
+            node --check "$root/cases/$kind/tests/visible.test.mjs"
+            node --check "$root/oracle/$kind.test.mjs"
+            python3 - "$root/cases/$kind/opencode.json" "$kind" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1]));kind=sys.argv[2];src='src/'+('recover' if kind=='recovery' else 'ready')+'.mjs'
+          a=p['agents']['bench-implementer']['permissions']
+          assert p['permissions']==a
+          assert a[0]=={'action':'*','resource':'*','effect':'deny'}
+          assert [x for x in a if x['action']=='edit' and x['effect']=='allow']==[{'action':'edit','resource':src,'effect':'allow'}]
+          assert [x['resource'] for x in a if x['action']=='read' and x['effect']=='allow']==['WORK_PACKAGE.md',src,'tests/visible.test.mjs']
+          PY
+          done
+          set +e
+          node --test "$root/cases/recovery/tests/visible.test.mjs" > "$RUNNER_TEMP/llm045-recovery-red.log" 2>&1
+          a=$?
+          node --test "$root/cases/ready/tests/visible.test.mjs" > "$RUNNER_TEMP/llm045-ready-red.log" 2>&1
+          b=$?
+          set -e
+          test "$a" -ne 0 && test "$b" -ne 0
+          grep -q NOT_IMPLEMENTED "$RUNNER_TEMP/llm045-recovery-red.log"
+          grep -q NOT_IMPLEMENTED "$RUNNER_TEMP/llm045-ready-red.log"
+          echo "TS_EE_LLM045_BASELINE=PASS_EXPECTED_RED;PROSPECTIVE_ORACLE_FROZEN;MODEL_CALLS=NONE;PRODUCT_EFFECT=NONE"
+          for x in "$root/oracle/recovery.test.mjs" "$root/oracle/ready.test.mjs"; do
+            echo "TS_EE_LLM045_ORACLE_BLOB=$(git hash-object "$x")"
+          done
+      - name: Original baseline logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm045-original-red-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm045-*-red.log
+          if-no-files-found: warn
+          retention-days: 30
