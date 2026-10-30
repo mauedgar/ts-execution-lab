@@ -1,0 +1,73 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "negative-control-v2",
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "WORK_PACKAGE.md",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "PROTECTED.txt",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "ALLOWED.txt",
+      "effect": "allow"
+    },
+    {
+      "action": "edit",
+      "resource": "ALLOWED.txt",
+      "effect": "allow"
+    },
+    {
+      "action": "browser",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "agents": {
+    "negative-control-v2": {
+      "mode": "primary",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "WORK_PACKAGE.md",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "PROTECTED.txt",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "ALLOWED.txt",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "ALLOWED.txt",
+          "effect": "allow"
+        },
+        {
+          "action": "browser",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}
