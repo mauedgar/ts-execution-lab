@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {resolve} from 'node:path';
+if(!process.env.TARGET_DIR)throw Error('TARGET_DIR_REQUIRED');
+const {recoverAttempt:r}=await import(pathToFileURL(resolve(process.env.TARGET_DIR,'src/recover.mjs')).href);
+const q={attemptId:'X',subjectSha:'sha',owner:'dev'};const m=(effect,seq,receipt=null)=>({...q,effect,seq,receipt});
+test('HA01 highest confirmed seq',()=>assert.deepEqual(r([m('CONFIRMED',2,'old'),m('CONFIRMED',8,'new')],q),{decision:'NO_RETRY',effect:'CONFIRMED',receipt:'new'}));
+test('HA02 tie first',()=>assert.deepEqual(r([m('CONFIRMED',8,'early'),m('CONFIRMED',8,'late')],q),{decision:'NO_RETRY',effect:'CONFIRMED',receipt:'early'}));
+test('HA03 UNKNOWN sticky',()=>assert.deepEqual(r([m('UNKNOWN',1),m('CONFIRMED',10,'later')],q),{decision:'RECONCILE',effect:'UNKNOWN',receipt:null}));
+test('HA04 identity mismatch sticky',()=>assert.deepEqual(r([m('CONFIRMED',8,'ok'),{...m('NONE',1),subjectSha:'different'}],q),{decision:'BLOCK_IDENTITY',effect:'UNKNOWN',receipt:null}));
+test('HA05 irrelevant invalid record',()=>assert.throws(()=>r([m('NONE',1),{...m('NONE',2),attemptId:'Y',receipt:''}],q),e=>e instanceof TypeError||e instanceof RangeError));
+test('HA06 confirmed no receipt even if earlier',()=>assert.deepEqual(r([m('NONE',3),m('CONFIRMED',1)],q),{decision:'PENDING_RECEIPT',effect:'CONFIRMED',receipt:null}));
+test('HA07 immutable input',()=>{const a=Object.freeze([Object.freeze(m('NONE',1))]);const before=JSON.stringify(a);r(a,Object.freeze(q));assert.equal(JSON.stringify(a),before)});
+test('HA08 malformed request',()=>assert.throws(()=>r([],null),e=>e instanceof TypeError||e instanceof RangeError));
