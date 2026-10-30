@@ -1,0 +1,56 @@
+name: TS EE LLM Beads 041 attested evidence join
+on:
+  push:
+    branches:
+      - experiment/llm-beads-041-evidence-join-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm-beads-041.yml
+permissions:
+  contents: read
+jobs:
+  original-attested-join:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run exactly one isolated Beads evidence join
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = experiment/llm-beads-041-evidence-join-20261030-001
+          script=experiments/TS-EE-LLM-BEADS-041-20261030-001/native041.py
+          manifest=experiments/TS-EE-LLM-BEADS-041-20261030-001/EVIDENCE_ATTESTATIONS.json
+          test "$(git hash-object "$script")" = 2910f65435fb9915c2d010fd14bf15090a7c05fc
+          test "$(git hash-object "$manifest")" = 9cb5a38ca3e3b5078a98cb924ecd4a98d225e17a
+          scratch="$RUNNER_TEMP/ts-ee-llm-beads041-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          export LAB_ROOT="$scratch/lab"
+          export RESULT_PATH="$RUNNER_TEMP/ORIGINAL_RESULT041.json"
+          export ATTESTATIONS_PATH="$GITHUB_WORKSPACE/$manifest"
+          test ! -e "$RESULT_PATH"
+          python3 -m py_compile "$script"
+          python3 -m json.tool "$manifest" >/dev/null
+          python3 "$script"
+          test -s "$RESULT_PATH"
+          echo "TS_EE_LLM_BEADS041_ORIGINAL_SHA256=$(sha256sum "$RESULT_PATH" | cut -d' ' -f1)"
+          echo "TS_EE_LLM_BEADS041_PRODUCT=NONE;PROVIDER=NONE;SOURCE=HOST_ATTESTATIONS_ONLY"
+      - name: Preserve original result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm-beads041-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ORIGINAL_RESULT041.json
+          if-no-files-found: warn
+          retention-days: 30
