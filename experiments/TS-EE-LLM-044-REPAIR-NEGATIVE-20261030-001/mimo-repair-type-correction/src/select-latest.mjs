@@ -5,23 +5,23 @@ const ALLOWED_STATUSES = new Set(['PASS', 'FAIL', 'PENDING', 'UNKNOWN']);
 
 function validateRecord(record) {
   if (record === null || typeof record !== 'object' || Array.isArray(record)) {
-    throw new Error('record must be an object');
+    throw new TypeError('record must be an object');
   }
   const {jobId, sequence, status} = record;
   if (typeof jobId !== 'string' || jobId.length === 0) {
-    throw new Error('jobId must be a non-empty string');
+    throw new TypeError('jobId must be a non-empty string');
   }
   if (typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) {
-    throw new Error('sequence must be a non-negative safe integer');
+    throw new RangeError('sequence must be a non-negative safe integer');
   }
   if (typeof status !== 'string' || !ALLOWED_STATUSES.has(status)) {
-    throw new Error('status must be one of PASS, FAIL, PENDING, UNKNOWN');
+    throw new TypeError('status must be one of PASS, FAIL, PENDING, UNKNOWN');
   }
 }
 
 export function selectLatest(records) {
   if (!Array.isArray(records)) {
-    throw new Error('records must be an array');
+    throw new TypeError('records must be an array');
   }
   // Validate every record up front, including losing duplicates.
   for (const record of records) {
