@@ -1,0 +1,58 @@
+name: TS EE LLM 043 native coding fixed baseline
+on:
+  push:
+    branches:
+      - experiment/llm-043-native-code-qual-20261030-001
+    paths: [.github/workflows/ts-ee-llm-043-baseline.yml]
+permissions:
+  contents: read
+jobs:
+  frozen-red-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Verify both isolated roles start RED and permissions are allowlisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-043-NATIVE-CODING-20261030-001
+          for role in implementation repair; do
+            test -f "$root/$role/opencode.json"
+            test -f "$root/$role/.opencode/agents/llm-coder.md"
+            node --check "$root/$role/src/"*.mjs
+            node --check "$root/$role/tests/"*.test.mjs
+            node - "$root/$role/opencode.json" "$role" <<'JS'
+          const fs=require('node:fs')
+          const [f,role]=process.argv.slice(2)
+          const p=JSON.parse(fs.readFileSync(f,'utf8'))
+          const src=role==='implementation'?'src/aggregate.mjs':'src/select-latest.mjs'
+          const read=[{action:'read',resource:'WORK_PACKAGE.md',effect:'allow'},{action:'read',resource:src,effect:'allow'},{action:'read',resource:role==='implementation'?'tests/aggregate.test.mjs':'tests/select-latest.test.mjs',effect:'allow'}]
+          const required=[{action:'*',resource:'*',effect:'deny'},...read,{action:'edit',resource:src,effect:'allow'}]
+          if (JSON.stringify(p.permissions)!==JSON.stringify(required) || JSON.stringify(p.agents['llm-coder'].permissions)!==JSON.stringify(required)) process.exit(12)
+          JS
+          done
+          set +e
+          node --test "$root/implementation/tests/aggregate.test.mjs" > "$RUNNER_TEMP/llm043-impl-red.log" 2>&1
+          a=$?
+          node --test "$root/repair/tests/select-latest.test.mjs" > "$RUNNER_TEMP/llm043-repair-red.log" 2>&1
+          b=$?
+          set -e
+          test "$a" -ne 0
+          test "$b" -ne 0
+          grep -Eq '^# fail [1-9]' "$RUNNER_TEMP/llm043-impl-red.log"
+          grep -Eq '^# fail [1-9]' "$RUNNER_TEMP/llm043-repair-red.log"
+          grep -q 'NOT_IMPLEMENTED' "$RUNNER_TEMP/llm043-impl-red.log"
+          grep -q 'old PASS must not override newer UNKNOWN' "$RUNNER_TEMP/llm043-repair-red.log"
+          echo "TS_EE_LLM043_BASELINE=PASS_EXPECTED_RED;roles=2;models=NONE;Product=NONE"
+      - name: Preserve original logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm043-baseline-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm043-*-red.log
+          if-no-files-found: warn
+          retention-days: 30
