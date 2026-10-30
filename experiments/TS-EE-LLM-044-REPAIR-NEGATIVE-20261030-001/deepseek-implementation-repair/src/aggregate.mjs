@@ -1,6 +1,6 @@
 /** Synthetic implementation exercise. */
 const STATUSES = ['PASS', 'FAIL', 'BLOCKED'];
-const COST_SCALE = 1e10;
+const COST_SCALE = 1e6;
 
 function invalid(message) {
   throw new TypeError(message);
