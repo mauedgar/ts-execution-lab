@@ -1,0 +1,56 @@
+name: TS EE LLM047 TCP ACK-loss durable reconciliation
+on:
+  push:
+    branches:
+      - experiment/llm-047-network-ack-loss-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm047-network-ack-loss.yml
+permissions:
+  contents: read
+jobs:
+  one-original-network-ack-loss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute seven pinned native TCP recovery tests once
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-047-NETWORK-ACK-LOSS-20261030-001
+          test "${GITHUB_REF_NAME}" = experiment/llm-047-network-ack-loss-20261030-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/provider047.py")" = e1f71a57fc9ca31daecfca259262805ae6e31fcc
+          test "$(git hash-object "$root/client047.py")" = 69681f595675f21af2f999696dfe4c3aa65f33b2
+          test "$(git hash-object "$root/test047.py")" = 4b721e20bab7e402fe2d015cf72b55c67fc3e2aa
+          python3 -m py_compile "$root/provider047.py" "$root/client047.py" "$root/test047.py"
+          scratch="$RUNNER_TEMP/ts-ee-llm047-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          export LAB047_ROOT="$scratch/scenarios"
+          export LAB047_PROVIDER="$GITHUB_WORKSPACE/$root/provider047.py"
+          export LAB047_CLIENT="$GITHUB_WORKSPACE/$root/client047.py"
+          export LAB047_RESULT="$scratch/RESULT047.json"
+          python3 "$root/test047.py" 2>&1 | tee "$scratch/ORIGINAL_RUN047.log"
+          python3 - "$scratch/RESULT047.json" <<'PY'
+          import json,sys
+          z=json.load(open(sys.argv[1],encoding="utf8"))
+          assert z["execution_attempt"]=="TS-EE-LLM-047-ATTEMPT-001",z
+          assert z["tests_run"]==7 and z["success"] is True,z
+          assert z["failures"]==0 and z["errors"]==0,z
+          assert z["product_effect"]=="NONE" and z["provider"]=="SYNTHETIC_SQLITE_NOT_EXTERNAL",z
+          assert len(z["scenario_directories"])==7,z
+          PY
+          test "$(find "$LAB047_ROOT" -name 'provider.sqlite3' | wc -l)" -eq 7
+          test "$(find "$LAB047_ROOT" -name 'consumer.sqlite3' | wc -l)" -eq 7
+          (cd "$scratch" && find scenarios -type f \( -name '*.sqlite3' -o -name '*.log' \) -print0 | sort -z | xargs -0 sha256sum > ORIGINAL_FILE_SHA256.txt)
+          echo "TS_EE_LLM047=PASS_BOUNDED_REAL_TCP_ACK_DROP_RECOVERY;tests=7;Product=NONE;provider=LOCAL_SQLITE_HTTP_MOCK"
+          echo "TS_EE_LLM047_RESULT_SHA256=$(sha256sum "$LAB047_RESULT" | cut -d' ' -f1)"
+      - name: Preserve all original databases, journals and native logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm047-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-ee-llm047-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
