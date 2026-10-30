@@ -1,0 +1,43 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "llm-readqual",
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "README.md",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "**/README.md",
+      "effect": "allow"
+    }
+  ],
+  "agents": {
+    "llm-readqual": {
+      "mode": "primary",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "README.md",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "**/README.md",
+          "effect": "allow"
+        }
+      ]
+    }
+  }
+}
