@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {resolve} from 'node:path';
+if(!process.env.TARGET_DIR)throw Error('TARGET_DIR_REQUIRED');
+const {selectReady:r}=await import(pathToFileURL(resolve(process.env.TARGET_DIR,'src/ready.mjs')).href);const t=(id,deps=[])=>({id,deps});
+test('HB01 duplicate IDs',()=>assert.throws(()=>r([t('a'),t('a')],[]),/./));
+test('HB02 duplicate dep',()=>assert.throws(()=>r([t('a'),t('b',['a','a'])],[]),/./));
+test('HB03 completed duplicate',()=>assert.throws(()=>r([t('a')],['a','a']),/./));
+test('HB04 unknown completed',()=>assert.throws(()=>r([t('a')],['z']),/./));
+test('HB05 completed cycle',()=>assert.throws(()=>r([t('a',['b']),t('b',['a'])],['a','b']),/./));
+test('HB06 dangling dependency on completed',()=>assert.throws(()=>r([t('a',['z'])],['a']),/./));
+test('HB07 frozen input',()=>{const a=Object.freeze([Object.freeze({id:'z',deps:Object.freeze([])}),Object.freeze({id:'a',deps:Object.freeze([])})]);assert.deepEqual(r(a,Object.freeze([])),['a','z'])});
+test('HB08 self dep',()=>assert.throws(()=>r([t('a',['a'])],[]),/./));
