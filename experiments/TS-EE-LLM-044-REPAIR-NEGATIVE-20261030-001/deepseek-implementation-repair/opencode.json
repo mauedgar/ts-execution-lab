@@ -1,0 +1,73 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "llm-repair",
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "WORK_PACKAGE.md",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "src/aggregate.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "tests/aggregate.test.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "edit",
+      "resource": "src/aggregate.mjs",
+      "effect": "allow"
+    },
+    {
+      "action": "browser",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "agents": {
+    "llm-repair": {
+      "mode": "primary",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "WORK_PACKAGE.md",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "src/aggregate.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "tests/aggregate.test.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "src/aggregate.mjs",
+          "effect": "allow"
+        },
+        {
+          "action": "browser",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}
