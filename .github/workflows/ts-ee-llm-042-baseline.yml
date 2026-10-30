@@ -1,0 +1,51 @@
+name: TS EE LLM 042 frozen synthetic baseline
+on:
+  push:
+    branches:
+      - experiment/llm-042-impl-repair-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm-042-baseline.yml
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Prove both independent tasks start RED, not qualified
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-042-IMPLEMENTATION-REPAIR-20261030-001
+          test "${GITHUB_REF_NAME}" = experiment/llm-042-impl-repair-20261030-001
+          node --check "$root/src/aggregate.mjs"
+          node --check "$root/src/select-latest.mjs"
+          node --check "$root/tests/aggregate.test.mjs"
+          node --check "$root/tests/select-latest.test.mjs"
+          set +e
+          node --test "$root/tests/aggregate.test.mjs" > "$RUNNER_TEMP/impl-baseline.log" 2>&1
+          impl=$?
+          node --test "$root/tests/select-latest.test.mjs" > "$RUNNER_TEMP/repair-baseline.log" 2>&1
+          repair=$?
+          set -e
+          test "$impl" -ne 0
+          test "$repair" -ne 0
+          grep -Eq '^# fail [1-9]' "$RUNNER_TEMP/impl-baseline.log"
+          grep -Eq '^# fail [1-9]' "$RUNNER_TEMP/repair-baseline.log"
+          grep -Fq 'NOT_IMPLEMENTED' "$RUNNER_TEMP/impl-baseline.log"
+          grep -Fq 'R03 old PASS must not override newer UNKNOWN' "$RUNNER_TEMP/repair-baseline.log"
+          echo "TS_EE_LLM042_BASELINE=PASS_EXPECTED_RED;implementation_exit=$impl;repair_exit=$repair;MODEL_ATTEMPTS=NONE;PRODUCT_EFFECT=NONE"
+      - name: Preserve original native baseline logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm042-baseline-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/impl-baseline.log
+            ${{ runner.temp }}/repair-baseline.log
+          if-no-files-found: warn
+          retention-days: 30
