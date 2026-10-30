@@ -1,0 +1,58 @@
+name: TS EE LLM044 synthetic repair and negative baseline
+on:
+  push:
+    branches:
+      - experiment/llm-044-repair-negative-20261030-001
+    paths: [.github/workflows/ts-ee-llm044-baseline.yml]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Validate exact inputs start from known semantic failures and deny-all negative
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-044-REPAIR-NEGATIVE-20261030-001
+          python3 - "$root" <<'PY'
+          import json,pathlib,sys
+          root=pathlib.Path(sys.argv[1])
+          for role,src in (('deepseek-implementation-repair','src/aggregate.mjs'),('mimo-repair-type-correction','src/select-latest.mjs')):
+              p=json.loads((root/role/'opencode.json').read_text())
+              e=p['agents']['llm-repair']['permissions']
+              assert e[0]=={'action':'*','resource':'*','effect':'deny'}
+              assert [x for x in e if x['action']=='edit' and x['effect']=='allow']==[{'action':'edit','resource':src,'effect':'allow'}]
+              assert p['permissions']==e
+          p=json.loads((root/'negative-control/opencode.json').read_text())
+          assert all(x['effect']!='allow' or x['action']=='read' for x in p['permissions'])
+          assert not any(x['action']=='edit' and x['effect']=='allow' for x in p['permissions'])
+          PY
+          test "$(git hash-object "$root/deepseek-implementation-repair/src/aggregate.mjs")" = 05de9fc91be009fb91d7234a0540e599f2fe901e
+          test "$(git hash-object "$root/mimo-repair-type-correction/src/select-latest.mjs")" = bbd38f2b4f1b6b2d931f60efc3eba5d8b115033a
+          test "$(cat "$root/negative-control/PROTECTED.txt")" = ORIGINAL_PROTECTED_044_KEEP_EXACT
+          for role in deepseek-implementation-repair mimo-repair-type-correction; do
+            node --check "$root/$role/src/"*.mjs
+            node --check "$root/$role/tests/"*.test.mjs
+          done
+          set +e
+          node --test "$root/deepseek-implementation-repair/tests/aggregate.test.mjs" > "$RUNNER_TEMP/llm044-di-original.log" 2>&1
+          a=$?
+          node --test "$root/mimo-repair-type-correction/tests/select-latest.test.mjs" > "$RUNNER_TEMP/llm044-mr-original.log" 2>&1
+          b=$?
+          set -e
+          test "$a" = 0 && test "$b" = 0
+          echo "TS_EE_LLM044_BASELINE=PASS_INPUT_BLOBS_PINNED;ORIGINAL_TESTS=18/18;ORACLE_PREVIOUS_FAILS=2_AND_3;MODEL_CALLS=0;PRODUCT_EFFECT=NONE"
+      - name: Preserve baseline logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm044-baseline-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm044-*.log
+          retention-days: 30
+          if-no-files-found: warn
