@@ -1,0 +1,79 @@
+name: TS EE LLM045 prospective independent original-candidate evaluation
+on:
+  push:
+    branches:
+      - experiment/llm-045-independent-20261030-001
+    paths:
+      - .github/workflows/ts-ee-llm045-independent.yml
+permissions:
+  contents: read
+jobs:
+  fixed-subject-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - name: Run original and prospectively frozen oracle against exact three candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-045-PROSPECTIVE-20261030-001
+          test "$(git hash-object "$root/oracle/recovery.test.mjs")" = d1c74afa166cffdaa4bade48c23a09f6bec9d29a
+          test "$(git hash-object "$root/oracle/ready.test.mjs")" = d5ac32f48a1c87222a075e9c9cb760eb4ee8be4a
+          mkdir -p "$RUNNER_TEMP/llm045-independent"
+          result="$RUNNER_TEMP/llm045-independent/ORIGINAL_RESULTS.jsonl"
+          test ! -e "$result"
+          evaluate() {
+            id="$1"; sha="$2"; role="$3"; codeblob="$4"; source="$5"
+            dest="$RUNNER_TEMP/llm045-independent/$id"
+            git cat-file -e "$sha^{commit}"
+            git worktree add --detach "$dest" "$sha" >/dev/null
+            test "$(git -C "$dest" rev-parse HEAD)" = "$sha"
+            test "$(git -C "$dest" rev-parse "HEAD:$root/cases/$role/src/$source.mjs")" = "$codeblob"
+            target="$dest/$root/cases/$role"
+            set +e
+            node --test "$target/tests/visible.test.mjs" > "$RUNNER_TEMP/llm045-independent/$id-visible.log" 2>&1
+            visible_exit=$?
+            TARGET_DIR="$target" node --test "$GITHUB_WORKSPACE/$root/oracle/$role.test.mjs" > "$RUNNER_TEMP/llm045-independent/$id-oracle.log" 2>&1
+            oracle_exit=$?
+            set -e
+            visible_pass=$(grep '^# pass ' "$RUNNER_TEMP/llm045-independent/$id-visible.log" | tail -1 | awk '{print $3}')
+            visible_fail=$(grep '^# fail ' "$RUNNER_TEMP/llm045-independent/$id-visible.log" | tail -1 | awk '{print $3}')
+            oracle_pass=$(grep '^# pass ' "$RUNNER_TEMP/llm045-independent/$id-oracle.log" | tail -1 | awk '{print $3}')
+            oracle_fail=$(grep '^# fail ' "$RUNNER_TEMP/llm045-independent/$id-oracle.log" | tail -1 | awk '{print $3}')
+            test "$((oracle_pass+oracle_fail))" = 8
+            test "$((visible_pass+visible_fail))" = 7
+            test -z "$(git -C "$dest" status --porcelain)"
+            jq -nc --arg attempt "$id" --arg candidate "$sha" --arg code_blob "$codeblob" --arg case "$role" \
+              --argjson visible_pass "$visible_pass" --argjson visible_fail "$visible_fail" --argjson visible_exit "$visible_exit" \
+              --argjson oracle_pass "$oracle_pass" --argjson oracle_fail "$oracle_fail" --argjson oracle_exit "$oracle_exit" \
+              '{attempt,candidate,code_blob,case,visible_pass,visible_fail,visible_exit,oracle_pass,oracle_fail,oracle_exit,product_effect:"NONE"}' >> "$result"
+            echo "LLM045_EVAL=$id;SOURCE=$sha;VISIBLE=$visible_pass/7;ORACLE_PASS=$oracle_pass;ORACLE_FAIL=$oracle_fail;ORACLE_EXIT=$oracle_exit;Product=NONE"
+          }
+          evaluate LLM045-M-A-001 27da6ce976e3873875da28ac9dee21b24be88f30 recovery eedbc21ac69d4b2367946ad317bee52a9160ca73 recover
+          evaluate LLM045-D-B-001 124f10e272ce416c90f0980696d84661bf097fb8 ready a1dac89fcb1a0b95f02eccecf0864d8026accca8 ready
+          evaluate LLM045-M-B-001 c0cea66472498e45962d0ecfdef51025a48db9d7 ready 702940ba430bb5919c4a3099553f081f6b6f1a8e ready
+          test "$(wc -l < "$result")" = 3
+          echo "LLM045_INDEPENDENT=THREE_EXACT_CANDIDATES_EVALUATED;ONE_SEPARATE_BLOCKED_DISPATCH;Product=NONE"
+          echo "LLM045_RESULT_SHA256=$(sha256sum "$result" | cut -d' ' -f1)"
+      - name: Preserve native original logs and result JSONL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm045-independent-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm045-independent/*.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve result JSONL
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm045-independent-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/llm045-independent/ORIGINAL_RESULTS.jsonl
+          if-no-files-found: warn
+          retention-days: 30
