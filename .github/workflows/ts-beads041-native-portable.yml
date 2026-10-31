@@ -1,0 +1,138 @@
+name: TS Beads 041 native store portable original cross-runner join
+on:
+  push:
+    branches:
+      - experiment/beads-041-portable-native-store-20261031-001
+    paths:
+      - .github/workflows/ts-beads041-native-portable.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Produce original fully closed native Beads/Dolt store
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-041-PORTABLE-NATIVE-STORE-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "${GITHUB_REF_NAME}" = experiment/beads-041-portable-native-store-20261031-001
+          test "$(git hash-object "$root/native041.py")" = b8e9f34fdb5fd53a8b46f5967afaae3a81cb51a4
+          python3 -m py_compile "$root/native041.py"
+          provider=$(gh api repos/mauedgar/ts-execution-lab/actions/runs/41173329767)
+          test "$(jq -r '.conclusion' <<<"$provider")" = success
+          test "$(jq -r '.head_sha' <<<"$provider")" = 4d32a170f6f8aa2cabb9c0d0915b6cd1a7798d10
+          original=$(gh api repos/mauedgar/ts-execution-lab/actions/artifacts/13031552292)
+          test "$(jq -r '.digest' <<<"$original")" = sha256:96839db7c20212930ccb80a4147bb3c69f35d23ef70a65d909b58f8fff41593c
+          test "$(jq -r '.expired' <<<"$original")" = false
+          export BEADS041_VERIFIED_PROVIDER_RECEIPT="github-actions:41173329767:artifact:13031552292:sha256:96839db7c20212930ccb80a4147bb3c69f35d23ef70a65d909b58f8fff41593c"
+          scratch="$RUNNER_TEMP/beads041-producer-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt" "$scratch/original"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          export LAB_ROOT="$scratch/lab"
+          export RESULT_PATH="$scratch/original/RESULT041.json"
+          python3 "$root/native041.py" 2>&1 | tee "$scratch/original/ORIGINAL041.log"
+          python3 - "$RESULT_PATH" <<'PY'
+          import json,sys
+          z=json.load(open(sys.argv[1],encoding="utf8"))
+          assert z["attempt"]=="TS-BEADS-041-ATTEMPT-001",z
+          assert z["status"]=="PASS_NATIVE_BEADS_END_TO_END_READY_HISTORY_AND_PROVIDER_REFERENCE",z
+          assert z["native_full_lifecycle"]["terminal"]==[],z
+          assert z["provider_redispatch_count"]==0
+          assert all(x["pass"] for x in z["checks"].values()),z
+          PY
+          test -d "$LAB_ROOT/.beads"
+          tar -C "$LAB_ROOT" -cf "$scratch/original/BEADS_NATIVE_STORE.tar" .beads
+          sha256sum "$scratch/original/BEADS_NATIVE_STORE.tar" | awk '{print $1}' > "$scratch/original/STORE_SHA256.txt"
+          cp "$root/DOD.md" "$scratch/original/DOD.md"
+          (cd "$scratch/original" && sha256sum RESULT041.json ORIGINAL041.log BEADS_NATIVE_STORE.tar DOD.md > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS041_PRODUCER=PASS_NATIVE_FULL_LIFECYCLE;Product=NONE"
+          echo "TS_BEADS041_STORE_SHA256=$(cat "$scratch/original/STORE_SHA256.txt")"
+      - name: Publish one original native store and receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads041-producer-${{ github.run_id }}
+          path: ${{ runner.temp }}/beads041-producer-${{ github.run_id }}/original/
+          if-no-files-found: warn
+          retention-days: 30
+  consumer:
+    needs: producer
+    if: needs.producer.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads041-producer-${{ github.run_id }}
+          path: ${{ runner.temp }}/beads041-downloaded
+      - name: Verify original artifact and re-open native store on independent runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-041-PORTABLE-NATIVE-STORE-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/join041.py")" = 0a1df5124a668a187d82967a8b91c95bf436c523
+          python3 -m py_compile "$root/join041.py"
+          original="$RUNNER_TEMP/beads041-downloaded"
+          test -s "$original/BEADS_NATIVE_STORE.tar"
+          test "$(sha256sum "$original/BEADS_NATIVE_STORE.tar" | cut -d' ' -f1)" = "$(cat "$original/STORE_SHA256.txt")"
+          scratch="$RUNNER_TEMP/beads041-consumer-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt" "$scratch/fresh-git"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          git -C "$scratch/fresh-git" init -q
+          tar -C "$scratch/fresh-git" -xf "$original/BEADS_NATIVE_STORE.tar"
+          export LAB041_CONSUMER_ROOT="$scratch/fresh-git"
+          export BEADS041_ARCHIVE_SHA256="$(cat "$original/STORE_SHA256.txt")"
+          export RESULT041_JOIN="$scratch/JOIN041.json"
+          python3 "$root/join041.py" 2>&1 | tee "$scratch/JOIN041-original.log"
+          python3 - "$RESULT041_JOIN" <<'PY'
+          import json,sys
+          z=json.load(open(sys.argv[1],encoding="utf8"))
+          assert z["status"]=="PASS_NATIVE_BEADS_STORE_PORTABLE_FRESH_RUNNER",z
+          assert z["execution_attempt"]=="TS-BEADS-041-JOIN-001"
+          assert z["product_effect"]=="NONE" and z["provider_redispatch_count"]==0
+          assert len(z["checks"])>=10 and z["native_history_entries"]>=2
+          PY
+          (cd "$scratch" && sha256sum JOIN041.json JOIN041-original.log > JOIN_SHA256.txt)
+          echo "TS_BEADS041_CONSUMER=PASS_NATIVE_PORTABLE_DOLT_FRESH_RUNNER;Product=NONE"
+      - name: Preserve independent consumer original join
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads041-consumer-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/beads041-consumer-${{ github.run_id }}/JOIN041.json
+            ${{ runner.temp }}/beads041-consumer-${{ github.run_id }}/JOIN041-original.log
+            ${{ runner.temp }}/beads041-consumer-${{ github.run_id }}/JOIN_SHA256.txt
+          if-no-files-found: warn
+          retention-days: 30
