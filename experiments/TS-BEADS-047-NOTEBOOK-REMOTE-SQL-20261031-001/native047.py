@@ -4,6 +4,7 @@ Uses only a pre-provisioned private notebook Dolt server; NO self-hosted shadow 
 no Product, no provider action dispatch, no automatic failover or retry.
 """
 import hashlib
+import ipaddress
 import hmac
 import json
 import os
@@ -104,8 +105,14 @@ def conn(user=USER,password=PWD,db=DB):
 def sql_preflight(allow_initialized):
     check("source_sha_present",len(SHA)==40 and all(c in "0123456789abcdef" for c in SHA.lower()))
     check("single_original_attempt",os.environ.get("GITHUB_RUN_ATTEMPT")=="1")
-    check("expected_private_sql_host",bool(HOST) and HOST.lower() not in
-          ("localhost","127.0.0.1","0.0.0.0"))
+    def is_tailnet_host(value):
+        if value.lower().endswith(".ts.net") and len(value)>len(".ts.net"):
+            return True
+        try:
+            return ipaddress.ip_address(value) in ipaddress.ip_network("100.64.0.0/10")
+        except ValueError:
+            return False
+    check("expected_private_tailnet_sql_host",is_tailnet_host(HOST))
     check("expected_native_bd_1_3_1","1.3.1" in run([BD,"--version"],cwd=ROOT.parent).stdout)
     with conn() as c:
         with c.cursor() as cur:
