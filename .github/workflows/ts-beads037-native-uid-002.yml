@@ -4,7 +4,7 @@ on:
     branches:
       - experiment/beads-037-real-principal-authority-002-20261031
     paths:
-      - .github/workflows/ts-beads037-native-uid-boundary.yml
+      - .github/workflows/ts-beads037-native-uid-002.yml
 permissions:
   contents: read
 jobs:
