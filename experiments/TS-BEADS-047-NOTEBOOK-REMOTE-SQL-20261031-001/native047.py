@@ -145,6 +145,10 @@ def load_meta():
         allow={".beads/config.yaml",".beads/metadata.json"}
         check("only_portable_beads_metadata",set(names)==allow,sorted(names))
         check("meta_no_symlinks",all(m.isfile() and not m.issym() for m in tf.getmembers()))
+        for member in tf.getmembers():
+            data=tf.extractfile(member).read()
+            check("metadata_has_no_runtime_secret_"+member.name.replace("/","_"),
+                  all(secret.encode("utf-8") not in data for secret in (HOST,PWD,RO_PWD) if secret))
         tf.extractall(PROJ,filter="data")
     check("beads_metadata_restored",all((PROJ/n).is_file() for n in
                                        (".beads/config.yaml",".beads/metadata.json")))
@@ -176,6 +180,9 @@ def bootstrap():
         for name in (".beads/config.yaml",".beads/metadata.json"):
             path=PROJ/name
             check("required_metadata_"+name.replace("/","_"),path.is_file())
+            data=path.read_bytes()
+            check("metadata_upload_no_runtime_secret_"+name.replace("/","_"),
+                  all(secret.encode("utf-8") not in data for secret in (HOST,PWD,RO_PWD) if secret))
             tf.add(path,arcname=name,recursive=False)
     R["portable_metadata_sha256"]=hashlib.sha256(original.read_bytes()).hexdigest()
     R["status"]="PASS_REMOTE_SQL_INITIALIZED_ON_NOTEBOOK"
