@@ -27,7 +27,7 @@ function FailClosed([string] $Reason) {
     throw ('BLOCKED_PRECONDITION:' + $Reason)
 }
 function Get-GitBlobSha1([byte[]] $Bytes) {
-    $prefix = [System.Text.Encoding]::ASCII.GetBytes(('blob ' + $Bytes.Length + "\u0060"+"0"))
+    $prefix = [System.Text.Encoding]::ASCII.GetBytes(('blob ' + $Bytes.Length + "`0"))
     $joined = [byte[]]::new($prefix.Length + $Bytes.Length)
     [Array]::Copy($prefix, 0, $joined, 0, $prefix.Length)
     [Array]::Copy($Bytes, 0, $joined, $prefix.Length, $Bytes.Length)
