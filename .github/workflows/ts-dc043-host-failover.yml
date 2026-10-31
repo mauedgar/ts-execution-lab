@@ -1,0 +1,152 @@
+name: TS DC043 isolated native Beads remote artifact host failover
+on:
+  push:
+    branches:
+      - experiment/distributed-control-001-host-failover-20261031-001
+    paths:
+      - .github/workflows/ts-dc043-host-failover.yml
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  producer:
+    name: Host A - publish remote store and effect, then lose ACK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check original identity and install native pinned binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/distributed-control-001-host-failover-20261031-001
+          root=experiments/TS-DISTRIBUTED-CONTROL-001-HOST-FAILOVER-20261031-001
+          test "$(git hash-object "$root/host_failover043.py")" = a77f845fc545c7b729508a4508010f4ff6613870
+          python3 -m py_compile "$root/host_failover043.py"
+          scratch="$RUNNER_TEMP/dc043-tools-$GITHUB_RUN_ID"
+          mkdir -p "$scratch/bin" "$scratch/dolt"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          bd_bin="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          dolt_bin="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$bd_bin" && test -n "$dolt_bin"
+          chmod +x "$bd_bin" "$dolt_bin"
+          echo "BD_BIN=$bd_bin" >> "$GITHUB_ENV"
+          echo "$(dirname "$dolt_bin")" >> "$GITHUB_PATH"
+      - name: Construct original UNKNOWN and native store checkpoint
+        shell: bash
+        env:
+          TS043_BASE: ${{ runner.temp }}/dc043-a-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-DISTRIBUTED-CONTROL-001-HOST-FAILOVER-20261031-001/host_failover043.py producer
+          test -s "$TS043_BASE/stage/checkpoint/NATIVE_BEADS_STORE.tar"
+          test -s "$TS043_BASE/stage/effect/EFFECT043.json"
+          echo "TS_DC043_STAGE=ORIGINAL_UNKNOWN_READY;Product=NONE"
+      - name: Publish original native Beads/Dolt checkpoint to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-dc043-checkpoint-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc043-a-${{ github.run_id }}/stage/checkpoint/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish exactly one original external effect
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-dc043-effect-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc043-a-${{ github.run_id }}/stage/effect/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Inject irreversible lost acknowledgement after successful remote publication
+        shell: bash
+        run: |
+          echo "TS_DC043_EXPECTED_ACKLOSS_EXIT_73;provider_artifact_published=YES;do_not_retry=YES"
+          exit 73
+
+  consumer:
+    name: Host B - independent readback and zero-redispatch recovery
+    needs: producer
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm producer failed, exactly two external receipts published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCER_RESULT: ${{ needs.producer.result }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$PRODUCER_RESULT" = failure
+          root=experiments/TS-DISTRIBUTED-CONTROL-001-HOST-FAILOVER-20261031-001
+          test "$(git hash-object "$root/host_failover043.py")" = a77f845fc545c7b729508a4508010f4ff6613870
+          python3 -m py_compile "$root/host_failover043.py"
+          meta="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100")"
+          checkpoint="ts-dc043-checkpoint-$GITHUB_RUN_ID"
+          effect="ts-dc043-effect-$GITHUB_RUN_ID"
+          test "$(jq --arg n "$checkpoint" '[.artifacts[] | select(.name==$n and .expired==false)] | length' <<<"$meta")" = 1
+          test "$(jq --arg n "$effect" '[.artifacts[] | select(.name==$n and .expired==false)] | length' <<<"$meta")" = 1
+          id="$(jq -r --arg n "$effect" '.artifacts[] | select(.name==$n) | .id' <<<"$meta")"
+          test "$id" != null && test -n "$id"
+          echo "TS043_PROVIDER_ARTIFACT_ID=$id" >> "$GITHUB_ENV"
+          echo "TS_DC043_REMOTE_PROVIDER_COUNT=1;producer_failed_as_expected;artifact_id=$id"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-dc043-checkpoint-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc043-received-checkpoint
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-dc043-effect-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc043-received-effect
+      - name: Install independent pinned Beads and Dolt in fresh runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/dc043-tools-b-$GITHUB_RUN_ID"
+          mkdir -p "$scratch/bin" "$scratch/dolt"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          bd_bin="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          dolt_bin="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$bd_bin" && test -n "$dolt_bin"
+          chmod +x "$bd_bin" "$dolt_bin"
+          echo "BD_BIN=$bd_bin" >> "$GITHUB_ENV"
+          echo "$(dirname "$dolt_bin")" >> "$GITHUB_PATH"
+      - name: Independent native recovery without any redispatch
+        shell: bash
+        env:
+          TS043_BASE: ${{ runner.temp }}/dc043-b-${{ github.run_id }}
+          TS043_CHECKPOINT_DIR: ${{ runner.temp }}/dc043-received-checkpoint
+          TS043_EFFECT_DIR: ${{ runner.temp }}/dc043-received-effect
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-DISTRIBUTED-CONTROL-001-HOST-FAILOVER-20261031-001/host_failover043.py consumer
+          test "$(jq -r .status "$TS043_BASE/RESULT043.json")" = PASS_FRESH_HOST_REMOTE_ARTIFACT_UNKNOWN_RECONCILED_NO_REDISPATCH
+          test "$(jq -r .provider_redispatch_count "$TS043_BASE/RESULT043.json")" = 0
+          cp experiments/TS-DISTRIBUTED-CONTROL-001-HOST-FAILOVER-20261031-001/DOD.md "$TS043_BASE/DOD.md"
+          (cd "$TS043_BASE" && sha256sum RESULT043.json FINAL_NATIVE_STORE.tar DOD.md > ORIGINAL_SHA256.txt)
+          echo "TS_DC043_CONSUMER=PASS;producer=INTENTIONAL_FAILURE;provider_redispatch=0;Product=NONE"
+      - name: Preserve independent final recovery receipt
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-dc043-consumer-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/dc043-b-${{ github.run_id }}/RESULT043.json
+            ${{ runner.temp }}/dc043-b-${{ github.run_id }}/FINAL_NATIVE_STORE.tar
+            ${{ runner.temp }}/dc043-b-${{ github.run_id }}/DOD.md
+            ${{ runner.temp }}/dc043-b-${{ github.run_id }}/ORIGINAL_SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
