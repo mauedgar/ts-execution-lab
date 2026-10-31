@@ -40,4 +40,4 @@ Beads v1.3.1 + Dolt v2.2.0 puede aportar grafo de dependencias, estados `ready`,
 
 **Conclusión:** `BEADS_RESEARCH_CONSOLIDATED_AND_DEFERRED`. Es un **anexo informativo** del paquete Beta, no un plan de migración, instalación, integrador, dependencia de Attendance, ni Project/issue READY. Los casos 028 (bypass), 030 (divergencia) y 048 (proveedor sin idempotencia, aunque sin Beads) definen los límites mínimos que cualquier futura solución debe respetar.
 
-La revisión/freeze Product de #35 y la sustitución de su antigua selección *B-first* requieren un delta explícito de Product Control basado en la decisión posterior del Developer, sin reescribir o atribuir falsamente esa decisión al comentario previo de #35.
+La decisión posterior de Control [#35/6539442025](https://github.com/mauedgar/tecnotron-ai/issues/35#issuecomment-6539442025) ya desacopló el trabajo H6 de la experimentación Beads, conservando el comentario original como historia. En esta continuación, el Developer eligió explícitamente **operar sin Beads**; este archivo permanece ARCHIVE_ONLY. No se ha iniciado TaskCycle ni ejecutado efecto Product.
