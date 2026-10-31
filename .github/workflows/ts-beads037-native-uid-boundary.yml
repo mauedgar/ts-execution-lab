@@ -1,0 +1,70 @@
+name: TS Beads 037 native OS principal authority boundary
+on:
+  push:
+    branches:
+      - experiment/beads-037-real-principal-authority-20261031-001
+    paths:
+      - .github/workflows/ts-beads037-native-uid-boundary.yml
+permissions:
+  contents: read
+jobs:
+  one-native-isolated-two-uid-beads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run frozen native Beads/Dolt identity and guarded graph test
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-037-OS-PRINCIPALS-20261031-001
+          test "${GITHUB_REF_NAME}" = experiment/beads-037-real-principal-authority-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/native037.py")" = ab60ebeef0bc28b11c3f769f27d7c4327b1f3702
+          python3 -m py_compile "$root/native037.py"
+          scratch="$RUNNER_TEMP/ts-beads037-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -m 755 "$scratch"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          mkdir -p "$scratch/beads" "$scratch/dolt" "$scratch/py"
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/beads"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/beads" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod a+rx "$BD_BIN" "$DOLT_BIN"
+          python3 -m pip install --disable-pip-version-check -q --target "$scratch/py" 'PyMySQL==1.1.1'
+          chmod -R a+rX "$scratch/py"
+          export PYTHONPATH="$scratch/py"
+          export TS037_BASE="$scratch/native"
+          export TS037_RESULT="$scratch/RESULT037.json"
+          python3 "$root/native037.py" 2>&1 | tee "$scratch/ORIGINAL037.log"
+          python3 - "$scratch/RESULT037.json" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert r["status"]=="PASS_SCOPED_UNPRIVILEGED_DENIAL_AND_GUARDED_NATIVE_PATH_WITH_PRIVILEGED_BYPASS_OPEN",r
+          assert r["execution_attempt"]=="TS-BEADS-037-ATTEMPT-001"
+          assert r["authority"]=="EXPERIMENTAL_CONTROL_ONLY" and r["product_effect"]=="NONE"
+          assert len(r["checks"])>=20 and all(x["pass"] for x in r["checks"]),r
+          assert r["native_graph"]["dependencies"]==["ts037-child-a"]
+          assert r["native_graph"]["privileged_bypass_unresolved"] is True
+          PY
+          cp "$root/DOD.md" "$scratch/DOD.md"
+          (cd "$scratch" && sha256sum RESULT037.json DOD.md ORIGINAL037.log > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS037=PASS_BOUNDED_NATIVE_OS_PRINCIPAL;PRIVILEGED_BOUNDARY=OPEN;Product=NONE"
+          echo "TS_BEADS037_RESULT_SHA256=$(sha256sum "$scratch/RESULT037.json" | cut -d' ' -f1)"
+      - name: Preserve native result without secret tokens or SQL store
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads037-original-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ts-beads037-${{ github.run_id }}/RESULT037.json
+            ${{ runner.temp }}/ts-beads037-${{ github.run_id }}/ORIGINAL037.log
+            ${{ runner.temp }}/ts-beads037-${{ github.run_id }}/DOD.md
+            ${{ runner.temp }}/ts-beads037-${{ github.run_id }}/ORIGINAL_SHA256.txt
+          retention-days: 30
+          if-no-files-found: warn
