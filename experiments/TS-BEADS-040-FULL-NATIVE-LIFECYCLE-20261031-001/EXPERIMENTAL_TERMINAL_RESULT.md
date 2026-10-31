@@ -1,0 +1,14 @@
+# TS Beads 040 — Terminal full native Beads lifecycle and verified provider reference
+
+**Authority:** EXPERIMENTAL_CONTROL_ONLY, Product NONE. **Disposition:** `PASS_NATIVE_BEADS_END_TO_END_READY_HISTORY_AND_PROVIDER_REFERENCE / COMPLETE_WITH_LIMITATIONS`. Issue #35 canonical execution remains solely Beta Control.
+
+- Original source `mauedgar/ts-execution-lab@9dd2440ae811b81154a8b30f2ee0864715153e9b`, new `TS-BEADS-040-ATTEMPT-001`, source `native040_full.py` blob `a4e6038882922501303f3f6c6992fd89adfb77ed`.
+- [Original GitHub Actions 41173507307](https://github.com/mauedgar/ts-execution-lab/actions/runs/41173507307), job `124456214166`, run attempt 1, completed SUCCESS.
+- [Original artifact 13031896748](https://github.com/mauedgar/ts-execution-lab/actions/runs/41173507307/artifacts/13031896748), ZIP `sha256:b8f0b5dcd32c757bd70b4f6c6b110664ecf52ee873b620c1797b0e13749884f8`, retention expiry `2026-11-30T05:40:24Z`. Native `RESULT040.json` SHA-256 `0beb1f040feb2ba6aba9939e41770e8bedc1857881b0fbd8a954db9c7adf2a66`.
+- **15/15 native checks PASS:** Beads native `init/create/dep add/ready/update/close/history/show`, pinned Beads 1.3.1 and Dolt v2.2.0. Native graph initially unblocks only preflight; after preflight close, two child issues ready; first child closed leaves only second child ready; after both close, join becomes solely ready; after join close, `ready=[]`. Native readback shows all terminal; Dolt native history grows across update and close.
+- Original provider receipt was verified read-only by GitHub API before consuming: [039 run 41173329767](https://github.com/mauedgar/ts-execution-lab/actions/runs/41173329767), original source `4d32a170f6f8aa2cabb9c0d0915b6cd1a7798d10`, artifact `13031552292`, digest `sha256:96839db7c20212930ccb80a4147bb3c69f35d23ef70a65d909b58f8fff41593c`. Beads stored a **reference**, no model/provider redispach (`provider_redispatch_count=0`).
+- The source deliberately builds a new **disposable** native Beads graph, derived from but not replaying original TS-EE-LLM-BEADS-040. No Product, shared Dolt, external provider execution or TaskCycle initiation.
+
+**Limitations:** Beads dependency readiness, native issue lifecycle, Dolt version history and reference storage are technically viable as a primary experimental work tracker. They do **not** encode Product's independent reviewer/Developer acceptance, global revision/event-count/hash-chain, explicit external-provider no-retry or privileged writer exclusivity. #028 demonstrated native bypass; #037 proved only separate UID confinement; #039 showed conservative reclassification requires caller postread.
+
+**Adoption class:** `BOUNDED_EXPERIMENTAL_FULL_BEADS_LIFECYCLE`, **not** Product B-first acceptance. The remaining adoption questions require competent Product authority/rulings about trust boundary and replacement audit semantics. No further synthetic unscoped execution is justified by merely repeating these same checks.
