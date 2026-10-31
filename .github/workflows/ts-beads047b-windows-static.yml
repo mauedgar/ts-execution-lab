@@ -1,0 +1,40 @@
+name: TS-BEADS-047B Windows native peer preflight static validation
+on:
+  push:
+    branches:
+      - experiment/beads-047b-native-two-windows-20261031-001
+    paths:
+      - .github/workflows/ts-beads047b-windows-static.yml
+permissions:
+  contents: read
+jobs:
+  static_check:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parser, expected frozen blob, and no-effects check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/native-host-preflight.ps1'
+          $actual = git hash-object $path
+          if ($LASTEXITCODE -ne 0 -or $actual -ne 'af0969d7b42cff53f20cbbded376f99aa50dce8e') { throw "FROZEN_SOURCE_MISMATCH" }
+          $parseTokens = $null
+          $parseErrors = $null
+          $tree = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$parseTokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) { throw "POWERSHELL_PARSE_FAILURE" }
+          $source = [System.IO.File]::ReadAllText((Resolve-Path $path))
+          foreach ($required in @('NotebookServer','DesktopClient','PASS_READ_ONLY_HOST_PREFLIGHT','TAILNET_OFFLINE','PRIVATE_PEER_UNREACHABLE','LAB_ROOT_ALREADY_EXISTS_RECONCILE','SQL_PORT_ALREADY_OCCUPIED_RECONCILE')) {
+            if (-not $source.Contains($required)) { throw ("REQUIRED_BOUNDARY_MISSING:" + $required) }
+          }
+          foreach ($forbidden in @('start-process', 'sql-server --host', 'CREATE USER', 'ALTER USER', 'Funnel', 'New-NetFirewallRule', 'git clone', 'gh secret set')) {
+            if ($source.ToLowerInvariant().Contains($forbidden.ToLowerInvariant())) { throw ("FORBIDDEN_EFFECTIVE_OPERATION:" + $forbidden) }
+          }
+          "TS047B_STATIC=PASS_POWERSHELL_PARSER_FROZEN_READ_ONLY_NO_SQL_DISPATCH"
+      - name: Ensure static result did not start any lab endpoint
+        shell: pwsh
+        run: |
+          Write-Output "TS047B_LIVE_SQL_ATTEMPT_DISPATCHED=false;Product=NONE"
