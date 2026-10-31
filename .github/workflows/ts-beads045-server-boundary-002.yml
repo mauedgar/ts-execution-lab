@@ -1,0 +1,65 @@
+name: TS Beads 045 distinct 002 native Dolt SQL boundary
+on:
+  push:
+    branches:
+      - experiment/beads-045-server-boundary-20261031-002
+    paths:
+      - .github/workflows/ts-beads045-server-boundary-002.yml
+permissions:
+  contents: read
+jobs:
+  original-native-sql-server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute frozen single-host native server boundary qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-045-SERVER-BOUNDARY-20261031-002
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/beads-045-server-boundary-20261031-002
+          test "$(git hash-object "$root/native045.py")" = f4515102d7e2c16357f90f50e8b7c5d35e7a37cf
+          test "$(git hash-object "$root/DOD.md")" = dc51f96fe5af2a202d42ab96797c35dd885c19de
+          python3 -m py_compile "$root/native045.py"
+          scratch="$RUNNER_TEMP/ts-beads045-$GITHUB_RUN_ID"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt" "$scratch/original" "$scratch/py"
+          curl -fsSL -o "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl -fsSL -o "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          python3 -m pip install --disable-pip-version-check -q --target "$scratch/py" 'PyMySQL==1.1.1'
+          export PYTHONPATH="$scratch/py"
+          export TS045_BASE="$scratch/work"
+          export TS045_RESULT="$scratch/original/RESULT045.json"
+          python3 "$root/native045.py" 2>&1 | tee "$scratch/original/ORIGINAL045.log"
+          python3 - "$TS045_RESULT" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert x["execution_attempt"]=="TS-BEADS-045-ATTEMPT-002",x
+          assert x["status"]=="PASS_SINGLE_HOST_DOLT_SQL_SERVER_BOUNDARY_WITH_RESTART",x
+          assert x["product_effect"]=="NONE" and x["external_host_count"]==0 and x["runner_count"]==1
+          assert x["kernel_used"] is False and x["server_process_starts"]==2
+          assert x["native_client_process_count"]==2 and x["native_issue_count"]==5
+          assert len(x["checks"])>=18 and all(v["pass"] for v in x["checks"].values()),x
+          PY
+          cp "$root/DOD.md" "$scratch/original/DOD.md"
+          (cd "$scratch/original" && sha256sum RESULT045.json ORIGINAL045.log DOD.md > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS045=PASS_SINGLE_HOST_SERVER_BOUNDARY;INTERHOST=NOT_TESTED;Product=NONE"
+          echo "TS_BEADS045_RESULT_SHA256=$(sha256sum "$TS045_RESULT" | cut -d' ' -f1)"
+      - name: Preserve original bounded result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads045-002-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-beads045-${{ github.run_id }}/original/
+          if-no-files-found: warn
+          retention-days: 30
