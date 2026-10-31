@@ -1,0 +1,76 @@
+name: TS Beads 040 full native graph lifecycle and original receipt
+on:
+  push:
+    branches:
+      - experiment/beads-040-full-native-lifecycle-20261031-001
+    paths:
+      - .github/workflows/ts-beads040-full-native.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  one-full-native-beads-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: One original native Beads graph with provider-native verified receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-040-FULL-NATIVE-LIFECYCLE-20261031-001
+          test "${GITHUB_REF_NAME}" = experiment/beads-040-full-native-lifecycle-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/native040_full.py")" = a4e6038882922501303f3f6c6992fd89adfb77ed
+          python3 -m py_compile "$root/native040_full.py"
+          a=$(gh api repos/mauedgar/ts-execution-lab/actions/runs/41173329767)
+          test "$(jq -r '.conclusion' <<<"$a")" = success
+          test "$(jq -r '.head_sha' <<<"$a")" = 4d32a170f6f8aa2cabb9c0d0915b6cd1a7798d10
+          artifact=$(gh api repos/mauedgar/ts-execution-lab/actions/artifacts/13031552292)
+          test "$(jq -r '.digest' <<<"$artifact")" = sha256:96839db7c20212930ccb80a4147bb3c69f35d23ef70a65d909b58f8fff41593c
+          test "$(jq -r '.expired' <<<"$artifact")" = false
+          export BEADS040_VERIFIED_PROVIDER_RECEIPT="github-actions:41173329767:artifact:13031552292:sha256:96839db7c20212930ccb80a4147bb3c69f35d23ef70a65d909b58f8fff41593c"
+          scratch="$RUNNER_TEMP/ts-beads040-full-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          export LAB_ROOT="$scratch/native-repo"
+          export RESULT_PATH="$scratch/RESULT040.json"
+          python3 "$root/native040_full.py" 2>&1 | tee "$scratch/ORIGINAL_RUN040.log"
+          python3 - "$RESULT_PATH" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1],encoding="utf8"))
+          assert r["status"]=="PASS_NATIVE_BEADS_END_TO_END_READY_HISTORY_AND_PROVIDER_REFERENCE",r
+          assert r["attempt"]=="TS-BEADS-040-ATTEMPT-001"
+          assert all(x["pass"] for x in r["checks"].values()),r
+          assert r["native_full_lifecycle"]["terminal"]==[]
+          assert r["provider_redispatch_count"]==0
+          PY
+          cp "$root/DOD.md" "$scratch/DOD.md"
+          (cd "$scratch" && sha256sum RESULT040.json ORIGINAL_RUN040.log DOD.md > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS040=PASS_NATIVE_FULL_LIFECYCLE;Product=NONE;ProviderRedispatch=0"
+          echo "TS_BEADS040_RESULT_SHA256=$(sha256sum "$scratch/RESULT040.json" | cut -d' ' -f1)"
+      - name: Preserve original Beads lifecycle and SHA manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads040-full-original-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ts-beads040-full-${{ github.run_id }}/RESULT040.json
+            ${{ runner.temp }}/ts-beads040-full-${{ github.run_id }}/ORIGINAL_RUN040.log
+            ${{ runner.temp }}/ts-beads040-full-${{ github.run_id }}/ORIGINAL_SHA256.txt
+            ${{ runner.temp }}/ts-beads040-full-${{ github.run_id }}/DOD.md
+          if-no-files-found: warn
+          retention-days: 30
