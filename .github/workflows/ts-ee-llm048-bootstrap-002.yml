@@ -1,0 +1,55 @@
+name: TS EE LLM048 separate candidate 002 SQLite bootstrap
+on:
+  push:
+    branches:
+      - experiment/llm-048-db-bootstrap-002-20261030
+    paths:
+      - .github/workflows/ts-ee-llm048-bootstrap-002.yml
+permissions:
+  contents: read
+jobs:
+  exact-corrected-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: One new candidate against unchanged original nine-case test
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-EE-LLM-048-NONIDEMPOTENT-20261030-001
+          test "${GITHUB_REF_NAME}" = experiment/llm-048-db-bootstrap-002-20261030
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/provider048.py")" = 331e3f84993a120d355273d16a2f37aa3ebdbebc
+          test "$(git hash-object "$root/consumer048.py")" = 811942dae3560c795477b9dfd0c98c80dd67cc6f
+          test "$(git hash-object "$root/test048.py")" = d7e1233f3223c77efa23ce87757b455fdb2b2b5b
+          python3 -m py_compile "$root/provider048.py" "$root/consumer048.py" "$root/test048.py"
+          scratch="$RUNNER_TEMP/ts-ee-llm048-002-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          export LAB048_ROOT="$scratch/scenarios"
+          export LAB048_PROVIDER="$GITHUB_WORKSPACE/$root/provider048.py"
+          export LAB048_CONSUMER="$GITHUB_WORKSPACE/$root/consumer048.py"
+          export LAB048_RESULT="$scratch/RESULT048.json"
+          python3 "$root/test048.py" 2>&1 | tee "$scratch/ORIGINAL_RUN048.log"
+          python3 - "$LAB048_RESULT" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding="utf8"))
+          assert data["tests_run"]==9 and data["success"] is True,data
+          assert data["failures"]==0 and data["errors"]==0,data
+          assert data["product_effect"]=="NONE" and data["provider"]=="LOCAL_NONIDEMPOTENT_HTTP_SQLITE_MOCK",data
+          assert len(data["scenarios"])==9,data
+          PY
+          test "$(find "$LAB048_ROOT" -name provider.sqlite3 | wc -l)" = 9
+          test "$(find "$LAB048_ROOT" -name consumer.sqlite3 | wc -l)" = 8
+          (cd "$scratch" && find scenarios -type f \( -name '*.sqlite3' -o -name '*.log' \) -print0 | sort -z | xargs -0 sha256sum > ORIGINAL_FILE_SHA256.txt)
+          echo "TS_EE_LLM048_CANDIDATE_002=PASS_BOUNDED_FAIL_CLOSED_UNKNOWN;tests=9;Product=NONE"
+          echo "TS_EE_LLM048_CANDIDATE_002_RESULT_SHA256=$(sha256sum "$LAB048_RESULT" | cut -d' ' -f1)"
+      - name: Preserve new original result separately from failure 001
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-ee-llm048-002-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-ee-llm048-002-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
