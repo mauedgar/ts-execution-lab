@@ -4,6 +4,7 @@ Uses only a pre-provisioned private notebook Dolt server; NO self-hosted shadow 
 no Product, no provider action dispatch, no automatic failover or retry.
 """
 import hashlib
+import hmac
 import json
 import os
 import pathlib
@@ -31,7 +32,7 @@ META_SOURCE=os.environ.get("TS047_META_SOURCE","")
 RUN=os.environ["GITHUB_RUN_ID"]
 SHA=os.environ["GITHUB_SHA"]
 MACHINE_FINGERPRINT=hashlib.sha256(socket.gethostname().encode()).hexdigest()
-HOST_FINGERPRINT=hashlib.pbkdf2_hmac("sha256",(HOST+":"+str(PORT)).encode(),PWD.encode(),1).hex()
+HOST_FINGERPRINT=hmac.new(PWD.encode(),(HOST+":"+str(PORT)).encode(),hashlib.sha256).hexdigest()
 ATT="TS-BEADS-047-"+ROLE.upper()+"-ATTEMPT-001"
 ENV={**os.environ,"HOME":str(ROOT/"home"),
      "BEADS_DIR":str(PROJ/".beads"),
@@ -47,6 +48,7 @@ R={"operation":OP,"attempt":ATT,"role":ROLE,"status":"STARTED",
    "runner_machine_fingerprint":MACHINE_FINGERPRINT,
    "product_effect":"NONE","kernel_used":False,
    "original_provider_dispatch_count":0,"sql_server_mode":True,
+   "remote_write_attempt_started":False,"last_native_write_operation":None,
    "server_data_owner":"NOTEBOOK_WINDOWS_PRIMARY","automatic_failover":False,
    "checks":{}}
 
@@ -61,6 +63,10 @@ def check(name,condition,detail=None):
         raise RuntimeError("FAIL_CLOSED:"+name+(":"+str(detail)[:100] if detail else ""))
 
 def run(args,cwd=PROJ,timeout=90,allow=False):
+    if len(args)>1 and str(args[0])==str(BD) and str(args[1]) in ("init","create","dep","update","close","delete","reopen"):
+        R["remote_write_attempt_started"]=True
+        R["last_native_write_operation"]=str(args[1])
+        save()
     cp=subprocess.run([str(x) for x in args],cwd=cwd,env=ENV,
        capture_output=True,text=True,timeout=timeout)
     if cp.returncode and not allow:
@@ -250,7 +256,9 @@ if __name__=="__main__":
         elif ROLE in ("alpha","beta"):worker()
         else:join()
     except BaseException as e:
-        R["status"]="FAIL_CLOSED_ORIGINAL"
+        R["status"]=("UNKNOWN_REMOTE_WRITE_OUTCOME_REQUIRES_RECONCILIATION"
+                     if R.get("remote_write_attempt_started") else
+                     "BLOCKED_PRECONDITION_NO_REMOTE_WRITE")
         R["error_type"]=type(e).__name__
         msg=str(e)
         for secret in (PWD,RO_PWD,HOST):
