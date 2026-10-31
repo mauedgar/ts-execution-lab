@@ -1,0 +1,245 @@
+name: TS Beads 047 notebook live Dolt SQL two independent clients
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      TS047_SQL_HOST: ${{ secrets.TS047_SQL_HOST }}
+      TS047_SQL_PASSWORD: ${{ secrets.TS047_SQL_PASSWORD }}
+      TS047_RO_PASSWORD: ${{ secrets.TS047_RO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Frozen source and no automatic retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
+          test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
+          python3 -m py_compile "$root/native047.py"
+          test -n "$TS047_SQL_HOST" && test -n "$TS047_SQL_PASSWORD" && test -n "$TS047_RO_PASSWORD"
+          echo "TS047_SOURCE=VERIFIED;AUTH_INPUTS=PRESENT;Product=NONE"
+      - name: Connect to private tailnet with ephemeral CI identity
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ts047-ci
+          ping: ${{ secrets.TS047_SQL_HOST }}
+      - uses: ./.github/actions/ts047-native-toolchain
+      - name: Native role bootstrap (real notebook SQL server)
+        env:
+          TS047_ROLE: bootstrap
+          TS047_ROOT: ${{ runner.temp }}/ts047-${{ github.run_id }}-bootstrap/work
+          TS047_ORIGINAL: ${{ runner.temp }}/ts047-${{ github.run_id }}-bootstrap/original
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/native047.py
+          test "$(jq -r .attempt "$TS047_ORIGINAL/RESULT047_BOOTSTRAP.json")" = TS-BEADS-047-BOOTSTRAP-ATTEMPT-001
+          echo "TS047_ORIGINAL_BOOTSTRAP_RECEIPT_PRESENT;Product=NONE"
+      - name: Preserve original bootstrap result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-${{ github.run_id }}-bootstrap/original/
+          if-no-files-found: warn
+          retention-days: 30
+  worker_alpha:
+    needs: bootstrap
+    if: ${{ needs.bootstrap.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      TS047_SQL_HOST: ${{ secrets.TS047_SQL_HOST }}
+      TS047_SQL_PASSWORD: ${{ secrets.TS047_SQL_PASSWORD }}
+      TS047_RO_PASSWORD: ${{ secrets.TS047_RO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Frozen source and no automatic retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
+          test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
+          python3 -m py_compile "$root/native047.py"
+          test -n "$TS047_SQL_HOST" && test -n "$TS047_SQL_PASSWORD" && test -n "$TS047_RO_PASSWORD"
+          echo "TS047_SOURCE=VERIFIED;AUTH_INPUTS=PRESENT;Product=NONE"
+      - name: Connect to private tailnet with ephemeral CI identity
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ts047-ci
+          ping: ${{ secrets.TS047_SQL_HOST }}
+      - uses: ./.github/actions/ts047-native-toolchain
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads047-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-coordinator-original
+      - name: Native role alpha (real notebook SQL server)
+        env:
+          TS047_ROLE: alpha
+          TS047_ROOT: ${{ runner.temp }}/ts047-${{ github.run_id }}-alpha/work
+          TS047_ORIGINAL: ${{ runner.temp }}/ts047-${{ github.run_id }}-alpha/original
+          TS047_META_SOURCE: ${{ runner.temp }}/ts047-coordinator-original/META047.tar.gz
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/native047.py
+          test "$(jq -r .attempt "$TS047_ORIGINAL/RESULT047_ALPHA.json")" = TS-BEADS-047-ALPHA-ATTEMPT-001
+          echo "TS047_ORIGINAL_ALPHA_RECEIPT_PRESENT;Product=NONE"
+      - name: Preserve original alpha result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047-alpha-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-${{ github.run_id }}-alpha/original/
+          if-no-files-found: warn
+          retention-days: 30
+  worker_beta:
+    needs: bootstrap
+    if: ${{ needs.bootstrap.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      TS047_SQL_HOST: ${{ secrets.TS047_SQL_HOST }}
+      TS047_SQL_PASSWORD: ${{ secrets.TS047_SQL_PASSWORD }}
+      TS047_RO_PASSWORD: ${{ secrets.TS047_RO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Frozen source and no automatic retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
+          test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
+          python3 -m py_compile "$root/native047.py"
+          test -n "$TS047_SQL_HOST" && test -n "$TS047_SQL_PASSWORD" && test -n "$TS047_RO_PASSWORD"
+          echo "TS047_SOURCE=VERIFIED;AUTH_INPUTS=PRESENT;Product=NONE"
+      - name: Connect to private tailnet with ephemeral CI identity
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ts047-ci
+          ping: ${{ secrets.TS047_SQL_HOST }}
+      - uses: ./.github/actions/ts047-native-toolchain
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads047-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-coordinator-original
+      - name: Native role beta (real notebook SQL server)
+        env:
+          TS047_ROLE: beta
+          TS047_ROOT: ${{ runner.temp }}/ts047-${{ github.run_id }}-beta/work
+          TS047_ORIGINAL: ${{ runner.temp }}/ts047-${{ github.run_id }}-beta/original
+          TS047_META_SOURCE: ${{ runner.temp }}/ts047-coordinator-original/META047.tar.gz
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/native047.py
+          test "$(jq -r .attempt "$TS047_ORIGINAL/RESULT047_BETA.json")" = TS-BEADS-047-BETA-ATTEMPT-001
+          echo "TS047_ORIGINAL_BETA_RECEIPT_PRESENT;Product=NONE"
+      - name: Preserve original beta result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047-beta-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-${{ github.run_id }}-beta/original/
+          if-no-files-found: warn
+          retention-days: 30
+  join:
+    needs: [worker_alpha, worker_beta]
+    if: ${{ needs.worker_alpha.result == 'success' && needs.worker_beta.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      TS047_SQL_HOST: ${{ secrets.TS047_SQL_HOST }}
+      TS047_SQL_PASSWORD: ${{ secrets.TS047_SQL_PASSWORD }}
+      TS047_RO_PASSWORD: ${{ secrets.TS047_RO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Frozen source and no automatic retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
+          test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
+          python3 -m py_compile "$root/native047.py"
+          test -n "$TS047_SQL_HOST" && test -n "$TS047_SQL_PASSWORD" && test -n "$TS047_RO_PASSWORD"
+          echo "TS047_SOURCE=VERIFIED;AUTH_INPUTS=PRESENT;Product=NONE"
+      - name: Connect to private tailnet with ephemeral CI identity
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ts047-ci
+          ping: ${{ secrets.TS047_SQL_HOST }}
+      - uses: ./.github/actions/ts047-native-toolchain
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads047-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-coordinator-original
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads047-alpha-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-worker-originals/alpha
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-beads047-beta-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-worker-originals/beta
+      - name: Native role join (real notebook SQL server)
+        env:
+          TS047_ROLE: join
+          TS047_ROOT: ${{ runner.temp }}/ts047-${{ github.run_id }}-join/work
+          TS047_ORIGINAL: ${{ runner.temp }}/ts047-${{ github.run_id }}-join/original
+          TS047_META_SOURCE: ${{ runner.temp }}/ts047-coordinator-original/META047.tar.gz
+          TS047_WORKER_RECEIPTS: ${{ runner.temp }}/ts047-worker-originals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/native047.py
+          test "$(jq -r .attempt "$TS047_ORIGINAL/RESULT047_JOIN.json")" = TS-BEADS-047-JOIN-ATTEMPT-001
+          echo "TS047_ORIGINAL_JOIN_RECEIPT_PRESENT;Product=NONE"
+      - name: Preserve original join result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047-join-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts047-${{ github.run_id }}-join/original/
+          if-no-files-found: warn
+          retention-days: 30
