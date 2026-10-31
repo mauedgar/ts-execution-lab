@@ -135,6 +135,13 @@ def sql_preflight(allow_initialized):
     check("no_credential_written_to_receipt",PWD not in json.dumps(R) and RO_PWD not in json.dumps(R))
     return
 
+def no_embedded_shadow():
+    base=PROJ/".beads"
+    dolt=base/"dolt"
+    return (not (base/"embeddeddolt").exists()
+            and not (dolt/".dolt").exists()
+            and not (dolt/"noms").exists())
+
 def prepare_fresh():
     check("fresh_new_runner_workdir",not ROOT.exists())
     PROJ.mkdir(parents=True)
@@ -159,8 +166,7 @@ def load_meta():
         tf.extractall(PROJ,filter="data")
     check("beads_metadata_restored",all((PROJ/n).is_file() for n in
                                        (".beads/config.yaml",".beads/metadata.json")))
-    check("no_shadow_database",not (PROJ/".beads"/"dolt").exists()
-          and not (PROJ/".beads"/"embeddeddolt").exists())
+    check("no_shadow_database",no_embedded_shadow())
 
 def bootstrap():
     prepare_fresh()
@@ -169,8 +175,7 @@ def bootstrap():
          "--skip-agents","--skip-hooks","--non-interactive"])
     check("server_mode_metadata",(PROJ/".beads"/"metadata.json").is_file())
     check("beads_native_store_remote_only",
-          not (PROJ/".beads"/"embeddeddolt").exists()
-          and not (PROJ/".beads"/"dolt").exists())
+          no_embedded_shadow())
     check("fresh_native_issues_empty",rows(native("list","--all"))==[])
     for name in ("preflight","alpha","beta","join","parent"):
         run([BD,"create","TS047 "+name,"--id",PFX+"-"+name,
@@ -207,8 +212,7 @@ def worker():
     run([BD,"close",PFX+"-"+ROLE])
     check("own_child_closed",show(ROLE)["status"]=="closed")
     check("native_history",len(rows(native("history",PFX+"-"+ROLE)))>=2)
-    check("no_local_data_created",not (PROJ/".beads"/"dolt").exists()
-          and not (PROJ/".beads"/"embeddeddolt").exists())
+    check("no_local_data_created",no_embedded_shadow())
     R["completed_child"]=PFX+"-"+ROLE
     R["status"]="PASS_INDEPENDENT_NATIVE_CLIENT_SHARED_SQL"
     save()
@@ -262,8 +266,7 @@ def join():
           "return_code="+str(denied.returncode))
     check("native_original_alpha_description_unmodified",
           "FORBIDDEN_READONLY_CHANGE" not in str(show("alpha").get("description","")))
-    check("final_no_local_shadow",not (PROJ/".beads"/"dolt").exists()
-          and not (PROJ/".beads"/"embeddeddolt").exists())
+    check("final_no_local_shadow",no_embedded_shadow())
     R["independent_runner_machines"]=2
     R["original_worker_attempts"]=[receives[x]["attempt"] for x in ("alpha","beta")]
     R["status"]="PASS_TWO_INDEPENDENT_HOSTS_NOTEBOOK_LIVE_SQL_WITH_LIMITATIONS"
