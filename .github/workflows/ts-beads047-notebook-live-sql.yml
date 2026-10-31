@@ -1,6 +1,10 @@
 name: TS Beads 047 notebook live Dolt SQL two independent clients
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - experiment/beads-047-notebook-remote-sql-20261031-001
+    paths:
+      - experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/EXECUTE_047_ONCE.txt
 permissions:
   contents: read
   actions: read
@@ -22,6 +26,8 @@ jobs:
           set -euo pipefail
           root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
           test "$GITHUB_RUN_ATTEMPT" = 1
+          test -f "$root/EXECUTE_047_ONCE.txt"
+          test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
@@ -76,6 +82,8 @@ jobs:
           set -euo pipefail
           root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
           test "$GITHUB_RUN_ATTEMPT" = 1
+          test -f "$root/EXECUTE_047_ONCE.txt"
+          test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
@@ -135,6 +143,8 @@ jobs:
           set -euo pipefail
           root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
           test "$GITHUB_RUN_ATTEMPT" = 1
+          test -f "$root/EXECUTE_047_ONCE.txt"
+          test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
@@ -194,6 +204,8 @@ jobs:
           set -euo pipefail
           root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
           test "$GITHUB_RUN_ATTEMPT" = 1
+          test -f "$root/EXECUTE_047_ONCE.txt"
+          test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
