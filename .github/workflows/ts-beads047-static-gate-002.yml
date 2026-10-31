@@ -1,0 +1,71 @@
+name: TS Beads 047 static security corrected candidate 002 (no SQL dispatch)
+on:
+  push:
+    branches:
+      - experiment/beads-047-notebook-remote-sql-20261031-001
+    paths:
+      - .github/workflows/ts-beads047-static-gate-002.yml
+permissions:
+  contents: read
+jobs:
+  static_gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Parse frozen client/CI and verify isolated no-secret execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git hash-object "$root/native047.py")" = f8713242d37f9ebdef5ff12baa10d0336b65bb29
+          test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
+          test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
+          python3 -m py_compile "$root/native047.py"
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml==6.0.2
+          python3 - <<'PY'
+          import pathlib,yaml,json,os,hashlib
+          workflow=pathlib.Path(".github/workflows/ts-beads047-notebook-live-sql.yml")
+          content=workflow.read_text()
+          parsed=yaml.safe_load(content)
+          trigger=parsed.get("on",parsed.get(True))
+          assert isinstance(trigger,dict) and "push" in trigger and "workflow_dispatch" not in trigger
+          path="experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/EXECUTE_047_ONCE.txt"
+          assert path in trigger["push"]["paths"] and len(trigger["push"]["paths"])==1
+          jobs=parsed["jobs"]
+          assert set(jobs)=={"bootstrap","worker_alpha","worker_beta","join"}
+          assert jobs["worker_alpha"]["needs"]=="bootstrap" and jobs["worker_beta"]["needs"]=="bootstrap"
+          assert jobs["join"]["needs"]==["worker_alpha","worker_beta"]
+          assert all("tailscale/github-action@v4" in str(job) for job in jobs.values())
+          assert all("TS047_SQL_PASSWORD" in str(job) for job in jobs.values())
+          assert "workflow_dispatch" not in content and "funnel" not in content.lower()
+          code=pathlib.Path("experiments/TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001/native047.py").read_text()
+          assert "UNKNOWN_REMOTE_WRITE_OUTCOME_REQUIRES_RECONCILIATION" in code
+          assert "metadata_upload_no_runtime_secret_" in code
+          assert "native_beads_reader_write_denied" in code
+          assert "hmac.new(" in code
+          assert "expected_private_tailnet_sql_host" in code
+          assert "def no_embedded_shadow():" in code
+          assert "remote_write_attempt_started" in code
+          assert "FAIL_CLOSED_ORIGINAL" not in code
+          assert not pathlib.Path(path).exists()
+          payload={"status":"PASS_STATIC_CANDIDATE_002_NO_DISPATCH","operation":"TS-BEADS-047-NOTEBOOK-REMOTE-SQL-20261031-001",
+                   "subject_sha":os.getenv("GITHUB_SHA"),"code_blob":"f8713242d37f9ebdef5ff12baa10d0336b65bb29",
+                   "dod_blob":"85e3bbe1b0e795ce46b3a517ef2e930a434faf07",
+                   "toolchain_blob":"c45410c64eb63d80215549ed2688075d52c79c06",
+                   "live_sql_attempt_dispatched":False,"security_candidate":"002","product_effect":"NONE"}
+          dest=pathlib.Path(os.getenv("RUNNER_TEMP"))/"RESULT047_STATIC.json"
+          dest.write_text(json.dumps(payload,sort_keys=True,indent=2)+"\n")
+          print("TS047_STATIC="+payload["status"]+";SOURCE="+payload["subject_sha"]+";Product=NONE")
+          print("TS047_STATIC_SHA256="+hashlib.sha256(dest.read_bytes()).hexdigest())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ts-beads047-static-002-${{ github.run_id }}
+          path: ${{ runner.temp }}/RESULT047_STATIC.json
+          if-no-files-found: warn
+          retention-days: 30
