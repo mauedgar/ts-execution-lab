@@ -1,0 +1,55 @@
+name: TS Beads 036 bounded capability ownership audit
+on:
+  push:
+    branches:
+      - experiment/beads-036-capability-ownership-20261031-001
+    paths:
+      - .github/workflows/ts-beads-036-capability-ownership.yml
+permissions:
+  contents: read
+jobs:
+  frozen-source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate historical evidence and capability boundary, without Product writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-036-CAPABILITY-OWNERSHIP-20261031-001
+          test "${GITHUB_REF_NAME}" = experiment/beads-036-capability-ownership-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/INPUT_FROZEN.json")" = 9fdcbd7ba296d3ec85f89f6adcca955b6eb1b240
+          test "$(git hash-object "$root/audit036.py")" = 89f5692222122ebeab46f3bef0269b68e85714aa
+          python3 -m py_compile "$root/audit036.py"
+          scratch="$RUNNER_TEMP/ts-beads036-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch"
+          export TS_BEADS036_RESULT="$scratch/RESULT036.json"
+          python3 "$root/audit036.py" "$root/INPUT_FROZEN.json" | tee "$scratch/ORIGINAL_AUDIT_LOG.txt"
+          python3 - "$scratch/RESULT036.json" <<'PY'
+          import json,sys
+          z=json.load(open(sys.argv[1],encoding='utf8'))
+          assert z['technical_result']=='PASS_SOURCE_BOUNDED_OWNERSHIP_AUDIT_WITH_AUTHORITATIVE_GAPS_OPEN'
+          assert z['product_effect']=='NONE'
+          assert z['canonical_issue']=='mauedgar/tecnotron-ai#35'
+          assert z['canonical_execution_owner']=='TECNOTRON_BETA_CONTROL'
+          assert z['authoritative_beads_adoption']=='BLOCKED'
+          assert z['invariants_mapped']==10 and z['evidence_receipt_refs']==8
+          assert z['examined_source_bytes']==85014
+          assert z['measured_product_code_removed_bytes']==0
+          assert z['new_native_beads_runs']==0
+          PY
+          cp "$root/INPUT_FROZEN.json" "$scratch/INPUT_FROZEN.json"
+          cp "$root/DOD.md" "$scratch/DOD.md"
+          (cd "$scratch" && sha256sum RESULT036.json INPUT_FROZEN.json DOD.md ORIGINAL_AUDIT_LOG.txt > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS036_TERMINAL=PASS_BOUNDED_SOURCE_AUDIT;AUTHORITATIVE_ADOPTION=BLOCKED;Product=NONE"
+      - name: Preserve original bounded audit and result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads036-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-beads036-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 30
