@@ -7,7 +7,7 @@
 ## 1. Estado Product adquirido en GitHub
 
 - [#34](https://github.com/mauedgar/tecnotron-ai/issues/34) `closed/completed`. La TaskCycle OP03 **original** `TASKCYCLE-TECNOTRON-ULC-OP03-ACTIONS-EVIDENCE-CONSUMER-001` alcanzó `CLOSED_PASS 9/9`; fuente autenticada `mauedgar/ts-execution-transport@64021d065cdbc019b94b91d489f8db276188d59d:results/TECNOTRON-OP03-ORIGINAL-TERMINAL-CLOSE-20261030-001/ORIGINAL_TERMINAL_CARRIER.txt`, blob `730ed08a7849022438ad27fff172f02c25b6586d`; Control consumió `CONTROL_DELTA` [#34/6535453094](https://github.com/mauedgar/tecnotron-ai/issues/34#issuecomment-6535453094). No repetir PR57/PR58, cierre OP03 ni sus efectos.
-- [#35](https://github.com/mauedgar/tecnotron-ai/issues/35) `open`. **Control había seleccionado** `ATTENDANCE_STANDALONE_B_FIRST_PILOT_001` como *alcance* con `TASKCYCLE_NOT_INITIALIZED` y `IMPLEMENTATION_NOT_DISPATCHED`. Su comentario es una selección competente **de aquel momento**; no es Product adoption Beads. La instrucción posterior de Developer de continuar sin Beads requiere **nuevo delta de Control** antes de declarar que el plan Product vigente fue actualizado.
+- [#35](https://github.com/mauedgar/tecnotron-ai/issues/35) `open`. **Control había seleccionado** `ATTENDANCE_STANDALONE_B_FIRST_PILOT_001` como *alcance* con `TASKCYCLE_NOT_INITIALIZED` y `IMPLEMENTATION_NOT_DISPATCHED`. Su comentario es una selección competente **de aquel momento**; no es Product adoption Beads. Control publicó **posteriormente** [#35/6539442025](https://github.com/mauedgar/tecnotron-ai/issues/35#issuecomment-6539442025): `TRACK_A=H6_PRODUCT_RESPONSIBILITY_PREPARATION` progresa independientemente de `TRACK_B=BEADS_EXPERIMENTAL_QUALIFICATION`, con Beads no requerido. La instrucción de Developer de esta continuación fija la preferencia operativa **SIN Beads**. No implica TaskCycle inicializada.
 - **H6/OP05 DoD original:** Parent genuino con **al menos dos TaskCycles child reales**, responsabilidades disjuntas, subjects/worksets, Independent Review, aceptaciones Developer, integración/Phase 2 y cierres nativos independientes, y Parent `CLOSED_PASS` ordinario, **sin** reparar con excepciones históricas B/C. H7/OP09 Milestone delegado sólo después de H6 demostrado y necesidad repetida verificable.
 - State Kernel actual: baseline Product lo clasifica `NARROW`, disposición física final `UNDECIDED`, con consumidores vigentes. No se demostró equivalencia para remoción; **no tocar Kernel ni TC Core** por esta consolidación.
 
@@ -42,7 +42,7 @@ No hay una capacidad `Product_ACCEPTED_BEADS_STORAGE` ni una obligación de Bead
 | Gate | Observado / disposición | Próxima acción competente |
 |---|---|---|
 | G0. Cerrar deuda previa #34 | **PASS**, CLOSED_PASS original confirmado | Consumir refs, **no reejecutar** |
-| G1. Reconciliar preferencia *sin Beads* con selección B-first antigua | **PENDIENTE DELTA CONTROL**; comentario #35 aún representa selección previa | Control registra fuente y alcance nuevo `NO_BEADS`; decide si mantiene Attendance como trabajo genuino y sus 2 children |
+| G1. Desacoplar H6 de Beads | **CONTROL YA CALIFICÓ** desacoplamiento en [#35/6539442025](https://github.com/mauedgar/tecnotron-ai/issues/35#issuecomment-6539442025); el Developer hoy elige operar sin Beads | Consumir el delta competente sin reescribir la selección previa; continuar a G2/G3, no iniciar Tasks automáticamente |
 | G2. Recuperar piloto Attendance histórico 043 / source | **NO CALIFICADO EN GIT REMOTO** con lo adquirido; hubo reportes host-local pero sin commit/tree/receipt exacto corroborado | Adquirir fuente/artefacto real por repo/Files, o partir de baseline independiente **sin afirmar ancestralidad ni aceptación** |
 | G3. Freeze del dominio/API/DoD y ownership | **PENDIENTE** | Acordar contrato mínimo y rutas, exact Git base, firma/autorización de responsabilidad; un único owner por write-set |
 | G4. TaskCycle Parent/children | **NO INICIALIZADO** según #35 | Sólo tras G1–G3 y autorización Product competente, seleccionar e inicializar identidades nativas existentes |
@@ -53,13 +53,13 @@ No hay una capacidad `Product_ACCEPTED_BEADS_STORAGE` ni una obligación de Bead
 
 ## 5. Deudas priorizadas y decisión recomendada
 
-**P0 para inicio Product:** G1 + G2 + G3. Son calificaciones de selección/candidato, no necesidad de más experimentos sintéticos ni de adoptar Beads. El informe Beads acompaña como `ARCHIVE_ONLY`, principalmente por 028 bypass y 030 divergencia Kernel/Beads.
+**P0 para inicio Product:** G2 + G3; G1 ya fue resuelto como desacoplamiento de planificación por Control y no requiere otra decisión para excluir Beads del trabajo preparatorio. Son calificaciones de selección/candidato, no necesidad de más experimentos sintéticos ni de adoptar Beads. El informe Beads acompaña como `ARCHIVE_ONLY`, principalmente por 028 bypass y 030 divergencia Kernel/Beads.
 
 **P1 para evidencia/operación real:** admitir Child A/B con contratos actuales, pruebas reales/negativas, IR aislada, aceptación e integración por sujeto; capturar native receipts y hashes, no recortar ownership ni authority. El historial original OP03 y los resultados EE 043–048 informan los casos de prueba, no son garantías instaladas en Attendance.
 
 **P2 diferible:** transporte original JSONL de modelos, comparación estadística de modelos, Beads/Kernal physical migration, H7 y multi-host ACK-loss. No convertir una deuda de investigación independiente en bloqueo global para trabajo Product disjunto autorizado.
 
-**Decisión recomendada para Control:** `CONTINUE_BETA_H6_ATTENDANCE_WITHOUT_BEADS_PREPARATION_ONLY`; calificar fuentes y contrato, mantener TC Core + Kernel actuales, no generar otros componentes de orquestación. Esta es una **propuesta** y no reemplaza la selección Control de #35 hasta su acto competente.
+**Decisión vigente de Control sobre acoplamiento:** [#35/6539442025](https://github.com/mauedgar/tecnotron-ai/issues/35#issuecomment-6539442025) autoriza la preparación H6 independiente de Beads, aún sin TaskCycle; el Developer aquí prefiere no usar Beads. **Próxima acción técnica real:** congelar baseline y API Attendance G2/G3, sin nuevo scheduler ni modificación Kernel/TC Core.
 
 ## 6. Enlace entre proyectos y handoff al Beta
 
@@ -67,4 +67,4 @@ No hay una capacidad `Product_ACCEPTED_BEADS_STORAGE` ni una obligación de Bead
 - [Archivo integral Beads](BEADS_INTEGRAL_RESEARCH_ARCHIVE.md): evidencia nativa 021/028–035/040–041, divergencias y por qué no adoptarlo ahora.
 - Git fuente Product: `mauedgar/tecnotron-ai:tools@bc9e60b9cad79037b40c298d5c9a84f17a33d909`.
 - #34 original complete; #35 abierto/selección histórica previa; ningún write Product en este paquete.
-- **Prompt de consumo sugerido:** «Continuá `TECNOTRON_BETA_RUN_001` desde `tools@bc9e60b9cad79037b40c298d5c9a84f17a33d909`, #34 CLOSED_PASS y #35 aún sin TaskCycle. Consumí el informe TS-EE-BETA-NO-BEADS-20261031-001 de `ts-execution-lab`; reconciliá en Control el alcance Attendance sin Beads, verificá source/contrato y proponé únicamente los gates Product competentes sin inicializar automáticamente las TaskCycles ni reejecutar OP03».
+- **Prompt de consumo sugerido:** «Continuá `TECNOTRON_BETA_RUN_001` desde `tools@bc9e60b9cad79037b40c298d5c9a84f17a33d909`, #34 CLOSED_PASS y #35 aún sin TaskCycle. Consumí el informe TS-EE-BETA-NO-BEADS-20261031-001 de `ts-execution-lab` y la decisión Control `#35/6539442025` que ya desacopló H6 de Beads; verificá source/contrato de Attendance y proponé los gates Product competentes sin inicializar TaskCycles ni reejecutar OP03».
