@@ -1,5 +1,7 @@
 # Tecnotron — Beads: informe integral de investigación y adaptación (ARCHIVO; no adopción)
 
+> **RECTIFICACIÓN DE ALCANCE — 2026-10-31 (Developer):** Este chat/branch de investigación corresponde **exclusivamente a Beads experimental**. La implementación, integración, TaskCycles y reconciliación canónica de Tecnotron Beta competen **únicamente a Beta Control**. **Attendance ya es una responsabilidad canónica de Tecnotron**, no una candidata que esta rama tenga que seleccionar o iniciar. El estado de su ejecución y sus contratos se observan/deciden en Beta Control. Toda recomendación posterior de este documento sobre gates, preparación de Attendance, selección o ejecución Product queda **SUPERADA / NO EJECUTABLE DESDE AQUÍ**. Se conservan los hallazgos históricos como evidencia de Beads, sin transferencia de autoridad. No interpretar «continuar sin Beads» como orden de detener esta investigación experimental: significa que Beta Control puede avanzar por separado sin depender de ella.
+
 **Corte:** 2026-10-31. **Clase:** `EXPERIMENTAL_RESEARCH_ARCHIVE`; no autoridad Product ni TaskCycle, Developer acceptance, IR Product o Phase 2. **Preferencia vigente del Developer para el próximo tramo Beta:** continuar **SIN Beads**. Este archivo no propone reactivar Beads, sustituir Kernel ni reescribir TC Core.
 
 ## 1. Hipótesis investigada (no decisión Product)
