@@ -1,0 +1,250 @@
+{
+  "schema": "ts-ee-beads036-capability-ownership/v1",
+  "experiment": "TS-BEADS-036-CAPABILITY-OWNERSHIP-20261031-001",
+  "authority": "EXPERIMENTAL_CONTROL_ONLY",
+  "product_effect": "NONE",
+  "target_canonical_issue": "mauedgar/tecnotron-ai#35",
+  "canonical_execution_owner": "TECNOTRON_BETA_CONTROL",
+  "product_subject": {
+    "repository": "mauedgar/tecnotron-ai",
+    "branch": "tools",
+    "commit": "bc9e60b9cad79037b40c298d5c9a84f17a33d909",
+    "sot_path": "docs/SOURCE_OF_TRUTH.md",
+    "sot_blob": "dd8d34a7e3ef3094805d014f9e59741d2c553957"
+  },
+  "source_inventory": [
+    {
+      "path": "src/state-kernel-v0/cli.js",
+      "blob": "f2163eb79965ef22739f4a183c8a869a625e884f",
+      "bytes": 2703,
+      "owner": "current_product_kernel"
+    },
+    {
+      "path": "src/state-kernel-v0/contracts.js",
+      "blob": "5d2d3a8a24ebc17339675e0c801595956e0cd353",
+      "bytes": 9885,
+      "owner": "current_product_kernel"
+    },
+    {
+      "path": "src/state-kernel-v0/index.js",
+      "blob": "0219b92e5f546407a6060a6dc449865c14c7f144",
+      "bytes": 14361,
+      "owner": "current_product_kernel"
+    },
+    {
+      "path": "src/state-kernel-v0/store.js",
+      "blob": "f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a",
+      "bytes": 9766,
+      "owner": "current_product_kernel"
+    },
+    {
+      "path": "src/operational-spine-v0/state-kernel-adapter.js",
+      "blob": "b8970d6e78b77878a8cb8ef0fbd3c2568954c82e",
+      "bytes": 12020,
+      "owner": "current_product_adapter"
+    },
+    {
+      "path": "src/operational-spine-v0/recipes/reconcile-and-close-taskcycle.js",
+      "blob": "1e89df1a1885e3d0d24576338f0ffbd9b79890bc",
+      "bytes": 36279,
+      "owner": "current_product_consumer"
+    },
+    {
+      "path": "docs/architecture-knowledge-ownership-baseline.md",
+      "blob": "330fdc82f75e1126939cd718c1facb28abe00c62",
+      "bytes": 48234,
+      "owner": "product_knowledge_sot"
+    },
+    {
+      "path": "docs/SOURCE_OF_TRUTH.md",
+      "blob": "dd8d34a7e3ef3094805d014f9e59741d2c553957",
+      "bytes": 5613,
+      "owner": "product_authority_sot"
+    }
+  ],
+  "prior_evidence": [
+    {
+      "id": "021",
+      "verdict": "BOUNDED_PASS",
+      "source_commit": "2de35490ee1c7e62a6e03bde97cf5d16ebe2a556",
+      "run": 40094843290,
+      "proves": "in_memory_reuse_of_original_closure_recipe",
+      "limits": "no_product_patch_or_semantic_global_equivalence"
+    },
+    {
+      "id": "028",
+      "verdict": "PASS_WITH_CRITICAL_BYPASS",
+      "source_commit": "9e8016004ef5d3ca74abd67914d8e1a03ffcd851",
+      "run": 40786754096,
+      "proves": "authenticated_selected_path",
+      "limits": "privileged_bd_dep_add_and_alternate_bd_serve_bypass"
+    },
+    {
+      "id": "029",
+      "verdict": "SOURCE_INVENTORY",
+      "source_commit": "6c03915493594a38cbb21c80235e7ac81e0e26af",
+      "run": 40787776443,
+      "proves": "physical_footprint_and_cost_comparison",
+      "limits": "zero_product_code_deletions"
+    },
+    {
+      "id": "030",
+      "verdict": "BOUNDED_PASS_WITH_SEMANTIC_DIVERGENCE",
+      "source_commit": "5cd88a9ce63aadbe08385f63ac11588192f31f6d",
+      "run": 40882306183,
+      "proves": "original_closure_consumer_adapter_on_native_beads",
+      "limits": "A_unknown_unknown_vs_B_fail_none_on_concurrent_attempt_UNKNOWN"
+    },
+    {
+      "id": "032",
+      "verdict": "BOUNDED_PASS",
+      "source_commit": "4cc47f1393db058f1c65878fb0adcd336c10fdc6",
+      "run": 40928581506,
+      "proves": "native_dolt_version_history_asof_fresh_process",
+      "limits": "not_global_kernel_hash_linked_event_history"
+    },
+    {
+      "id": "033",
+      "verdict": "BOUNDED_PASS",
+      "source_commit": "4cc47f1393db058f1c65878fb0adcd336c10fdc6",
+      "run": 40930288498,
+      "proves": "github_provider_effect_identity_receipt_reference",
+      "limits": "missing_ACK_not_actual_transport_drop"
+    },
+    {
+      "id": "034",
+      "verdict": "BOUNDED_PASS",
+      "source_commit": "4cc47f1393db058f1c65878fb0adcd336c10fdc6",
+      "run": 40931812435,
+      "proves": "join_provider_original_without_redispach",
+      "limits": "caller_no_retry_policy_not_beads_native_guarantee"
+    },
+    {
+      "id": "035",
+      "verdict": "BOUNDED_PASS_WITH_PRIVILEGED_BOUNDARY_OPEN",
+      "source_commit": "4cc47f1393db058f1c65878fb0adcd336c10fdc6",
+      "run": 40935082766,
+      "proves": "four_guarded_concurrent_races_one_200_one_409",
+      "limits": "does_not_exclude_privileged_alternate_writers"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "I01",
+      "name": "control_authority_Developer_acceptance_and_review",
+      "current_owner": "Control_Developer_TaskCycle_Core",
+      "beads_native": "NO",
+      "optionA": "RETAIN_PRODUCT",
+      "optionB": "RETAIN_PRODUCT",
+      "must_keep": true
+    },
+    {
+      "id": "I02",
+      "name": "global_revision_event_count_hash_chain_snapshot_correspondence",
+      "current_owner": "State_Kernel_store",
+      "beads_native": "NOT_EQUIVALENT",
+      "optionA": "RETAIN_PRODUCT",
+      "optionB": "BLOCKED_SEMANTIC_PARITY",
+      "must_keep": true
+    },
+    {
+      "id": "I03",
+      "name": "taskcycle_obligations_and_closure_recipe",
+      "current_owner": "TaskCycle_Core_original_recipe",
+      "beads_native": "PARTIAL_SHADOW",
+      "optionA": "RETAIN_PRODUCT",
+      "optionB": "BLOCKED_COMPLETE_PARITY",
+      "must_keep": true
+    },
+    {
+      "id": "I04",
+      "name": "effect_identity_immutable_git_receipt_join",
+      "current_owner": "GitHub_Transport_original_providers",
+      "beads_native": "REFERENCE_ONLY",
+      "optionA": "RETAIN_PROVIDER",
+      "optionB": "RETAIN_PROVIDER",
+      "must_keep": true
+    },
+    {
+      "id": "I05",
+      "name": "sticky_UNKNOWN_and_provider_ack_loss_safety",
+      "current_owner": "TaskCycle_Core_and_provider_native_reconciliation",
+      "beads_native": "NO_NATIVE_NO_RETRY_GUARANTEE",
+      "optionA": "RETAIN_PRODUCT",
+      "optionB": "BLOCKED_SEMANTIC_PARITY",
+      "must_keep": true
+    },
+    {
+      "id": "I06",
+      "name": "single_exclusive_privileged_causal_writer_boundary",
+      "current_owner": "Competent_Product_ownership_and_runtime_permissions",
+      "beads_native": "CRITICAL_BYPASS_PROVEN",
+      "optionA": "NOT_APPLICABLE_NONAUTHORITATIVE",
+      "optionB": "BLOCKED_PRIVILEGED_BYPASS",
+      "must_keep": true
+    },
+    {
+      "id": "I07",
+      "name": "dependency_readiness_and_issue_graph_readback",
+      "current_owner": "Product_Control_or_optional_projection",
+      "beads_native": "BOUNDED_PASS",
+      "optionA": "OPTIONAL_PROJECTION_ONLY",
+      "optionB": "BOUNDED_PASS_NOT_AUTHORITY",
+      "must_keep": false
+    },
+    {
+      "id": "I08",
+      "name": "native_version_history_asof_recovery",
+      "current_owner": "Git_Product_event_history",
+      "beads_native": "BOUNDED_PASS_DIFFERENT_SEMANTICS",
+      "optionA": "OPTIONAL_REFERENCE_ONLY",
+      "optionB": "BLOCKED_GLOBAL_AUDIT_PARITY",
+      "must_keep": true
+    },
+    {
+      "id": "I09",
+      "name": "execution_actor_write_set_scoping",
+      "current_owner": "Control_Git_worktrees_OpenCode_native_tools",
+      "beads_native": "NO_PER_ACTOR_HTTP_AUTH",
+      "optionA": "RETAIN_PRODUCT",
+      "optionB": "BLOCKED_ACTOR_AUTH",
+      "must_keep": true
+    },
+    {
+      "id": "I10",
+      "name": "package_byte_integrity_txt_envelope",
+      "current_owner": "GitHub_Transport_XForm",
+      "beads_native": "NONE",
+      "optionA": "RETAIN_TRANSPORT",
+      "optionB": "RETAIN_TRANSPORT",
+      "must_keep": true
+    }
+  ],
+  "options": {
+    "A": {
+      "id": "BEADS_READ_ONLY_PROJECTION",
+      "authority": "NONE",
+      "product_kernel_removed_bytes": 0,
+      "known_implementation_added_bytes": "UNMEASURED",
+      "risk": "OPTIONAL_NOT_NECESSARY_FOR_35",
+      "recommending_product_adoption": false
+    },
+    "B": {
+      "id": "BEADS_AUTHORITATIVE_GUARDED_CAUSAL",
+      "authority": "REQUIRES_COMPETENT_PRODUCT_DECISION",
+      "product_kernel_removed_bytes": 0,
+      "known_implementation_added_bytes": "UNMEASURED",
+      "risk": "BLOCKED_PRIVILEGED_WRITER_AND_EVENT_PARITY",
+      "recommending_product_adoption": false
+    }
+  },
+  "policy": {
+    "sot_writes": false,
+    "product_execution": false,
+    "beads_35_dependency": false,
+    "allow_new_kernel": false,
+    "allow_new_scheduler": false,
+    "retry_unknown": false,
+    "canonical_adoption": false
+  }
+}
