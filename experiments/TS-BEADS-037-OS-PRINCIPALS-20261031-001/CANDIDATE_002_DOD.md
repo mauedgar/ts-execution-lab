@@ -1,0 +1,9 @@
+# Beads 037 — Candidate 002 after original terminal infrastructure failure
+
+**Original failed identity remains immutable:** `TS-BEADS-037-ATTEMPT-001`, source `0e0c0b86fa6342515de18f6cddc5284a08298660`, [run 41172687235](https://github.com/mauedgar/ts-execution-lab/actions/runs/41172687235), job `124453810748`, `completed/failure`, original artifact `13031681326`, ZIP digest `sha256:e2d550bb29ace2881f0cba4d682bec8e7c12e1c2daa7e961891d85afe776d9b6`. Dolt subprocess exited 2 **before native Beads graph initialization**. No native security verdict was reached; do not call this FAIL of isolation.
+
+**New distinct execution identity:** `TS-BEADS-037-ATTEMPT-002` on `experiment/beads-037-real-principal-authority-002-20261031`, no replay of attempt 001. One new workflow push, fresh scratch and receipt. No Product authority.
+
+**Specific technical correction:** move disposable scratch from GitHub runner private `RUNNER_TEMP` to isolated mode-0755 directory under `/tmp`; the writer and reader Unix UIDs must traverse all parent paths to execute pinned native Beads/Dolt binaries. Original root-cause is **suspected inaccessible path**, not conclusively proven without Dolt's original log; 002 captures redacted startup evidence if it still fails. No change to privilege/secret permissions inside writer-only 0700 storage, native writer service, guarded batch or mutation acceptance criteria. `native037_002.py` blob `7ac9471d434f0396f8baa4296abfba9d3c51cdfe`, derived from 001 with distinct original receipt identity and redacted failure diagnostics. Original acceptance DoD `DOD.md` still applies in full.
+
+**Terminal:** PASS only with every native user/SQL/CLI/HTTP/CAS assertion PASS and original provider receipt. Privileged writer native CLI bypass remains OPEN regardless. FAIL/BLOCKED preserves result and no automatic redo. Do not use Beads in Product #35 based on either result.
