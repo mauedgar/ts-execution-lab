@@ -245,6 +245,16 @@ def join():
             except pymysql.MySQLError:
                 write_denied=True
             check("sql_reader_update_denied",write_denied)
+    denied_env=dict(ENV)
+    denied_env["BEADS_DOLT_SERVER_USER"]="ts047_reader"
+    denied_env["BEADS_DOLT_PASSWORD"]=RO_PWD
+    denied=subprocess.run([BD,"update",PFX+"-alpha","--description",
+                           "FORBIDDEN_READONLY_CHANGE"],cwd=PROJ,env=denied_env,
+                          capture_output=True,text=True,timeout=30)
+    check("native_beads_reader_write_denied",denied.returncode!=0,
+          "return_code="+str(denied.returncode))
+    check("native_original_alpha_description_unmodified",
+          "FORBIDDEN_READONLY_CHANGE" not in str(show("alpha").get("description","")))
     check("final_no_local_shadow",not (PROJ/".beads"/"dolt").exists()
           and not (PROJ/".beads"/"embeddeddolt").exists())
     R["independent_runner_machines"]=2
