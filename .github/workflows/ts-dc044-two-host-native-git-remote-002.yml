@@ -1,0 +1,126 @@
+name: TS DC044 read-only native GitHub Dolt two independent hosts
+on:
+  push:
+    branches:
+      - experiment/distributed-control-001-remote-read-20261031-002
+    paths:
+      - .github/workflows/ts-dc044-002-two-host-native-git-remote-002.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent_remote_reads:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [alpha, beta]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Freeze and prove immutable source and remote
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF_NAME" = experiment/distributed-control-001-remote-read-20261031-002
+          root=experiments/TS-DISTRIBUTED-CONTROL-001-REMOTE-READ-20261031-002
+          test "$(git hash-object "$root/remote_read044.py")" = d717bb625d177b48c8c0b0d6ebd497f3d0866ad4
+          test "$(git hash-object "$root/DOD.md")" = d750d4776579f53949f7519453dac4ac9a246239
+          python3 -m py_compile "$root/remote_read044.py"
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = 1f72d68797114170a97fee27641858f2e55a4571
+      - name: Install exactly pinned native Beads
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$RUNNER_TEMP/ts044-bin-$GITHUB_RUN_ID"
+          mkdir -p "$scratch/bin"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          bd_bin="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          test -n "$bd_bin"
+          chmod +x "$bd_bin"
+          echo "BD_BIN=$bd_bin" >> "$GITHUB_ENV"
+      - name: Independently restore native graph from hosted Git remote without any push
+        env:
+          TS044_SLOT: ${{ matrix.slot }}
+          TS044_ROOT: ${{ runner.temp }}/ts044-${{ matrix.slot }}-${{ github.run_id }}
+          TS044_RESULT: ${{ runner.temp }}/dc044-${{ matrix.slot }}-RESULT.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/TS-DISTRIBUTED-CONTROL-001-REMOTE-READ-20261031-002/remote_read044.py
+          test "$(jq -r .status "$TS044_RESULT")" = PASS_NATIVE_REMOTE_GITHUB_CROSS_HOST_READ_ONLY
+          test "$(jq -r .native_push_count "$TS044_RESULT")" = 0
+          echo "DC044_ALIVE_HOST=${{ matrix.slot }};native_remote_read=PASS;Product=NONE"
+      - name: Preserve separate original read-only result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-dc044-002-${{ matrix.slot }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc044-${{ matrix.slot }}-RESULT.json
+          if-no-files-found: warn
+          retention-days: 30
+  join:
+    needs: independent_remote_reads
+    if: ${{ needs.independent_remote_reads.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-dc044-002-alpha-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc044-join/alpha
+      - uses: actions/download-artifact@v4
+        with:
+          name: ts-dc044-002-beta-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc044-join/beta
+      - name: Verify both separate original receipts from native GitHub and exact remote
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/dc044-join"
+          python3 - "$root" "$GITHUB_SHA" <<'PY'
+          import json,pathlib,sys,hashlib
+          p=pathlib.Path(sys.argv[1])
+          a=json.loads((p/"alpha"/"dc044-alpha-RESULT.json").read_text())
+          b=json.loads((p/"beta"/"dc044-beta-RESULT.json").read_text())
+          expected_ids=["producer-1qa","producer-9a71a001","producer-9a71b002"]
+          for slot,x in [("alpha",a),("beta",b)]:
+              assert x["slot"]==slot and x["attempt"]=="TS-DC044-REMOTE-READ-"+slot.upper()+"-ATTEMPT-002"
+              assert x["status"]=="PASS_NATIVE_REMOTE_GITHUB_CROSS_HOST_READ_ONLY"
+              assert x["remote_sha"]=="1f72d68797114170a97fee27641858f2e55a4571"
+              assert set(expected_ids).issubset({v[0] for v in x["recovered_issue_id_status"]})
+              assert x["source_origin_verified"] is True and x["native_db_restored_from_fresh_git_clone"] is True
+              assert x["product_effect"]=="NONE" and x["kernel_used"] is False
+              assert x["native_push_count"]==0 and x["original_provider_dispatch_count"]==0
+          assert a["recovered_issue_id_status"]==b["recovered_issue_id_status"]
+          out={"experiment":"TS-DISTRIBUTED-CONTROL-001-REMOTE-READ-20261031-002",
+               "status":"PASS_TWO_INDEPENDENT_HOSTS_NATIVE_GITHUB_REMOTE_READ_ONLY",
+               "source_git_sha":sys.argv[2],"run_id":None,
+               "slots":["alpha","beta"],"remote_ref":"refs/dolt/data",
+               "remote_sha":"1f72d68797114170a97fee27641858f2e55a4571",
+               "recovered_issue_id_status":a["recovered_issue_id_status"],
+               "provider_dispatch_count":0,"native_push_count":0,
+               "kernel_used":False,"product_effect":"NONE",
+               "qualification":"READ_ONLY;NO_WRITER_ISOLATION_OR_HOSTED_WRITE_PARITY"}
+          output=p/"RESULT044.json"
+          output.write_text(json.dumps(out,sort_keys=True,indent=2)+"\n",encoding="utf8")
+          print("TS_DC044_JOIN="+out["status"]+";hosts=2;pushes=0;Product=NONE")
+          print("TS_DC044_RESULT_SHA256="+hashlib.sha256(output.read_bytes()).hexdigest())
+          PY
+          test "$(git ls-remote https://github.com/mauedgar/ts-execution-lab.git refs/dolt/data | cut -f1)" = 1f72d68797114170a97fee27641858f2e55a4571
+          echo "TS_DC044=PASS_REMOTE_NATIVE_GIT_TWO_HOSTS;shared_ref_unchanged=YES;Product=NONE"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ts-dc044-002-join-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc044-join/RESULT044.json
+          if-no-files-found: error
+          retention-days: 30
