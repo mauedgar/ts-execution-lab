@@ -31,7 +31,7 @@ META_SOURCE=os.environ.get("TS047_META_SOURCE","")
 RUN=os.environ["GITHUB_RUN_ID"]
 SHA=os.environ["GITHUB_SHA"]
 MACHINE_FINGERPRINT=hashlib.sha256(socket.gethostname().encode()).hexdigest()
-HOST_FINGERPRINT=hashlib.sha256((HOST+":"+str(PORT)).encode()).hexdigest()
+HOST_FINGERPRINT=hashlib.pbkdf2_hmac("sha256",(HOST+":"+str(PORT)).encode(),PWD.encode(),1).hex()
 ATT="TS-BEADS-047-"+ROLE.upper()+"-ATTEMPT-001"
 ENV={**os.environ,"HOME":str(ROOT/"home"),
      "BEADS_DIR":str(PROJ/".beads"),
