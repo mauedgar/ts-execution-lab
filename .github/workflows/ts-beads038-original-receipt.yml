@@ -1,0 +1,81 @@
+name: TS Beads 038 native UNKNOWN durable receipt join
+on:
+  push:
+    branches:
+      - experiment/beads-038-native-unknown-provenance-20261031-001
+    paths:
+      - .github/workflows/ts-beads038-original-receipt.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-graph-unknown-verified-receipt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: One native Beads/Dolt graph and independently verified original provider receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-038-UNKNOWN-RECEIPT-20261031-001
+          test "${GITHUB_REF_NAME}" = experiment/beads-038-native-unknown-provenance-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "$(git hash-object "$root/native038.py")" = 6f65bc51a9c415cf48db1b82f3f236042ec8385e
+          python3 -m py_compile "$root/native038.py"
+          original=$(gh api repos/mauedgar/ts-execution-lab/actions/runs/41172852201)
+          test "$(jq -r '.status' <<<"$original")" = completed
+          test "$(jq -r '.conclusion' <<<"$original")" = success
+          test "$(jq -r '.run_attempt' <<<"$original")" = 1
+          test "$(jq -r '.head_sha' <<<"$original")" = 6ace605b344ec11e53c232b896eed0895a079063
+          artifact=$(gh api repos/mauedgar/ts-execution-lab/actions/artifacts/13031456953)
+          test "$(jq -r '.name' <<<"$artifact")" = ts-beads037-002-original-41172852201
+          test "$(jq -r '.digest' <<<"$artifact")" = sha256:8cda5db5224055abe689a60cfd654a4a20792cc8ffa3b9b18f5494e6f166c7b1
+          test "$(jq -r '.expired' <<<"$artifact")" = false
+          export TS038_VERIFIED_ORIGINAL_RECEIPT="github-actions:41172852201:artifact:13031456953:sha256:8cda5db5224055abe689a60cfd654a4a20792cc8ffa3b9b18f5494e6f166c7b1"
+          scratch="/tmp/ts-beads038-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -m 755 "$scratch"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          mkdir -p "$scratch/beads" "$scratch/dolt"
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/beads"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/beads" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export LAB_ROOT="$scratch/native-repo"
+          export TS038_BASE="$scratch/native-runtime"
+          export RESULT_PATH="$scratch/RESULT038.json"
+          python3 "$root/native038.py" 2>&1 | tee "$scratch/ORIGINAL_RUN038.log"
+          python3 - "$scratch/RESULT038.json" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1],encoding="utf8"))
+          assert r["status"]=="PASS_NATIVE_BEADS_GRAPH_GUARDED_UNKNOWN_TO_RECEIPT_WITH_BOUNDARY_LIMITS",r
+          assert r["Product_effect"]=="NONE" and r["shared_Dolt_effect"]=="NONE"
+          assert r["provider_dispatch_count"]==0
+          assert r["external_receipt_ref"]=="github-actions:41172852201:artifact:13031456953:sha256:8cda5db5224055abe689a60cfd654a4a20792cc8ffa3b9b18f5494e6f166c7b1"
+          assert len(r["rounds"])==2 and r["native_history_entries"]>=4
+          assert len(r["checks"])>=20 and all(z["result"]=="PASS" for z in r["checks"].values()),r
+          PY
+          cp "$root/DOD.md" "$scratch/DOD.md"
+          (cd "$scratch" && sha256sum RESULT038.json DOD.md ORIGINAL_RUN038.log > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS038=PASS_NATIVE_GRAPH_UNKNOWN_VERIFIED_PROVIDER_RECEIPT;Product=NONE;ProviderRedispatch=0"
+          echo "TS_BEADS038_ORIGINAL_SHA256=$(sha256sum "$scratch/RESULT038.json" | cut -d' ' -f1)"
+      - name: Preserve original native receipt, no private credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads038-original-${{ github.run_id }}
+          path: |
+            /tmp/ts-beads038-${{ github.run_id }}/RESULT038.json
+            /tmp/ts-beads038-${{ github.run_id }}/ORIGINAL_RUN038.log
+            /tmp/ts-beads038-${{ github.run_id }}/ORIGINAL_SHA256.txt
+            /tmp/ts-beads038-${{ github.run_id }}/DOD.md
+          retention-days: 30
+          if-no-files-found: warn
