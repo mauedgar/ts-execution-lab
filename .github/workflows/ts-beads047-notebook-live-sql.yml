@@ -30,7 +30,7 @@ jobs:
           test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/native047.py")" = f8713242d37f9ebdef5ff12baa10d0336b65bb29
           test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
           test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
           python3 -m py_compile "$root/native047.py"
@@ -86,7 +86,7 @@ jobs:
           test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/native047.py")" = f8713242d37f9ebdef5ff12baa10d0336b65bb29
           test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
           test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
           python3 -m py_compile "$root/native047.py"
@@ -147,7 +147,7 @@ jobs:
           test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/native047.py")" = f8713242d37f9ebdef5ff12baa10d0336b65bb29
           test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
           test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
           python3 -m py_compile "$root/native047.py"
@@ -208,7 +208,7 @@ jobs:
           test "$(cat "$root/EXECUTE_047_ONCE.txt")" = TS-BEADS-047-ACTIONS-ATTEMPT-001
           test "$GITHUB_REF_NAME" = experiment/beads-047-notebook-remote-sql-20261031-001
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git hash-object "$root/native047.py")" = 8ca873d5c1825c3e0ad6a1fbf6dff8cdd5d2b8b5
+          test "$(git hash-object "$root/native047.py")" = f8713242d37f9ebdef5ff12baa10d0336b65bb29
           test "$(git hash-object "$root/DOD.md")" = 85e3bbe1b0e795ce46b3a517ef2e930a434faf07
           test "$(git hash-object .github/actions/ts047-native-toolchain/action.yml)" = c45410c64eb63d80215549ed2688075d52c79c06
           python3 -m py_compile "$root/native047.py"
