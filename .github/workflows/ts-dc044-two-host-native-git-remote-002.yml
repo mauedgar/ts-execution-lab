@@ -4,7 +4,7 @@ on:
     branches:
       - experiment/distributed-control-001-remote-read-20261031-002
     paths:
-      - .github/workflows/ts-dc044-002-two-host-native-git-remote-002.yml
+      - .github/workflows/ts-dc044-two-host-native-git-remote-002.yml
 permissions:
   contents: read
   actions: read
