@@ -1,0 +1,66 @@
+name: TS Beads 042 decisive no-kernel actual parallel
+on:
+  push:
+    branches:
+      - experiment/beads-042-no-kernel-parallel-go-nogo-20261031-001
+    paths:
+      - .github/workflows/ts-beads-042-parallel-no-kernel.yml
+permissions:
+  contents: read
+jobs:
+  native-real-parallel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute two independent real native Beads-ready workers with no State Kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-BEADS-042-NO-KERNEL-PARALLEL-20261031-001
+          test "${GITHUB_RUN_ATTEMPT}" = 1
+          test "${GITHUB_REF_NAME}" = experiment/beads-042-no-kernel-parallel-go-nogo-20261031-001
+          test "$(git hash-object "$root/native042.py")" = ba518e866b644378610e730574a3df840f75ecea
+          python3 -m py_compile "$root/native042.py"
+          scratch="$RUNNER_TEMP/ts-beads042-${GITHUB_RUN_ID}"
+          test ! -e "$scratch"
+          mkdir -p "$scratch/bin" "$scratch/dolt" "$scratch/original"
+          curl --fail --location --silent --show-error --output "$scratch/beads.tar.gz" https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_linux_amd64.tar.gz
+          echo "3219443a9734b89b93fb16ee8d65844759fa1b3cd3cf139c606b7353cfb0715c  $scratch/beads.tar.gz" | sha256sum -c -
+          curl --fail --location --silent --show-error --output "$scratch/dolt.tar.gz" https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-linux-amd64.tar.gz
+          echo "1f7ad8c2622995789420a3fb0f2d16b4aa7430000a825dd91d5938f36480cbf6  $scratch/dolt.tar.gz" | sha256sum -c -
+          tar -xzf "$scratch/beads.tar.gz" -C "$scratch/bin"
+          tar -xzf "$scratch/dolt.tar.gz" -C "$scratch/dolt"
+          export BD_BIN="$(find "$scratch/bin" -type f -name bd -print -quit)"
+          export DOLT_BIN="$(find "$scratch/dolt" -type f -name dolt -print -quit)"
+          test -n "$BD_BIN" && test -n "$DOLT_BIN"
+          chmod +x "$BD_BIN" "$DOLT_BIN"
+          export PATH="$(dirname "$DOLT_BIN"):$PATH"
+          export TS042_BASE="$scratch/work"
+          export TS042_RESULT="$scratch/original/RESULT042.json"
+          python3 "$root/native042.py" 2>&1 | tee "$scratch/original/ORIGINAL042.log"
+          python3 - "$TS042_RESULT" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1],encoding="utf8"))
+          assert x["status"]=="PASS_REAL_PARALLEL_BEADS_FIRST_NO_STATE_KERNEL_WITH_TRUSTED_POLICY_BOUNDARY",x
+          assert x["execution_attempt"]=="TS-BEADS-042-ATTEMPT-001" and x["product_effect"]=="NONE"
+          assert x["state_backend"]=="NATIVE_BEADS_DOLT_ONLY" and x["kernel_used"] is False
+          assert x["worker_dispatch_count"]==2 and x["actual_overlap_ns"]>=100_000_000
+          assert len(x["receipts"])==2
+          assert all(c["pass"] for c in x["checks"].values()),x
+          assert len(x["checks"])>=24,x
+          PY
+          test -d "$scratch/work/git/.beads"
+          tar -C "$scratch/work/git" -cf "$scratch/original/ORIGINAL_NATIVE_BEADS_STORE.tar" .beads
+          cp "$root/DOD.md" "$scratch/original/DOD.md"
+          (cd "$scratch/original" && sha256sum RESULT042.json ORIGINAL042.log ORIGINAL_NATIVE_BEADS_STORE.tar DOD.md > ORIGINAL_SHA256.txt)
+          echo "TS_BEADS042=PASS_REAL_PARALLEL_NO_KERNEL;workers=2;Beads=AUTHORITATIVE_IN_EXPERIMENT;Product=NONE"
+          echo "TS_BEADS042_RESULT_SHA256=$(sha256sum "$TS042_RESULT" | cut -d' ' -f1)"
+      - name: Preserve original run and native store
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads042-original-${{ github.run_id }}
+          path: ${{ runner.temp }}/ts-beads042-${{ github.run_id }}/original/
+          if-no-files-found: warn
+          retention-days: 30
