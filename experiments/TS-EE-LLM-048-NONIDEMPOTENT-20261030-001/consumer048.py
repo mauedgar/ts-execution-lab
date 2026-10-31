@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """Fail-closed consumer: durable reservation before network, never repeats an attempt."""
-import argparse,json,sqlite3,urllib.request,urllib.error,urllib.parse
+import argparse,json,sqlite3,time,urllib.request,urllib.error,urllib.parse
 
 def db(path):
  c=sqlite3.connect(path,timeout=8,isolation_level=None)
  c.execute("PRAGMA busy_timeout=8000")
- c.execute("PRAGMA journal_mode=WAL")
+ # Metadata-only SQLite bootstrap. Another first opener can briefly own the
+ # journal-mode transition. No external call is made until this precondition
+ # completes; retrying PRAGMA is never retrying a provider effect.
+ for attempt in range(100):
+  try:
+   c.execute("PRAGMA journal_mode=WAL")
+   break
+  except sqlite3.OperationalError as exc:
+   if "locked" not in str(exc).lower() or attempt==99:raise
+   time.sleep(.025)
  c.execute("PRAGMA synchronous=FULL")
  c.execute("CREATE TABLE IF NOT EXISTS attempts (attempt TEXT PRIMARY KEY,subject TEXT NOT NULL,owner TEXT NOT NULL,state TEXT NOT NULL,receipt TEXT)")
  c.execute("CREATE TABLE IF NOT EXISTS history (seq INTEGER PRIMARY KEY AUTOINCREMENT,attempt TEXT NOT NULL,state TEXT NOT NULL,receipt TEXT)")
