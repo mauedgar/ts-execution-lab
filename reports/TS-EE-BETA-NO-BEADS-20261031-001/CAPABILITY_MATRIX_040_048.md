@@ -1,5 +1,7 @@
 # Tecnotron Execution Engineering — matriz verificable 040–048 (sin Beads en Beta)
 
+> **RECTIFICACIÓN DE ALCANCE — 2026-10-31 (Developer):** Este chat/branch de investigación corresponde **exclusivamente a Beads experimental**. La implementación, integración, TaskCycles y reconciliación canónica de Tecnotron Beta competen **únicamente a Beta Control**. **Attendance ya es una responsabilidad canónica de Tecnotron**, no una candidata que esta rama tenga que seleccionar o iniciar. El estado de su ejecución y sus contratos se observan/deciden en Beta Control. Toda recomendación posterior de este documento sobre gates, preparación de Attendance, selección o ejecución Product queda **SUPERADA / NO EJECUTABLE DESDE AQUÍ**. Se conservan los hallazgos históricos como evidencia de Beads, sin transferencia de autoridad. No interpretar «continuar sin Beads» como orden de detener esta investigación experimental: significa que Beta Control puede avanzar por separado sin depender de ella.
+
 **Fecha de corte:** 2026-10-31. **Clase:** evaluación derivada de evidencia experimental; `EXPERIMENTAL_CONTROL_ONLY`. **Decisión de alcance expresada por Developer:** continuar la preparación de `TECNOTRON_BETA_RUN_001` **sin Beads**. Este informe no es una aceptación Product, no cambia `tools`, no inicia #35 y no reabre #34. Evidencia `!=` autoridad `!=` implementación.
 
 ## 1. Matriz de intentos originales
