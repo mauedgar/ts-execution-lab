@@ -1,0 +1,94 @@
+﻿{
+    "Harness":  "deterministic-mock-native",
+    "Candidate":  "TS-BEADS-047B-OFFLINE-PRIVILEGE-CANDIDATE-20261101-001",
+    "PositivePhase":  "STOP_AWAIT_INDEPENDENT_REVIEW",
+    "NativeCalls":  2,
+    "NegativeLabels":  [
+                           {
+                               "Label":  "MISSING_BINARY_OR_HASH",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "MISSING_BINARY_OR_HASH: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "DISALLOWED_ROOT_PATH",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "DISALLOWED_ROOT_PATH: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "MISSING_EXECUTION_GRANT",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "MISSING_EXECUTION_GRANT: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "WRONG_HOST_OR_OWNER",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "WRONG_HOST_OR_OWNER: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "REPARSE_POINT_OR_UNPROTECTED_ACL",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "REPARSE_POINT_OR_UNPROTECTED_ACL: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "STALE_DB_OR_PRIVILEGE_FILE",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "STALE_DB_OR_PRIVILEGE_FILE: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "PRIOR_EFFECT_UNKNOWN",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "PRIOR_EFFECT_UNKNOWN: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "CSPRNG_OR_DPAPI_FAILURE",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "CSPRNG_OR_DPAPI_FAILURE: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "STDIN_UNAVAILABLE",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "STDIN_UNAVAILABLE: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "UNSUPPORTED_CLI_GLOBAL_FLAGS",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "UNSUPPORTED_CLI_GLOBAL_FLAGS: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "OFFLINE_SQL_CREATION_FAILURE",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "OFFLINE_SQL_CREATION_FAILURE: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "UNEXPECTED_ROOT_ACCOUNT",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "UNEXPECTED_ROOT_ACCOUNT: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "PRIVILEGE_FILE_NOT_SAME_AS_FUTURE_CONFIG",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "PRIVILEGE_FILE_NOT_SAME_AS_FUTURE_CONFIG: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "PASSWORDLESS_ROOT",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "PASSWORDLESS_ROOT: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "BAD_WRITER_DDL",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "BAD_WRITER_DDL: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "READER_MUTATION",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "READER_MUTATION: PRECHECK/ExactPinnedBinary"
+                           },
+                           {
+                               "Label":  "POSTCONDITION_FAILURE",
+                               "Result":  "REJECTED_BY_MOCK",
+                               "Detail":  "POSTCONDITION_FAILURE: PRECHECK/ExactPinnedBinary"
+                           }
+                       ],
+    "NoSqlServer":  true
+}

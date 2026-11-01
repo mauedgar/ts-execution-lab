@@ -1,0 +1,31 @@
+﻿{
+    "Candidate":  "TS-BEADS-047B-OFFLINE-PRIVILEGE-CANDIDATE-20261101-001",
+    "HashScope":  "all candidate files except HASHES.json",
+    "Files":  [
+                  {
+                      "File":  "MOCK_RECEIPT.json",
+                      "SHA256":  "E4223CF75CD25B7C954935CEBF400F54BF642D93EEB89DE6D3F0D820A2F8A3ED",
+                      "GitBlob":  "8f3e0857efe8bfb66cb8c4b1323ccd377699ccec"
+                  },
+                  {
+                      "File":  "MockNativeHarness.ps1",
+                      "SHA256":  "9002A85B5E8935DC8438C10A18A60126C3F0390172DD2159FD712F4119C676A6",
+                      "GitBlob":  "a773603b6ab38a0da00d132dd4b387df45b57047"
+                  },
+                  {
+                      "File":  "NO_EFFECT_REPORT.md",
+                      "SHA256":  "0EE37CA3007407A349FD6233F95C7D43910E283598D20CB9EBF518BBB133EE84",
+                      "GitBlob":  "f1ace95e168512c1c1f2b87e2b8e7ff1ab58ba3c"
+                  },
+                  {
+                      "File":  "OfflinePrivilegeBootstrap.psm1",
+                      "SHA256":  "79B88A23AB9895BB2A332C4A8F7AD5590372E7C36C1BCBBC19852220D302311D",
+                      "GitBlob":  "2ef6f5997775eb889201f9468e1f303b0d2d0bc9"
+                  },
+                  {
+                      "File":  "README.md",
+                      "SHA256":  "0B00E096C3E78052B4C123CD813D651A997E2AFE507D159977C6C8FBF11A6614",
+                      "GitBlob":  "6391ee69960a5b2c172b112424ca1ddf9f05399f"
+                  }
+              ]
+}
