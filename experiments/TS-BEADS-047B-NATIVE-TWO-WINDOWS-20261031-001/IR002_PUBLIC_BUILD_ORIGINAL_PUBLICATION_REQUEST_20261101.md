@@ -1,0 +1,25 @@
+# TS-BEADS 047B — Publish preexisting IR002 public-build original candidate (transport-only)
+
+**Operation:** TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001.
+**New bounded publication ExecutionAttempt:** TS-BEADS-047B-IR002-PUBLIC-BUILD-PUBLISH-20261101-001. This is not a re-run of the original implementation.
+**Owner:** notebook DESKTOP-DJLBEQH, Orca folder C:\TS\station, Commander device 40cc0b10-fa7b-4a6a-98cf-1c94f93791b2.
+**Authority:** existing user authorization to continue experimental secure provisioner preparation and publish original code for independent review. EXPERIMENTAL_CONTROL_ONLY. No Product or SQL authority.
+**Original terminal:** term_59e34bf6-00b6-4a28-a0b6-242d886d3902, incarnation ebe31121-3c36-430d-b442-b2a371e25f90, original implementation ExecutionAttempt TS-BEADS-047B-IR002-PUBLIC-BUILD-20261101-001 is TERMINAL.
+**Original frozen input:** mauedgar/ts-execution-lab@94a042ad7587b0970e811566356eff532b002a28:experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/IR002_PUBLIC_BUILD_EXECUTION_ATTEMPT_20261101-001.md (Git blob 727924117435eb5c84365e40e158e48f99d5d1ca).
+**Original output:** local-only source under C:\TS\station\ts-execution-lab-047b-public-build\experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\IR002-PUBLIC-BUILD-20261101-001\candidate\. Do not reconstruct missing source, don't edit bytes, don't run tests again.
+**Original terminal verdict:** BLOCKED_PUBLICATION_GIT_IDENTITY_UNCONFIGURED. Original implementer claims 24/24 mock tests PASS, future fenced runner/Windows DPAPI/MySqlConnector adapter, source hashes and SHA256SUMS. Original candidate is not yet published and NOT independently reviewed.
+
+## One bounded transport action
+
+1. Read ONLY the frozen public input and existing original candidate directory in the exactly named notebook experimental checkout. Reconcile the original terminal state as terminal (PowerShell prompt after final response), read-only query exact remote branch to establish no previous candidate publication and no same-purpose publication process. If original files or verified session/receipt are missing, STOP with BLOCKED_PRECONDITION.
+2. Enumerate the **existing** candidate files within the exact allowlisted candidate directory; require a coherent nonsecret source, tests, receipt, procedure, SHA256SUMS and manifest. Compute per-file byte lengths, Git blob sha and SHA-256. Verify SHA256SUMS matches file bytes; reject symlinks/reparse points and unexpected path traversal. Perform secret/pairing-token/private endpoint/credentials scan; do not publish any secret or host-sensitive value; do not redact a source then claim it is original.
+3. Target must be EXACTLY repository mauedgar/ts-execution-lab, branch experiment/beads-047b-native-two-windows-20261031-001, path experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/IR002-PUBLIC-BUILD-20261101-001/candidate/ (preexisting untracked original candidate). No other source/target. Do not modify SOT, DoD, older IRs, Product, source originals, or local non-allowlisted files.
+4. Reconcile the local Git checkout against its actual GitHub origin branch (the publication request itself is a newer remote commit). Use fetch and safe fast-forward on the same branch, preserving untouched untracked candidate files; if a conflicting file exists, STOP. Ensure no uncommitted tracked changes or other untracked relevant outputs are mixed. Stage **only** the exact candidate allowlist; inspect staged filenames and bytes for absence of deletions/out-of-scope paths. Commit with current authenticated GitHub identity, **without any persistent/global Git config**: query `gh api user` for the authenticated login/id, check that it is authorized to publish to mauedgar; use only ephemeral per-command Git `-c user.name` / `-c user.email` grounded in that verified identity, OR authenticated GitHub Contents/Git data API. Do not invent an author identity, force-push, rebase across unknown effects, or change branch defaults.
+5. Push exactly once. Verify the resulting remote commit SHA/tree/path/blob SHA and original byte SHA-256. If the result is UNKNOWN, read provider Git state first; NO blind retry. Do not mark PASS if no remote verified commit and exact original blobs.
+6. Return an original compact terminal result with attempt identity, exact candidate files, each hash, published commit/tree, any original test receipt as **self-reported**, and clear outstanding independent review. Do not misstate local mocks as live SQL proofs.
+
+## Explicit prohibitions
+
+This is publication-only. **NO implementation or patch construction, no test rerun, no SQL/dolt/sql-server process, no real secrets or users, no Tailscale Serve/Funnel, no native Beads mutation, no Product, no cleanup, no new extra worker or automatic retry.** If Git publication needs source edits or Git owner identity isn't reliably available, STOP with the exact BLOCKED reason and preserve original files untouched.
+
+The approved provider for the publication worker is openai/gpt-5.6-terra, agent build, standalone. This user authorization does NOT imply an effectful server grant. Future independent review remains mandatory.
