@@ -1,0 +1,28 @@
+# TS-BEADS 047B — IR002 implementation correction
+
+Authority EXPERIMENTAL_CONTROL_ONLY, user authorized continue and repair. No Product, no TaskCycle, no Kernel migration. Existing operation TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001.
+
+Original DoD: mauedgar/ts-execution-lab@e02c611dec74ce5d2ddcd5c169f407543ef2e3c4:experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md (blob 26388665fc0782fd10b24adca96a7dfa47c6a952).
+Prior request: mauedgar/ts-execution-lab@3bc774c3d2c6c2ec400819f8f03876a2013f0575:experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SECURE_HOST_PROVISIONING_IR001_REPAIR_REQUEST_20261101.md.
+IR002 verdict: mauedgar/ts-execution-transport@b12e7ccfcf5bd91a72e0464d714b59e41363626e:handoffs/TS-BEADS-047B-SECURE-PROVISIONING-IR001-REPAIR-20261101-002/WEB_INLINE_IR002-SECURITY-20261101.md (blob a374014238536812331ef617eae1a2bc542443bd).
+Prior pure validator and 14/14 fixtures: mauedgar/ts-execution-transport@91ab00d1b419d91f349e1293fbc3505303eaaf67:handoffs/TS-BEADS-047B-SECURE-PROVISIONING-IR001-REPAIR-20261101-002/candidate/. Preserve all these originals.
+
+## Required actual implementation, not a third static stub
+
+The prior Test-StaticPlan reads a schema fixture and uses all-true synthetic booleans. This does NOT implement secure provisioning. The new deliverable must contain actual, reviewable PowerShell source for a future bounded, once-only SQL bootstrap and a comprehensive mocked-provider test suite, not merely an operator plan. THIS REPAIR ATTEMPT MUST NOT EXECUTE THAT BOOTSTRAP, start Dolt/SQL, create real secrets or users, enable Tailscale Serve, mutate Beads or Product.
+
+1. Implement effect fencing: Preflight always read-only; Apply requires a DISTINCT future approved immutable ExecutionAttempt, exact source digest, owner and provider identity and explicit effect grant. This repair run never calls Apply. If prior UNKNOWN or partial provider effect, never retry or cleanup.
+2. Implement real host/provider preconditions using a typed HostProvider adapter, NOT injected all-true booleans: Windows notebook DESKTOP-DJLBEQH and approved owner device, Dolt 2.2.0 native binary/digest and Beads 1.3.1, tailnet peer, vacant 3307, no SQL/Serve/Funnel, exact resolved %LOCALAPPDATA%\TS-BEADS-047B isolated root, no reparse point or file collision, restricted ACL and proof of no previous provider effect. Missing provider evidence must block. No Product paths.
+3. Implement nonsecret secret mechanism via OS CSPRNG (.NET RandomNumberGenerator.Fill), independent root/admin/writer/reader passwords and Windows DPAPI CurrentUser/Credential Manager, strict OS ACL, in-memory handling only. Never secrets in arguments, process list, SQL shell -e, env/logs, Git, stdout, PowerShell transcript, receipts or error strings. Provider must accept parameters in memory; if no verified connector, fail SECURE_SQL_CLIENT_UNAVAILABLE.
+4. Implement sanitized no-secret Dolt config with exact 127.0.0.1:3307 loopback, isolated data_dir/cfg_dir/privilege_file. First boot creates passwordless root@localhost: before any ingress, use exclusive local secure client to create a recoverable secured admin, then remove insecure root, create ts047b_beads database, least-privileged writer and SELECT-only reader with suitable restricted principal hosts. Do not use GRANT ALL ON *.*, root@%, or delete last admin. Native dolt sql can bypass SQL grants via filesystem: enforce OS isolation. Do not claim atomic hardening if startup has an unprotected local window.
+5. Verify command and SQL grammar against native pinned Dolt 2.2.0 help/version and current docs before an effect. ALTER USER/SET PASSWORD may not work. Unverified syntax must block before effect; no guessing. Use process/SQL adapters with bounded states and original receipt, not implicit shell execution.
+6. Deterministic chain for future invocation: integrity/parser checks -> provider/host/identity preconditions -> one conditioned loopback SQL process and immediate auth hardening -> positive and NEGATIVE SQL auth/grant/root/reader tests -> sanitized receipt. On partial effect preserve state; never blind retry, delete/roll back or promote a new writer.
+7. Tailscale Serve is separate after authenticated local SQL proof and peer ACL tests; never include private ingress/Funnel in this Apply.
+8. Mock tests must exercise the actual sequence through injected providers, with exact failure reason and no downstream effects on failure: wrong host/device, existing root, symlink, ACL/DPAPI, port busy, unexpected Serve, prior UNKNOWN/partial, wrong hash, unsupported native SQL grammar, secret failure, client missing, root still passwordless, overprivileged writer, reader mutation, wrong password, process crash and postconditions. Parser/integrity tests required. A fixture PASS never proves live auth.
+9. Publish new files only in a new, allowlisted experimental GitHub Transport candidate prefix with exact commit/tree/Git blob/SHA-256 and original test receipt. No modifying any original IR001/IR002 code, no Product changes, no Commander for semantic work.
+
+If the secure connector or pinned Dolt grammar is genuinely unavailable, return BLOCKED_SECURE_BOOTSTRAP_UNVERIFIED with specific evidence. Never substitute a static-only fixture and call it a repair of F001-F004.
+
+References: https://www.dolthub.com/docs/sql-reference/server/access-management/ ; https://www.dolthub.com/docs/sql-reference/server/configuration/ ; https://www.dolthub.com/blog/2025-02-05-sql-server-removes-user-pass-args/ .
+
+Result here is STATIC_CANDIDATE_FOR_INDEPENDENT_REVIEW, not permission to invoke live SQL. Full 047B remains HOST_INDEPENDENCE_INCOMPLETE.
