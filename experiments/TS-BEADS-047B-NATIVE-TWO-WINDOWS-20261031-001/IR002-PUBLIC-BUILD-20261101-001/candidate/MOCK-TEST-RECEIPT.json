@@ -1,0 +1,22 @@
+{
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "executionAttempt": "TS-BEADS-047B-IR002-PUBLIC-BUILD-20261101-001",
+  "status": "STATIC_CANDIDATE_FOR_INDEPENDENT_REVIEW",
+  "sourceCommit": "94a042ad7587b0970e811566356eff532b002a28",
+  "frozenBriefCommit": "df46aab3431194be4409362778ff98fe90753981",
+  "dodCommit": "e02c611dec74ce5d2ddcd5c169f407543ef2e3c4",
+  "testCommand": "pwsh -NoProfile -File TS047B-SecureBootstrap.Mock.Tests.ps1",
+  "testProvider": "MockTs047bHostProvider only",
+  "mockTestsPassed": 24,
+  "mockTestsFailed": 0,
+  "liveSqlStarted": false,
+  "liveSecretsCreated": false,
+  "tailscaleServeChanged": false,
+  "beadsMutated": false,
+  "productMutated": false,
+  "sqlExecuted": false,
+  "limitations": [
+    "Real Apply is deliberately blocked until a separately authorized future attempt provides native Dolt 2.2.0 grammar evidence and a verified MySqlConnector dependency.",
+    "No host/provider preflight was run against the native machine in this build attempt."
+  ]
+}
