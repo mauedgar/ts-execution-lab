@@ -1,0 +1,23 @@
+# TS-BEADS 047B — original offline privilege candidate publication ONLY
+
+**Existing operation:** TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001.
+**NEW one-shot transport ExecutionAttempt:** TS-BEADS-047B-OFFLINE-PRIVILEGE-PUBLISH-20261101-001. Do not replay the original build attempt.
+**Authority:** experimental 047B user autonomy, Product NONE. No SQL, Serve, Beads, Kernel or TaskCycle effect.
+**Owner:** notebook DESKTOP-DJLBEQH / Commander 40cc0b10-fa7b-4a6a-98cf-1c94f93791b2 / visible Orca C:\TS\station.
+**Provider:** OpenCode2 build standalone, openai/gpt-5.6-terra for THIS transport task only, no fallback.
+**Original build ExecutionAttempt (terminal):** TS-BEADS-047B-OFFLINE-PRIVILEGE-CANDIDATE-20261101-001, Orca terminal term_4c4a2ea9-5532-4902-88dc-0a6b6d50a6e1, incarnation 673bf9e4-b078-4138-9642-9b3f638fbb21, final original answer NO_GO/BLOCKED_OFFLINE_PRIVILEGE_FEASIBILITY (mock-only native security not proved), PowerShell prompt returned. No remote publication by original.
+**Original frozen task:** same PUBLIC repo @efef3eac25f1883b783a086f58740515d41db691:experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE_PRIVILEGE_BOOTSTRAP_CANDIDATE_REQUEST_20261101-001.md; Git blob 8c064389be200c47cb9f1b3bf282d389b68fb67e.
+**Original local candidate folder:** expect C:\TS\station\experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\OFFLINE-PRIVILEGE-CANDIDATE-20261101-001\candidate\; verify with original local output/manifest. Do not guess alternate files or read unrelated repos.
+**Allowed publication path:** in mauedgar/ts-execution-lab experiment/beads-047b-native-two-windows-20261031-001 branch, exactly experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-CANDIDATE-20261101-001/candidate/. No other path.
+
+## Bounded mechanical transport work
+
+1. First reconcile original terminal as final and current GitHub branch/target, with no prior publisher, no candidate target already published, no ambiguous Git writes. If original candidate or result files absent or there are concurrent effects, FAIL CLOSED.
+2. Read ONLY existing original candidate directory. Validate exact regular files and relative basenames, reject symlink/reparse traversal, compute Git blob SHA-1 and SHA-256 of ORIGINAL bytes; compare with original HASHES.json and preserve original line endings/BOM. Include OfflinePrivilegeBootstrap.psm1, MockNativeHarness.ps1, MOCK_RECEIPT.json, NO_EFFECT_REPORT.md, README.md, HASHES.json and any other original candidate entry only if verified source+allowlist. Do NOT generate/reformat/patch/re-run ANY code/test.
+3. Check files for secret/credential/token/private tailnet pairing material; if any real secret is found STOP, no publication. Fixed host name/role and illustrative placeholders are nonsecret; report minimal sanitized path and original sha.
+4. Resolve a fresh clean Git checkout of the specified PUBLIC experimental repo/branch via authenticated GitHub, protecting original candidate against overwrite. The Orca root C:\TS\station is not itself a repo. Prefer using a separate fresh Git clone or the already-verified public lab checkout `C:\TS\station\ts-execution-lab-047b-public-build` only after ensuring no concurrent writer/unknown state. Never use a blind git reset/checkout/cleanup. Stage only the target candidate directory; no unrelated repo edits. If no safe clone, BLOCKED; don't improvise path.
+5. Current `gh api user` in earlier 047B original publisher confirmed authenticated GitHub owner mauedgar and authorized repo permissions. Reverify identity and permission via GitHub. Avoid global git config; apply per-command `git -c user.name=<verified login> -c user.email=<verified GitHub noreply email>` *only when identity is grounded*; OR use GitHub contents API. Do not embed secrets/tokens in logs/argv or invent an email. If no verified email or authenticated write access, STOP.
+6. Make one isolated commit and one push, then verify GitHub remote HEAD, commit/tree, exact six or fewer original Git blobs and original SHA256 and no unrelated deletions. If push result UNKNOWN, reconcile provider first, no blind retry. Return compact original terminal and verified Git refs.
+7. Only publication; **do not rerun original tests**, do not start Dolt init/sql/sql-server (including offline SQL), no secrets, no Tailscale Serve/Funnel, no Beads native mutations, no Product. This is NOT a new developer implementation or authorization for SQL. Independent ChatGPT Web review is next.
+
+**Stop:** if previous original reports NO_GO, carry that verdict honestly; publishing its source does not turn it into GO. The future real Dolt 2.2.0 persistence/root security can only be qualified by a separate bounded experiment and independent review.
