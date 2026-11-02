@@ -1,0 +1,38 @@
+name: TS-BEADS 047B F001 post-Start benign child negative
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p3r2-pid-isolation-20261102-001
+    paths:
+      - .github/workflows/ts-beads047b-v6p3r2-f001-poststart.yml
+permissions:
+  contents: read
+jobs:
+  post_start_source_negative:
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - name: Enforce LF before checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: 16f6e08b2bab5b8a5d266c2317a40401cf8c8cc7
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact source and no runnable candidate
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne '16f6e08b2bab5b8a5d266c2317a40401cf8c8cc7') {throw 'F001_POSTSTART_WRONG_SOURCE'}
+          $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R2-20261102-001'
+          if ((git hash-object (Join-Path $root 'candidate/Invoke-047B-V6-Fixture.ps1')).Trim() -cne 'c483edd310756097027c2f6c17e483eac69c9fb7') {throw 'F001_RUNNER_CHANGED'}
+          if (Test-Path -LiteralPath (Join-Path $root 'candidate/Start-047B-V6.ps1')) {throw 'FORBIDDEN_LAUNCHER_PRESENT'}
+          if (Test-Path -LiteralPath (Join-Path $root 'MANIFEST.json')) {throw 'FORBIDDEN_DISPATCH_MANIFEST_PRESENT'}
+      - name: Test post-Start logger failure with safe whoami child, NO SQL
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R2-20261102-001/tests/Test-V6P3R2-PostStart-ReceiptFailure.ps1'
+          if ($LASTEXITCODE -ne 0) {throw 'F001_POSTSTART_BENIGN_CHILD_FAILED'}
+          'TS047B_F001_POSTSTART=PASS_SAFE_CHILD_NO_SQL'
