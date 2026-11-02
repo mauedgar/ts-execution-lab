@@ -1,0 +1,93 @@
+{
+  "artifact_id": "TS-AI-ACTIONS-LOCKFILE-001-R3-QUALIFICATION-20261102",
+  "kind": "ACTUAL_GH_ACTIONS_LOCK_V0_4_0_ISOLATED_CLI_RESULT",
+  "terminal_state": "COMPLETE_WITH_LIMITATIONS_PENDING_INDEPENDENT_REVIEW",
+  "cli_binary_sha256": "a64179817d7605d705e805475a09b5ef0be12a3469477d8607350f1f3cc26d8b",
+  "immutable_input_carrier_sha256": "3c4a8d01f971d7eefe2002c1b3c37b0f92d7b5d597672b28728949e8bc5901ea",
+  "runner_sha256": "008a624c8ac9ab4abf159c9e6d6ffd9bd721fd220b0e12f3377747d17831c511",
+  "original_output_receipt_sha256": "f965f8ac0da258f4039f40532d4e1b8acbeccb83b064592f15113c3b8dbc0a42",
+  "lockfile_sha256": "bad92b372467c06dc8de4d1339caec4a1557a9d7d6eaf723dc047d759f94d9bc",
+  "lockfile_bytes": 438,
+  "effects": {
+    "product": 0,
+    "remote_push": 0,
+    "github_action_dispatch": 0
+  },
+  "tests": [
+    {
+      "id": "T01_missing_lock_offline",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "EXPECTED_NEGATIVE_MISSING_PIN"
+    },
+    {
+      "id": "T02_generate_lockfile",
+      "exit_code": 0,
+      "timed_out": false,
+      "interpretation": "PASS_GENERATE_LOCK_ACTUAL_CLI"
+    },
+    {
+      "id": "T03_verify_local_positive",
+      "exit_code": 0,
+      "timed_out": false,
+      "interpretation": "PASS_OFFLINE_COVERAGE"
+    },
+    {
+      "id": "T04_verify_online_provenance",
+      "exit_code": 0,
+      "timed_out": false,
+      "interpretation": "PASS_ONLINE_VERIFICATION"
+    },
+    {
+      "id": "T05_new_uses_missing",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "EXPECTED_NEGATIVE_STALE_AND_NOT_PINNED"
+    },
+    {
+      "id": "T06_local_action",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "EXPECTED_NEGATIVE_LOCAL_ACTION_BLOCK"
+    },
+    {
+      "id": "T07_external_reusable",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "INCOMPLETE_NOT_PINNED_WORKFLOW_CONFUSION"
+    },
+    {
+      "id": "T08_unpinned_container_offline",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "INCOMPLETE_NEW_WORKFLOW_NOT_PINNED"
+    },
+    {
+      "id": "T09_unpinned_container_no_fix",
+      "exit_code": 1,
+      "timed_out": false,
+      "interpretation": "WARN_UNPINNED_CONTAINER_CONFIRMED_PLUS_NOT_PINNED_WORKFLOW"
+    },
+    {
+      "id": "T10_verify_restored",
+      "exit_code": 0,
+      "timed_out": false,
+      "interpretation": "PASS_OFFLINE_RESTORATION"
+    },
+    {
+      "id": "T11_verify_online_restored",
+      "exit_code": 0,
+      "timed_out": false,
+      "interpretation": "PASS_ONLINE_RESTORATION"
+    }
+  ],
+  "limitations": [
+    "T07 does not isolate the upstream external reusable workflow limitation, because its new workflow itself lacked a lockfile entry.",
+    "T08 offline failure is due to new workflow without lockfile entry, not specifically container digest.",
+    "T09 --no-fix did explicitly warn that container image node:22 is not pinned by digest.",
+    "No real CI runner enforcement, no Product repo integration, no independent reviewer verdict yet.",
+    "All test runs occurred inside an isolated local synthetic checkout, with R1 and R2 untouched."
+  ],
+  "review_gate": "IR001_PENDING",
+  "authenticity": "tool-observed compact terminal plus fetched original receipt and R3 ZIP SHA"
+}
