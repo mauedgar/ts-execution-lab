@@ -1,0 +1,275 @@
+{
+  "gate": "TS-AI-ACTIONS-LOCKFILE-001-R4",
+  "status": "R4_COMPLETED_PENDING_IR",
+  "cli_version": "v0.4.0",
+  "official_binary_sha256": "a64179817d7605d705e805475a09b5ef0be12a3469477d8607350f1f3cc26d8b",
+  "results": [
+    {
+      "id": "T01_initial_missing_lock",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "expected_exit": "NONZERO",
+      "required_diagnostics": [
+        "not-pinned"
+      ],
+      "forbidden_diagnostics": [],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "1 of 1 workflow failed: 1 not-pinned\nRun without --verify-local to resolve and pin missing actions.\n"
+    },
+    {
+      "id": "T02_generate_lockfile",
+      "args": [],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "Pinned 1 action"
+      ],
+      "forbidden_diagnostics": [],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\nPlanning pins\nPinned 1 action across 1 workflow\n  actions/checkout@v4.4.0 (11d5960)\n    ÔööÔöÇ .github\\workflows\\baseline.yml\n"
+    },
+    {
+      "id": "T03_baseline_verify_local",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T04_baseline_verify_online",
+      "args": [
+        "--verify"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "workflow valid"
+      ],
+      "forbidden_diagnostics": [],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\nAll 1 workflow valid\n"
+    },
+    {
+      "id": "T05_external_reusable_mutable_offline",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed",
+        "local action"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T06_external_reusable_mutable_online",
+      "args": [
+        "--verify"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "workflow valid"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed",
+        "local action"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\nAll 1 workflow valid\n"
+    },
+    {
+      "id": "T07_external_reusable_sha_offline",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T08_after_reusable_restore",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T09_container_warning_no_fix",
+      "args": [
+        "--no-fix"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ANY",
+      "required_diagnostics": [
+        "not pinned by digest",
+        "node:22"
+      ],
+      "forbidden_diagnostics": [
+        "workflow has no lockfile entry",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\ncontainer image node:22 is not pinned by digest\nÔå│ used by .github\\workflows\\baseline.yml: job baseline container\nÔå│ the lockfile pins action commits, not container images; pin it as node:22@sha256:ÔÇª\nÔå│ https://github.com/github/gh-actions-lock/blob/main/docs/troubleshooting.md#container-image\nAll 1 workflow valid\n"
+    },
+    {
+      "id": "T10_container_offline_coverage",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T11_container_online_verify",
+      "args": [
+        "--verify"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ANY",
+      "required_diagnostics": [
+        "node:22",
+        "not pinned by digest"
+      ],
+      "forbidden_diagnostics": [
+        "workflow has no lockfile entry",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\ncontainer image node:22 is not pinned by digest\nÔå│ used by .github\\workflows\\baseline.yml: job baseline container\nÔå│ the lockfile pins action commits, not container images; pin it as node:22@sha256:ÔÇª\nÔå│ https://github.com/github/gh-actions-lock/blob/main/docs/troubleshooting.md#container-image\nAll 1 workflow valid\n"
+    },
+    {
+      "id": "T12_final_clean_verify_local",
+      "args": [
+        "--verify-local"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "complete lockfile coverage"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "All 1 workflow have complete lockfile coverage.\n"
+    },
+    {
+      "id": "T13_final_clean_verify_online",
+      "args": [
+        "--verify"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "expected_exit": "ZERO",
+      "required_diagnostics": [
+        "workflow valid"
+      ],
+      "forbidden_diagnostics": [
+        "not-pinned",
+        "ref-changed"
+      ],
+      "semantic_pass": true,
+      "issues": [],
+      "stdout_excerpt": "",
+      "stderr_excerpt": "Scanning 1 workflow\nAll 1 workflow valid\n"
+    }
+  ],
+  "result_count": 13,
+  "semantic_pass_count": 13,
+  "generated_lockfile": {
+    "bytes": 438,
+    "sha256": "bad92b372467c06dc8de4d1339caec4a1557a9d7d6eaf723dc047d759f94d9bc"
+  },
+  "notes": [
+    "T05/T06: CLI accepts a workflow with external reusable job pinned to mutable @main; upstream explicitly excludes jobs.<id>.uses from lock coverage. This is a SECURITY LIMITATION, not secure PASS.",
+    "T07: compensating static policy must require full commit SHA for external jobs.<id>.uses. Neither online nor offline gh-actions-lock proves this SHA is consumed/trusted.",
+    "T09-T11: digest warnings documented separately from lockfile coverage; any absence of failing enforcement means separate digest policy needed."
+  ],
+  "product_effects": 0,
+  "git_remote_configured": false,
+  "push_effects": 0,
+  "dispatch_effects": 0,
+  "reference_public_reusable": "actions/reusable-workflows/.github/workflows/basic-validation.yml@d468c63c53c1184242904d1a3ac74fd1081f36c8",
+  "max_seconds_per_case": 60
+}
