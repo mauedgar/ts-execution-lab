@@ -1,4 +1,5 @@
 import concurrent.futures
+import json
 from contextlib import closing
 import sqlite3
 import multiprocessing
@@ -124,6 +125,7 @@ class CoreTests(unittest.TestCase):
     def test_future_schema_version_fail_closed_preserve_original(self):
         with closing(sqlite3.connect(self.db)) as conn:
             conn.execute('PRAGMA user_version=999')
+            conn.commit()
         with self.assertRaises(AttendanceError) as cm:
             AttendanceService(self.db)
         self.assertEqual(cm.exception.code,'STORAGE_ERROR')
@@ -137,6 +139,7 @@ class CoreTests(unittest.TestCase):
             # v1 used .000000Z, so construct its actual legacy representation.
             conn.execute('UPDATE sessions SET checked_in_at="2026-11-01T10:00:00.000000Z", checked_out_at="2026-11-01T11:00:00.000000Z"')
             conn.execute('PRAGMA user_version=1')
+            conn.commit()
         restored = AttendanceService(self.db)
         data=restored.listSessions({'subject_id':'s1','from':T0,'to':T3})
         self.assertEqual(len(data),1)
@@ -144,6 +147,50 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],2)
         AttendanceService(self.db)  # repeat setup must not mutate anything
+
+    def test_invalid_offset_minutes_hours_are_typed(self):
+        for offset in ('+00:60','+01:99','-01:99','+24:00'):
+            with self.subTest(offset=offset):
+                self.must_fail('INVALID_ARGUMENT', self.s.checkIn,
+                               self.inp('2026-11-01T10:00:00' + offset))
+
+    def test_known_leap_second_utc_and_local_offset(self):
+        s=self.s.checkIn(self.inp('2016-12-31T23:59:60Z'))
+        self.assertEqual(s['checked_in_at'],'2016-12-31T23:59:60.000000Z')
+        self.s.checkOut(self.inp('2017-01-01T00:00:00.0000001Z'))
+        self.assertEqual(len(self.s.listSessions({'subject_id':'s1',
+                          'from':'2016-12-31T23:59:59Z',
+                          'to':'2017-01-01T00:00:00Z'})),1)
+        other=AttendanceService(str(Path(self.tmp.name)/'another.sqlite'))
+        v=other.checkIn({'subject_id':'x','occurred_at':'2017-01-01T00:59:60+01:00'})
+        self.assertEqual(v['checked_in_at'],'2016-12-31T23:59:60.000000Z')
+        self.must_fail('INVALID_ARGUMENT',other.checkIn,
+                       {'subject_id':'y','occurred_at':'2017-12-31T23:59:60Z'})
+
+    def test_migrate_genuine_v1_persisted_idempotency_signature(self):
+        stamp='2026-11-01T10:00:00Z'
+        original=self.s.checkIn(self.inp(stamp,request_id='legacy'))
+        # Reconstruct actual v1 persisted signature and session timestamp.
+        with closing(sqlite3.connect(self.db)) as conn:
+            legacy_sig=json.dumps({'operation':'checkIn',
+                        'occurred_at':'2026-11-01T10:00:00.000000Z'},sort_keys=True,separators=(',',':'))
+            conn.execute('UPDATE requests SET payload=? WHERE request_id="legacy"',(legacy_sig,))
+            conn.execute('UPDATE sessions SET checked_in_at="2026-11-01T10:00:00.000000Z"')
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        migrated=AttendanceService(self.db)
+        self.assertEqual(migrated.checkIn(self.inp(stamp,request_id='legacy')),original)
+        # Legacy keys retain their canonical UTC replay semantics as v1 did.
+        self.assertEqual(migrated.checkIn(self.inp('2026-11-01T12:00:00+02:00',request_id='legacy')),original)
+        self.must_fail('REQUEST_CONFLICT',migrated.checkIn,self.inp(T1,request_id='legacy'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],2)
+            sig=json.loads(conn.execute('SELECT payload FROM requests WHERE request_id="legacy"').fetchone()[0])
+            self.assertEqual(sig['signature_version'],1)
+        # Newly issued v2 keys obey original *literal* payload identity.
+        migrated.checkOut(self.inp(T1,request_id='new'))
+        self.must_fail('REQUEST_CONFLICT',migrated.checkOut,
+                       self.inp('2026-11-01T13:00:00+02:00',request_id='new'))
 
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):

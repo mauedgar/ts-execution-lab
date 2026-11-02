@@ -52,6 +52,22 @@ class SQLiteAttendanceStore:
                         exited = _legacy_key(row['checked_out_at']) if row['checked_out_at'] is not None else None
                         conn.execute('UPDATE sessions SET checked_in_at=?, checked_out_at=? WHERE session_id=?',
                                      (entered, exited, row['session_id']))
+                    # Version 1 had no original raw timestamp; preserve the
+                    # historical canonical-instant replay policy under a
+                    # marked legacy signature, separate from v2 literal keys.
+                    requests = conn.execute('SELECT subject_id, request_id, payload FROM requests').fetchall()
+                    from attendance.core.service import utc
+                    for req in requests:
+                        try:
+                            old = json.loads(req['payload'])
+                            marked = json.dumps({'signature_version': 1,
+                              'operation': old['operation'],
+                              'utc_occurred_at': utc(old['occurred_at'])},
+                              sort_keys=True, separators=(',', ':'))
+                        except (KeyError, ValueError, TypeError, AttendanceError) as exc:
+                            raise AttendanceError('STORAGE_ERROR', 'corrupt historical request signature') from exc
+                        conn.execute('UPDATE requests SET payload=? WHERE subject_id=? AND request_id=?',
+                                     (marked, req['subject_id'], req['request_id']))
                 if version < 2:
                     conn.execute('PRAGMA user_version=2')
                 conn.commit()
@@ -75,7 +91,15 @@ class SQLiteAttendanceStore:
             if request_id is not None:
                 previous = conn.execute('SELECT payload,response FROM requests WHERE subject_id=? AND request_id=?', (subject, request_id)).fetchone()
                 if previous is not None:
-                    if previous['payload'] != signature:
+                    previous_sig = json.loads(previous['payload'])
+                    if previous_sig.get('signature_version') == 1:
+                        # A v1 request originally used normalized UTC, never raw
+                        # bytes; the raw value cannot be recovered retroactively.
+                        identical = (previous_sig.get('operation') == operation and
+                                     previous_sig.get('utc_occurred_at') == occurred_at)
+                    else:
+                        identical = previous['payload'] == signature
+                    if not identical:
                         raise AttendanceError('REQUEST_CONFLICT', 'request_id used for different arguments')
                     response = json.loads(previous['response'])
                     conn.commit()

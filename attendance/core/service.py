@@ -31,6 +31,16 @@ def request_id(value: Any) -> str | None:
     return value
 
 
+# Positive UTC leap seconds published by IERS through 2016. No new insertion
+# dates are inferred: unknown :60 instants fail closed until this data is updated.
+_LEAP_SECOND_DATES = frozenset("""1972-06-30 1972-12-31 1973-12-31 1974-12-31 1975-12-31
+1976-12-31 1977-12-31 1978-12-31 1979-12-31 1981-06-30
+1982-06-30 1983-06-30 1985-06-30 1987-12-31 1989-12-31
+1990-12-31 1992-06-30 1993-06-30 1994-06-30 1995-12-31
+1997-06-30 1998-12-31 2005-12-31 2008-12-31 2012-06-30
+2015-06-30 2016-12-31""".split())
+
+
 def utc(value: Any) -> str:
     """Normalize an RFC3339 instant without discarding fractional precision.
 
@@ -43,13 +53,25 @@ def utc(value: Any) -> str:
         raise AttendanceError("INVALID_ARGUMENT", "timestamp must be RFC3339 with timezone")
     day, clock, fraction, zone = match.groups()
     zone = "+00:00" if zone.upper() == "Z" else zone
+    if zone != "+00:00":
+        hours, minutes = int(zone[1:3]), int(zone[4:6])
+        if hours > 23 or minutes > 59:
+            raise AttendanceError("INVALID_ARGUMENT", "invalid RFC3339 offset")
+    is_leap = clock.endswith(":60")
+    normal_clock = clock[:-2] + "59" if is_leap else clock
     try:
-        dt = datetime.fromisoformat(f"{day}T{clock}{zone}")
+        dt = datetime.fromisoformat(f"{day}T{normal_clock}{zone}")
         if dt.tzinfo is None or dt.utcoffset() is None:
             raise ValueError("naive")
         utc_dt = dt.astimezone(timezone.utc)
         utc_second = (f"{utc_dt.year:04d}-{utc_dt.month:02d}-{utc_dt.day:02d}T"
                       f"{utc_dt.hour:02d}:{utc_dt.minute:02d}:{utc_dt.second:02d}")
+        if is_leap:
+            # RFC3339 :60 is representable as the distinct UTC second after
+            # 23:59:59; lexicographic SQLite ordering remains exact.
+            if utc_second[:10] not in _LEAP_SECOND_DATES or not utc_second.endswith("23:59:59"):
+                raise ValueError("not an announced UTC leap second")
+            utc_second = utc_second[:-2] + "60"
     except (ValueError, OverflowError) as exc:
         raise AttendanceError("INVALID_ARGUMENT", "invalid timestamp") from exc
     digits = (fraction or "").rstrip("0")
