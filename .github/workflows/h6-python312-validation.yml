@@ -1,0 +1,75 @@
+name: H6 Python 3.12 candidate validation (bounded)
+on:
+  push:
+    branches:
+      - validation/h6-python312-ir001-repair-20261102-001
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a547060f4bb046aad15ffc1f59895c025c5d3db4
+          path: domain
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: d161f86006440f09a900ad0620a6ed5199ff69e9
+          path: operator
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 39571b53cbc83eecdb3fef3839328a35a6145a6f
+          path: parent
+          persist-credentials: false
+      - name: Verify exact original Git subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C domain rev-parse HEAD)" = "a547060f4bb046aad15ffc1f59895c025c5d3db4"
+          test "$(git -C domain rev-parse 'HEAD^{tree}')" = "c95f7367491fb2acbe04f59cf8d38a96301faf15"
+          test "$(git -C operator rev-parse HEAD)" = "d161f86006440f09a900ad0620a6ed5199ff69e9"
+          test "$(git -C operator rev-parse 'HEAD^{tree}')" = "e80e8c6bdda7e5fd983c5a2149e9fa4ae86f4a42"
+          test "$(git -C parent rev-parse HEAD)" = "39571b53cbc83eecdb3fef3839328a35a6145a6f"
+          test "$(git -C parent rev-parse 'HEAD^{tree}')" = "ca1f2b824da45ca81bbc66355eb389a0e71f4224"
+          test "$(git -C domain rev-parse HEAD:attendance/contracts/attendance-v0.md)" = "2e939672a8401154289ea94aab83194f689247f0"
+          test "$(git -C operator rev-parse HEAD:attendance/contracts/attendance-v0.md)" = "2e939672a8401154289ea94aab83194f689247f0"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate native runtime, disjoint children and real E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version
+          python -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+          (cd domain && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/core -p 'test_*.py' -v)
+          (cd operator && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/operator -p 'test_*.py' -v)
+          mkdir -p combined/attendance
+          cp -a domain/attendance/. combined/attendance/
+          cp -a operator/attendance/operator combined/attendance/
+          cp -a operator/attendance/tests/operator combined/attendance/tests/
+          cp -a parent/attendance/tests/e2e combined/attendance/tests/
+          (cd combined && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/e2e -p 'test_*.py' -v)
+      - name: Emit result provenance
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,sys,os,pathlib
+          out={'schema':'tecnotron-h6-python312-validation-receipt/v1','run_id':os.getenv('GITHUB_RUN_ID'),
+               'python_version':sys.version,'job_status':'${{ job.status }}',
+               'domain':'a547060f4bb046aad15ffc1f59895c025c5d3db4',
+               'operator':'d161f86006440f09a900ad0620a6ed5199ff69e9',
+               'parent_e2e':'39571b53cbc83eecdb3fef3839328a35a6145a6f',
+               'Product_effect':'NONE','acceptance':'NOT_GRANTED','phase2':'NOT_GRANTED'}
+          pathlib.Path('h6-validation-result.json').write_text(json.dumps(out,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h6-python312-validation
+          path: h6-validation-result.json
