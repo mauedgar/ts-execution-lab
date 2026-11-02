@@ -1,0 +1,74 @@
+name: TS-BEADS 047B V6P3R1 native Windows source-only corrected tests
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p3r1-test-literal-repair-20261102-001
+    paths:
+      - .github/workflows/ts-beads047b-v6p3r1-native-source.yml
+permissions:
+  contents: read
+jobs:
+  native_v6p3r1_source_only:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Configure LF before checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.safecrlf true
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: fb9a010751d98790226e147e2b58b87d7f0851cb
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify immutable V6P3R1 source hashes and no effects
+        id: integrity
+        shell: pwsh
+        env:
+          SOURCE_DIR: experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R1-20261102-001
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne 'fb9a010751d98790226e147e2b58b87d7f0851cb') {throw 'FROZEN_SUBJECT_MISMATCH'}
+          $m=Get-Content -LiteralPath (Join-Path $env:SOURCE_DIR 'MANIFEST.json') -Raw | ConvertFrom-Json
+          if (-not $m.sourceOnly -or -not $m.notDispatchable -or $m.grantPresent -or $m.sqlExecuted -or $m.originalProviderEffectsReconciled -or @($m.files).Count -ne 8) {throw 'MANIFEST_DISPATCH_BLOCK_MISSING'}
+          foreach($f in @($m.files)){
+            $p=Join-Path $env:SOURCE_DIR $f.path
+            $bytes=[IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $p))
+            $blob=(git hash-object $p).Trim()
+            $digest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+            if ($bytes.Length -ne $f.bytes -or $blob -cne $f.gitBlobSha1 -or $digest -cne $f.sha256Utf8Lf) {throw ('V6P3R1_FILE_PIN_FAIL_'+$f.path)}
+            if (@($bytes | Where-Object {$_ -eq 13}).Count -gt 0) {throw ('V6P3R1_NON_LF_'+$f.path)}
+          }
+          'TS047B_V6P3R1_MANIFEST=PASS_8_OF_8_LF_NO_EFFECT'
+      - name: AST source-only with adversarial fixtures
+        id: ast
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R1-20261102-001/tests/Test-V6P3-ParserAndAst.ps1'
+          if ($LASTEXITCODE -ne 0) {throw 'V6P3R1_AST_NEGATIVES_FAIL'}
+      - name: Python source-only tests
+        id: python
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R1-20261102-001/tests' -p test_source_contract.py -v
+          if ($LASTEXITCODE -ne 0) {throw 'V6P3R1_PYTHON_FAIL'}
+      - name: Negative absent trusted issuer
+        id: negative
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3R1-20261102-001/tests/Test-V6P3-Negative.ps1'
+          if ($LASTEXITCODE -ne 0) {throw 'V6P3R1_ISSUER_NEGATIVE_FAIL'}
+      - name: Terminal verdict across all three source test families
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.integrity.outcome }}' -cne 'success' -or '${{ steps.ast.outcome }}' -cne 'success' -or '${{ steps.python.outcome }}' -cne 'success' -or '${{ steps.negative.outcome }}' -cne 'success') {
+            throw "V6P3R1_SOURCE_ONLY_FAIL integrity=${{ steps.integrity.outcome }} ast=${{ steps.ast.outcome }} python=${{ steps.python.outcome }} negative=${{ steps.negative.outcome }}"
+          }
+          'TS047B_V6P3R1=PASS_WINDOWS_SOURCE_ONLY_ZERO_SQL_BEADS_PRODUCT'
+          'TS047B_NOTEBOOK_V6P2_ORIGINAL=ABANDONED_UNRECONCILED_UNKNOWN'
