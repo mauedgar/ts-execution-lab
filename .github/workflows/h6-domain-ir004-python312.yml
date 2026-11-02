@@ -1,0 +1,63 @@
+name: H6 Domain IR004 native Python312 (original candidate)
+on:
+  push:
+    branches:
+      - validation/h6-domain-ir004-python312-20261102-001
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 93c3f2b788b7169e3a23ca1f30a96e08e82ea8e1
+          persist-credentials: false
+      - name: Verify exact candidate tree and frozen V0
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '93c3f2b788b7169e3a23ca1f30a96e08e82ea8e1'
+          test "$(git rev-parse 'HEAD^{tree}')" = 'dca5a2c869fbe4795b1b894cea4a4a1991459c53'
+          test "$(git rev-parse HEAD:attendance/contracts/attendance-v0.md)" = '2e939672a8401154289ea94aab83194f689247f0'
+      - uses: actions/checkout@v4
+        with:
+          ref: 68cdba19acf1fd77cd86d4a4e2f86f73e6b32c37
+          path: control-policy
+          persist-credentials: false
+      - name: Verify Control frozen compatibility addendum
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C control-policy rev-parse HEAD)" = '68cdba19acf1fd77cd86d4a4e2f86f73e6b32c37'
+          test "$(git -C control-policy rev-parse HEAD:attendance/contracts/attendance-v0-legacy-idempotency-control-20261102.md)" = '5ccb84f7642eb25fc2b3fb98bb7f93cab0ecd917'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test exact Domain source under Python 3.12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.version_info[:2]==(3,12),sys.version; print(sys.version)'
+          PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/core -p 'test_*.py' -v
+      - name: Persist bounded validation observation
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,sys,pathlib,os
+          x={'class':'VALIDATION_ONLY_NOT_INDEPENDENT_REVIEW',
+             'run_id':os.getenv('GITHUB_RUN_ID'),'attempt':os.getenv('GITHUB_RUN_ATTEMPT'),
+             'job_status':'${{ job.status }}',
+             'candidate':'93c3f2b788b7169e3a23ca1f30a96e08e82ea8e1',
+             'tree':'dca5a2c869fbe4795b1b894cea4a4a1991459c53',
+             'policy_addendum_commit':'68cdba19acf1fd77cd86d4a4e2f86f73e6b32c37',
+             'python':sys.version, 'Product_effect':'NONE','Developer_acceptance':'NOT_GRANTED','Phase2':'NOT_GRANTED'}
+          pathlib.Path('domain-ir004-native312.json').write_text(json.dumps(x,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: domain-ir004-python312-validation
+          path: domain-ir004-native312.json
