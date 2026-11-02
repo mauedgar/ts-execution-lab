@@ -1,0 +1,57 @@
+{
+  "manifestVersion": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "candidate": "OFFLINE-PRIVILEGE-FIXTURE-V3-20261102-001",
+  "baselineCommit": "ee5efa31cf9674c4f148e5ef51b710899df5c359",
+  "status": "SOURCE_ONLY_NOT_DISPATCHABLE",
+  "grantPresent": false,
+  "issuerPinProvisioned": false,
+  "offHostClaimVerified": false,
+  "sqlExecuted": false,
+  "nativeWindowsTestsExecuted": false,
+  "manifestSelfHash": "EXCLUDED_TO_AVOID_SELF_REFERENCE",
+  "files": [
+    {
+      "path": "candidate/Security-047B-V3.psm1",
+      "gitBlobSha1": "1714a4ecb53a944dded8eeb93cb060d1b0875b0e",
+      "sha256Utf8Lf": "3B1CC29B539A04DB05223CE1D50785F8736646EAE71378E855F3CF6FE9291B26",
+      "bytes": 11912
+    },
+    {
+      "path": "candidate/Invoke-047B-V3-Fixture.ps1",
+      "gitBlobSha1": "89ebdba2b6aef52789c37672591491d513f148dc",
+      "sha256Utf8Lf": "DD2C0B9387A4CF46CC4900966DB226B3C37FF1805BAC4BEB02F2B6B4EE844BA9",
+      "bytes": 11178
+    },
+    {
+      "path": "candidate/Start-047B-V3.ps1",
+      "gitBlobSha1": "c49864f702c053810628d8c492d46545a511fe6c",
+      "sha256Utf8Lf": "0C4678CA16160B0C670B31DCF841A30C7F7CB83E1931AECE0F53B8DE82ED3369",
+      "bytes": 1844
+    },
+    {
+      "path": "tests/test_source_contract.py",
+      "gitBlobSha1": "3e46e087de5fb125bdd6b3475ed782aaa4ca0c98",
+      "sha256Utf8Lf": "31CA4F4E60972AAC1EAE3E4509F11BB698DFE41E616020C19145AC8074E994FE",
+      "bytes": 3485
+    },
+    {
+      "path": "tests/Test-V3-Negative.ps1",
+      "gitBlobSha1": "432aa6d2259700cd89b587090738ba2776e25504",
+      "sha256Utf8Lf": "1F1C3E0394ED88B27AF000BCD1EA9AF17F3708AD63E40975AE44BF081684D33F",
+      "bytes": 1227
+    },
+    {
+      "path": "tests/Test-V3-ParserOnly.ps1",
+      "gitBlobSha1": "82d7d59cce5ecc939504d00a5451e0aee82b297f",
+      "sha256Utf8Lf": "36DAF534D3547BB1E2439052EECC25073F1DA33FAF75035ABF8670084CCC2EF7",
+      "bytes": 638
+    },
+    {
+      "path": "README.md",
+      "gitBlobSha1": "4d6132dc00a08f8a3b57691634db186fc3a8e59f",
+      "sha256Utf8Lf": "D4B7CB26E113769C09B631E15698AC4CEC726BA310901DA8AED975407958F02C",
+      "bytes": 2715
+    }
+  ]
+}
