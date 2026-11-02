@@ -1,0 +1,6 @@
+# Immutable experimental 047B V6P2 canonical source uses LF on every host
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
