@@ -3,6 +3,7 @@ import json
 from contextlib import closing
 import sqlite3
 import multiprocessing
+import uuid
 from pathlib import Path
 import tempfile
 import unittest
@@ -167,7 +168,7 @@ class CoreTests(unittest.TestCase):
         self.must_fail('INVALID_ARGUMENT',other.checkIn,
                        {'subject_id':'y','occurred_at':'2017-12-31T23:59:60Z'})
 
-    def test_migrate_genuine_v1_persisted_idempotency_signature(self):
+    def test_migrate_reconstructed_v1_persisted_idempotency_signature(self):
         stamp='2026-11-01T10:00:00Z'
         original=self.s.checkIn(self.inp(stamp,request_id='legacy'))
         # Reconstruct actual v1 persisted signature and session timestamp.
@@ -252,7 +253,7 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             for index in range(260):
                 sid=f's{index:04d}'
-                session=f'c{index:04d}'
+                session=uuid.uuid4().hex
                 conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',(sid,))
                 conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
                              'VALUES(?,?,?,?)',(session,sid,'2026-11-01T10:00:00.000000Z','2026-11-01T11:00:00.000000Z'))
@@ -301,6 +302,57 @@ class CoreTests(unittest.TestCase):
         self.s.checkOut(self.inp(T1))
         self.assertEqual(len(self.s.listSessions({'subject_id':'s1',
              'from':T0,'to':T2})),1)
+
+    def test_v1_provenance_and_invalid_history_fail_closed(self):
+        self.s.checkIn(self.inp(request_id='r'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            session = conn.execute('SELECT session_id FROM sessions').fetchone()[0]
+            signature=json.dumps({'operation':'checkIn','occurred_at':'2026-11-01T10:00:00.000000Z'},
+                                 sort_keys=True,separators=(',',':'))
+            response=json.dumps({'session_id':session,'subject_id':'s1',
+                                 'checked_in_at':'2026-11-01T10:00:00.000000Z','checked_out_at':None})
+            conn.execute('UPDATE requests SET payload=?,response=?,operation=? WHERE request_id=?',
+                         (signature,response,'checkOut','r'))
+            conn.execute('UPDATE sessions SET checked_in_at=?',
+                         ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+
+    def test_v1_malformed_session_timestamp_fails_storage_error(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE sessions SET checked_in_at=?',('garbage-time',))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+
+    def test_v1_empty_session_id_must_not_be_skipped(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE sessions SET session_id=?,checked_in_at=?',
+                         ('','2026-11-01T10:00:00.000000Z'))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+
+    def test_v1_response_type_shape_must_match_persisted_session(self):
+        self.s.checkIn(self.inp(request_id='r'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            signature=json.dumps({'operation':'checkIn','occurred_at':'2026-11-01T10:00:00.000000Z'},
+                                 sort_keys=True,separators=(',',':'))
+            conn.execute('UPDATE sessions SET checked_in_at=?',
+                         ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('UPDATE requests SET payload=?,response=? WHERE request_id=?',
+                         (signature, json.dumps({'session_id':None,'subject_id':'s1',
+                          'checked_in_at':False,'checked_out_at':{}}),'r'))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
 
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):

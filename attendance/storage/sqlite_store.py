@@ -8,6 +8,7 @@ import sqlite3
 import uuid
 
 from attendance.core.service import AttendanceError, to_public
+from attendance.storage.legacy_v1 import original_stamp, validate_session_identity, migrate_request
 
 
 class SQLiteAttendanceStore:
@@ -26,10 +27,14 @@ class SQLiteAttendanceStore:
 
     def _connect(self):
         conn = sqlite3.connect(self.path, isolation_level=None, timeout=15)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA foreign_keys=ON')
-        conn.execute('PRAGMA busy_timeout=15000')
-        return conn
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute('PRAGMA foreign_keys=ON')
+            conn.execute('PRAGMA busy_timeout=15000')
+            return conn
+        except Exception:
+            conn.close()
+            raise
 
     def _setup(self):
         try:
@@ -52,48 +57,44 @@ class SQLiteAttendanceStore:
                 if version == 1:
                     # Migrate in keyset batches, with bounded memory usage.
                     # Original v1 stored canonical UTC but not raw argument bytes.
-                    last_session_id = ''
+                    last_session_id = None
                     while True:
-                        rows = conn.execute(
-                            'SELECT session_id,checked_in_at,checked_out_at FROM sessions '
-                            'WHERE session_id>? ORDER BY session_id LIMIT 128',
-                            (last_session_id,)).fetchall()
+                        if last_session_id is None:
+                            rows = conn.execute(
+                                'SELECT session_id,subject_id,checked_in_at,checked_out_at '
+                                'FROM sessions ORDER BY session_id LIMIT 128').fetchall()
+                        else:
+                            rows = conn.execute(
+                                'SELECT session_id,subject_id,checked_in_at,checked_out_at '
+                                'FROM sessions WHERE session_id>? ORDER BY session_id LIMIT 128',
+                                (last_session_id,)).fetchall()
                         if not rows:
                             break
                         for row in rows:
-                            entered = _legacy_key(row['checked_in_at'])
-                            exited = _legacy_key(row['checked_out_at']) if row['checked_out_at'] is not None else None
+                            validate_session_identity(row)
+                            entered = original_stamp(row['checked_in_at'])
+                            exited = original_stamp(row['checked_out_at']) if row['checked_out_at'] is not None else None
+                            if exited is not None and exited <= entered:
+                                raise AttendanceError('STORAGE_ERROR', 'invalid historical interval')
                             conn.execute('UPDATE sessions SET checked_in_at=?, checked_out_at=? WHERE session_id=?',
                                          (entered, exited, row['session_id']))
                         last_session_id = rows[-1]['session_id']
-                    last_subject, last_request = '', ''
-                    from attendance.core.service import utc
+                    last_subject, last_request = None, None
                     while True:
-                        requests = conn.execute(
-                            'SELECT subject_id,request_id,payload,response FROM requests '
-                            'WHERE (subject_id,request_id)>(?,?) '
-                            'ORDER BY subject_id,request_id LIMIT 128',
-                            (last_subject, last_request)).fetchall()
+                        if last_subject is None:
+                            requests = conn.execute(
+                                'SELECT subject_id,request_id,operation,payload,response '
+                                'FROM requests ORDER BY subject_id,request_id LIMIT 128').fetchall()
+                        else:
+                            requests = conn.execute(
+                                'SELECT subject_id,request_id,operation,payload,response FROM requests '
+                                'WHERE (subject_id,request_id)>(?,?) '
+                                'ORDER BY subject_id,request_id LIMIT 128',
+                                (last_subject, last_request)).fetchall()
                         if not requests:
                             break
                         for req in requests:
-                            try:
-                                old = json.loads(req['payload'])
-                                response = json.loads(req['response'])
-                                if (not isinstance(old, dict) or
-                                    old.get('operation') not in ('checkIn', 'checkOut') or
-                                    not isinstance(old.get('occurred_at'), str) or
-                                    not isinstance(response, dict) or
-                                    not all(x in response for x in
-                                            ('session_id','subject_id','checked_in_at','checked_out_at')) or
-                                    response['subject_id'] != req['subject_id']):
-                                    raise ValueError('invalid historical idempotency row')
-                                marked = json.dumps({'signature_version': 1,
-                                  'operation': old['operation'],
-                                  'utc_occurred_at': utc(old['occurred_at'])},
-                                  sort_keys=True, separators=(',', ':'))
-                            except (KeyError, ValueError, TypeError, AttendanceError) as exc:
-                                raise AttendanceError('STORAGE_ERROR', 'corrupt historical request row') from exc
+                            marked = migrate_request(conn, req)
                             conn.execute('UPDATE requests SET payload=? WHERE subject_id=? AND request_id=?',
                                          (marked, req['subject_id'], req['request_id']))
                         last_subject, last_request = requests[-1]['subject_id'], requests[-1]['request_id']
@@ -207,10 +208,3 @@ class SQLiteAttendanceStore:
         except sqlite3.Error as exc:
             raise AttendanceError('STORAGE_ERROR', 'SQLite read failure') from exc
 
-
-def _legacy_key(value: str) -> str:
-    # SQLite v1 values are UTC RFC3339 and the old parser always stored
-    # exactly six decimal places; stripping Z and insignificant zeros gives
-    # an exact sorting key for the v2 schema without loss of instant value.
-    from attendance.core.service import utc
-    return utc(value)
