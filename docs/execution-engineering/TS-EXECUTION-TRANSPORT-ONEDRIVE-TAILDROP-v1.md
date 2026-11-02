@@ -30,6 +30,7 @@ Previous immutable Taildrop proof:
 Observed successful paths:
 - Educational OneDrive 183-byte text file: SharePoint `update_file_exact` with **explicit educational account binding**, readback and local notebook SHA-256 `452f5cf5450f76dfbca6018516aab82c595e7f024af882a3dd4cd173f31c53dd`.
 - Taildrop notebook -> desktop 1535-byte text: both endpoint SHA-256 `e1cc27ee30e9009211e123f97349c57c34f0ef74fea689b0501385655ddac402`.
+- Taildrop desktop -> notebook independently tested with a new 1535-byte TXT (same benign prior content), recipient SHA-256 MATCH. Immutable receipt: `mauedgar/ts-execution-lab@13f92749ace9a74b1f35ebdfc98c7ba8c6dfdd77:docs/execution-engineering/evidence/TS-TAILDROP-REVERSE-20261102-001.json`.
 
 ## Canonical flow / producer-consumer contract
 
@@ -38,7 +39,7 @@ Observed successful paths:
 3. **Read/resolve the exact educational cloud target** with explicit educational account, do not use the default personal OneDrive connection. Target identity must match approved slot and drive.
 4. **Cloud write with `Microsoft_SharePoint.update_file_exact`** using exact target, `link_id` explicitly selecting educational account, trusted file reference, and bounded MIME/type. Never use account-unbound `upload_drive_item_content` as the canonical cloud writer; it yielded HTTP 400 `ObjectHandle is Invalid`.
 5. **Verify receipt**: cloud readback against expected bytes/hash where available, then independent notebook readback of synced bytes/size/SHA-256. A provider success response alone is not an end-to-end PASS.
-6. **Optionally send notebook -> desktop via Taildrop** only when an explicit destination and artifact are authorized. Verify receiver file identity, size, and SHA-256. The reverse **desktop -> notebook file-transfer** direction is not yet qualified (bidirectional Tailscale pings are not equivalent to receipt verification).
+6. **Optionally use Taildrop notebook <-> desktop** in either direction, only when an explicit destination and artifact are authorized. Both directions have separate small-TXT SHA-256-matched receipts. Verify receiver file identity, size and SHA-256 for each new transfer; large/binary/batch transfers remain unqualified.
 7. **Publish compact durable evidence** in GitHub Transport or appropriate EE evidence store. Record immutable source identities, outcomes, hashes, stop reasons and any UNKNOWN state. No secrets, tokens, remote tunnel URLs or personal files in public receipts.
 
 ## Security / lifecycle invariants
@@ -60,7 +61,7 @@ Observed successful paths:
 | OneDrive educational cloud exact-write -> notebook, tiny TXT | PASS |
 | Microsoft multiple-account routing explained | PASS_DIAGNOSTIC |
 | Taildrop notebook -> desktop, tiny TXT | PASS |
-| Taildrop desktop -> notebook, file receipt | UNQUALIFIED |
+| Taildrop desktop -> notebook, tiny TXT | PASS |
 | OneDrive general direct upload/create from cloud | BLOCKED_CONNECTOR_ACCOUNT_BINDING |
 | Large/binary artifacts, concurrency, cancellation, interruption, idempotent repair | NOT_TESTED |
 | Auto-ingestion of all inbound bytes, Product effect execution | NOT_AUTHORIZED |
@@ -72,3 +73,7 @@ Observed successful paths:
 - On drift or violation: fail closed, preserve the original receipt and identity, report reason. Fall back to GitHub Transport + Commander if separately authorized and technically compatible; never treat a fallback as license to bypass a security denial.
 
 Canonical baseline: `docs/execution-engineering/TS-EXECUTION-ENGINEERING-AUTONOMOUS-OPERATING-CONTRACT-v1.md`.
+
+## Connector-specific operational recipe
+
+The **tested operations, current account-selection rule, exact-write procedure, negative results, and non-tested actions** are documented in `docs/execution-engineering/TS-SP-ONEDRIVE-OPERATIONS-RECIPE-v1.md` with evidence `docs/execution-engineering/evidence/TS-SP-ONEDRIVE-OPERATIONS-QUALIFICATION-20261102-001.json`. Use the recipe before any Microsoft SharePoint/OneDrive transport action, instead of rediscovering schemas. Qualified and prohibited operations must not be conflated.
