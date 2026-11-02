@@ -1,0 +1,53 @@
+name: TS-BEADS-047B V6P1 one-shot Windows NO-SQL native validation
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p1-windows-nosql-20261102-001
+    paths:
+      - .github/workflows/ts-beads047b-v6p1-windows-nosql-001.yml
+permissions:
+  contents: read
+jobs:
+  no_sql_native:
+    if: ${{ github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Checkout frozen 047B V6P1 source (no credentials)
+        uses: actions/checkout@v4
+        with:
+          ref: 0118028c2508c2ce274fd42240f847adf7ff2187
+          path: source
+          persist-credentials: false
+      - name: Checkout frozen gate runner at original workflow event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: gate
+          persist-credentials: false
+      - name: Select Python for pure original source tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact runner blob and execute bounded no-SQL native gate once
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:GITHUB_RUN_ATTEMPT -cne '1'){throw 'RETRY_NOT_AUTHORIZED'}
+          if($env:GITHUB_REF_NAME -cne 'experiment/ts-beads-047b-v6p1-windows-nosql-20261102-001'){throw 'BRANCH_NOT_EXPECTED'}
+          $gate=Join-Path $env:GITHUB_WORKSPACE 'gate'
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $runner=Join-Path $gate 'experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\WINDOWS-NOSQL-V6P1-GATE-20261102-001\Invoke-WindowsNoSql-V6P1.ps1'
+          $blob=(& git -C $gate hash-object $runner).Trim()
+          if($LASTEXITCODE -ne 0 -or $blob -cne '3060628b16973ec444967dfe70d9627a7d7835da'){throw 'GATE_RUNNER_BLOB_MISMATCH'}
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -File $runner -SourceCheckoutRoot $source
+          if($LASTEXITCODE -ne 0){throw 'NATIVE_NO_SQL_TEST_REPORTED_FAILURE'}
+          Write-Output 'TS047B_WINDOWS_NOSQL=PASS_SOURCE_AND_SCRATCH_ONLY;SQL=false;Product=false;HostNotebook=false'
+      - name: Publish original bounded no-SQL result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047b-v6p1-windows-nosql-${{ github.run_id }}
+          path: ${{ runner.temp }}/TS_BEADS_047B_V6P1_WINDOWS_NOSQL_RESULT.json
+          if-no-files-found: warn
+          retention-days: 30
