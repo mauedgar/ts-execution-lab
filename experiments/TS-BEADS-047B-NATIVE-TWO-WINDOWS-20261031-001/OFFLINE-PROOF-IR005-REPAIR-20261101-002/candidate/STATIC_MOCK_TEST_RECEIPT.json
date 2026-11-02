@@ -1,0 +1,18 @@
+﻿{
+  "status": "REVIEW_REQUIRED",
+  "kind": "bounded injected-provider mocks only",
+  "cases": [
+    "provider absent",
+    "wrong binary hash",
+    "existing root",
+    "junction ancestor",
+    "unsafe ACL",
+    "listener",
+    "serve",
+    "prior receipt",
+    "prior unknown",
+    "effect grammar blocked"
+  ],
+  "sqlExecuted": false,
+  "empiricalPass": false
+}

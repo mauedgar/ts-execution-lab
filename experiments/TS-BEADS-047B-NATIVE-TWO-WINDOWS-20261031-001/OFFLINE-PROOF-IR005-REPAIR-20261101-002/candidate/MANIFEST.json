@@ -1,0 +1,27 @@
+{
+  "executionAttempt": "TS-BEADS-047B-OFFLINE-PROOF-IR005-REPAIR-20261101-002",
+  "sourceCommit": "8b4f0f884a0220fbc4f06490e37bf1c6efa3ecb5",
+  "mockSqlExecuted": false,
+  "files": [
+    {
+      "path": "PROCEDURE.md",
+      "sha256": "1FF5995C812168646C3E3CF7A4BD438455E61F3AB12908AD393B35BBC8834C98",
+      "gitBlob": "d209c1e79cf0137412d52ce478fc173fe2c84ec6"
+    },
+    {
+      "path": "Proof-OfflineDoltPrivilege.ps1",
+      "sha256": "A18336304ED902D5A6DCD84C730DD37BDC3EDBC7401C2EF8B5E481EBEC7BB22D",
+      "gitBlob": "40b6f1fadc8327d3a50991860eeedbf14bd83002"
+    },
+    {
+      "path": "STATIC_MOCK_TEST_RECEIPT.json",
+      "sha256": "831D83813225996E45866F208EECD446933D3B7586471832650238219AA7136C",
+      "gitBlob": "342f9acec2e4d6b7ff0575da4b583a8dded338d4"
+    },
+    {
+      "path": "Test-Proof-OfflineDoltPrivilege.Mock.ps1",
+      "sha256": "6298A89B065AA73F9E270A04FEC64E11B6CBD71AC43AB3185ACB590D40E6FEB1",
+      "gitBlob": "9496cef9fa12367a6a7006cdf18582c929407735"
+    }
+  ]
+}
