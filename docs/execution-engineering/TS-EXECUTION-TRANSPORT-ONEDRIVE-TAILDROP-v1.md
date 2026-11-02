@@ -77,3 +77,7 @@ Canonical baseline: `docs/execution-engineering/TS-EXECUTION-ENGINEERING-AUTONOM
 ## Connector-specific operational recipe
 
 The **tested operations, current account-selection rule, exact-write procedure, negative results, and non-tested actions** are documented in `docs/execution-engineering/TS-SP-ONEDRIVE-OPERATIONS-RECIPE-v1.md` with evidence `docs/execution-engineering/evidence/TS-SP-ONEDRIVE-OPERATIONS-QUALIFICATION-20261102-001.json`. Use the recipe before any Microsoft SharePoint/OneDrive transport action, instead of rediscovering schemas. Qualified and prohibited operations must not be conflated.
+
+## Account-selector schema migration (2026-11-02)
+
+**Canonical account invariant is educational identity verification, not the continued presence of an API field.** When the SharePoint connector has several Microsoft accounts, bind its `link_id` explicitly to the verified educational account whenever the method supports it. When only the educational account remains connected, some live method schemas omit `link_id`; supplying the old ID is invalid. In that configuration, call `get_profile({})`, require the exact educational account, qualify the target drive/site/item, and omit `link_id` for the write. Use `update_file_exact` on a verified unique empty slot and notebook SHA-256 receipt. Re-check only the relevant tool schema, not all tools, before a new operation. See the [updated operating recipe](./TS-SP-ONEDRIVE-OPERATIONS-RECIPE-v1.md#7-live-schema-reconciliation--single-educational-account-2026-11-02).
