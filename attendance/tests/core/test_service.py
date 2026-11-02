@@ -433,6 +433,40 @@ class CoreTests(unittest.TestCase):
             'from':'2026-11-01T00:00:00Z','to':'2026-11-02T00:00:00Z'})
         self.assertEqual(len(results),260)
 
+    def test_v1_partial_unique_index_with_false_predicate_rejected(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('DROP INDEX one_open_session')
+            conn.execute('CREATE UNIQUE INDEX one_open_session ON sessions(subject_id) '
+                         'WHERE checked_out_at IS NULL AND 1=0')
+            conn.execute('UPDATE sessions SET checked_in_at=?',
+                         ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+
+    def test_v2_forged_historical_signature_without_ledger_rejected(self):
+        self.s.checkIn(self.inp(request_id='req1'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE requests SET payload=? WHERE request_id=?',
+                         (json.dumps({'signature_version':1,'operation':'checkIn',
+                           'utc_occurred_at':'2026-11-01T10:00:00'},
+                           sort_keys=True,separators=(',',':')),'req1'))
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',self.s.checkIn,self.inp(request_id='req1'))
+
+    def test_get_state_and_list_sessions_reject_corrupt_v2_timestamp(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE sessions SET checked_in_at=?',
+                         ('2026-11-01T10:00:00invalid',))
+            conn.commit()
+        self.must_fail('STORAGE_ERROR', self.s.getState, {'subject_id':'s1'})
+        self.must_fail('STORAGE_ERROR', self.s.listSessions,
+                       {'subject_id':'s1','from':T0,'to':T3})
+
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):
             AttendanceService(self.db)
