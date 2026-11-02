@@ -1,0 +1,38 @@
+name: TS047B A002 atomic Git ref CAS source-only preflight
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-a002-atomic-cas-control-20261102-001
+    paths:
+      - .github/workflows/ts-beads-047b-a002-atomic-cas-preflight.yml
+permissions:
+  contents: read
+jobs:
+  static_preflight:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - name: LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: 312d614dc4c3ed1c253f3133d64301282c53a940
+          persist-credentials: false
+      - name: Parse and pin exact script without running it
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne '312d614dc4c3ed1c253f3133d64301282c53a940') { throw 'WRONG_FROZEN_SOURCE' }
+          $f='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-GRAPHQL-CAS-20261102-001/Invoke-AtomicRefCas-Fixture.ps1'
+          if ((git hash-object $f).Trim() -cne 'bfe57ebd2c75a86ffe5f1e3a41b387674cf4e263') { throw 'SCRIPT_BLOB_CHANGED' }
+          $errors=$null; $tokens=$null
+          [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f),[ref]$tokens,[ref]$errors)
+          if (@($errors).Count -ne 0) { throw ('POWERSHELL_SOURCE_PARSER_FAIL_'+(@($errors) -join '|')) }
+          $s=[IO.File]::ReadAllText((Resolve-Path $f))
+          if ($s.Contains([char]13)) { throw 'CR_IN_SOURCE' }
+          foreach($required in @('beforeOid=$g0','force=$false','One-Mutation ''ALPHA''','One-Mutation ''BETA''','STOP_ALPHA_NOT_CONFIRMED_NO_BETA','GITHUB_ACTIONS')) {
+            if (-not $s.Contains($required)) { throw ('MISSING_GUARD_'+$required) }
+          }
+          'TS047B_A002_ATOMIC_CAS_SOURCE_PREFLIGHT=PASS_READONLY_NO_MUTATION'
