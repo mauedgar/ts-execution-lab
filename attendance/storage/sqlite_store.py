@@ -51,6 +51,8 @@ class SQLiteAttendanceStore:
                 if version == 1:
                     verify_original_v1_schema(conn)
                     verify_original_v1_intervals(conn)
+                elif version == 2:
+                    verify_original_v1_schema(conn, version=2)
                 conn.execute('CREATE TABLE IF NOT EXISTS subjects (subject_id TEXT PRIMARY KEY)')
                 conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(subject_id),
@@ -120,6 +122,7 @@ class SQLiteAttendanceStore:
                                          (marked, req['subject_id'], req['request_id']))
                         last_subject, last_request = requests[-1]['subject_id'], requests[-1]['request_id']
                 if version < 2:
+                    verify_original_v1_schema(conn, version=2)
                     conn.execute('PRAGMA user_version=2')
                 conn.commit()
         except sqlite3.Error as exc:
@@ -247,13 +250,15 @@ class SQLiteAttendanceStore:
             with closing(self._connect()) as conn:
                 self._known(conn, subject)
                 cursor=conn.execute('''SELECT * FROM sessions WHERE subject_id=? AND checked_in_at>=? AND checked_in_at<?
-                                       ORDER BY checked_in_at, session_id''', (subject,start,end))
+                                       ORDER BY checked_in_at, session_id LIMIT 10001''', (subject,start,end))
                 # The V0 Session[] necessarily materializes final output, but SQL fetch is bounded.
                 result=[]
                 while True:
                     chunk=cursor.fetchmany(128)
                     if not chunk:
                         break
+                    if len(result) + len(chunk) > 10000:
+                        raise AttendanceError('INVALID_ARGUMENT', 'result exceeds H6 V0 10000-session budget; narrow from/to')
                     result.extend(self._session(row) for row in chunk)
                 return result
         except sqlite3.Error as exc:

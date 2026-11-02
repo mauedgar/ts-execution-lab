@@ -39,7 +39,7 @@ def _unique_index(conn, table, cols, partial=None):
     return False
 
 
-def verify_original_v1_schema(conn):
+def verify_original_v1_schema(conn, version=1):
     # Must be called BEFORE CREATE TABLE/INDEX IF NOT EXISTS can conceal a mismatch.
     for name, expected in _TABLES.items():
         entry = conn.execute('SELECT type FROM sqlite_master WHERE name=?',(name,)).fetchone()
@@ -82,6 +82,42 @@ def verify_original_v1_schema(conn):
             _reject('missing historical foreign key')
     if conn.execute('PRAGMA foreign_key_check').fetchone() is not None:
         _reject('historical foreign key violation')
+
+    # Inventory every non-SQLite-managed object BEFORE admitting v1 or v2.
+    # An extra RAISE(IGNORE) trigger or UNIQUE index changes correctness.
+    expected = {'subjects':'table','sessions':'table','requests':'table',
+                'one_open_session':'index','sessions_order':'index'}
+    if version == 2:
+        expected['v1_provenance']='table'
+    elif version != 1:
+        _reject('unsupported compatibility schema')
+    records = conn.execute("SELECT name,type,sql FROM sqlite_master "
+                           "WHERE name NOT LIKE 'sqlite_%'").fetchall()
+    by_name = {row['name']:row for row in records}
+    if set(by_name)!=set(expected) or any(by_name[k]['type']!=kind
+                                         for k,kind in expected.items()):
+        _reject('unexpected or missing historical SQLite schema objects')
+    original_order = 'CREATE INDEX sessions_order ON sessions(subject_id,checked_in_at,session_id)'
+    original_open = ('CREATE UNIQUE INDEX one_open_session ON sessions(subject_id) '
+                     'WHERE checked_out_at IS NULL')
+    for key, original in (('sessions_order',original_order),('one_open_session',original_open)):
+        if not isinstance(by_name[key]['sql'],str):
+            _reject('invalid index definition')
+        if re.sub(r'\s+','',by_name[key]['sql']).lower() != re.sub(r'\s+','',original).lower():
+            _reject('nonoriginal index DDL')
+    if version == 2:
+        ledger = ('CREATE TABLE v1_provenance ('
+                  'subject_id TEXT NOT NULL, request_id TEXT NOT NULL, '
+                  'operation TEXT NOT NULL, utc_occurred_at TEXT NOT NULL, '
+                  'PRIMARY KEY(subject_id,request_id), '
+                  'FOREIGN KEY(subject_id,request_id) REFERENCES requests(subject_id,request_id))')
+        if (not isinstance(by_name['v1_provenance']['sql'],str) or
+            re.sub(r'\s+','',by_name['v1_provenance']['sql']).lower() !=
+            re.sub(r'\s+','',ledger).lower()):
+            _reject('invalid provenance ledger DDL')
+        if conn.execute('PRAGMA foreign_key_check').fetchone() is not None:
+            _reject('invalid provenance foreign key')
+
 
 
 def verify_original_v1_intervals(conn):

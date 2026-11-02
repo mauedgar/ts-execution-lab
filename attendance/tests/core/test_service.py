@@ -139,6 +139,7 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             # v1 used .000000Z, so construct its actual legacy representation.
             conn.execute('UPDATE sessions SET checked_in_at="2026-11-01T10:00:00.000000Z", checked_out_at="2026-11-01T11:00:00.000000Z"')
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         restored = AttendanceService(self.db)
@@ -177,6 +178,7 @@ class CoreTests(unittest.TestCase):
                         'occurred_at':'2026-11-01T10:00:00.000000Z'},sort_keys=True,separators=(',',':'))
             conn.execute('UPDATE requests SET payload=? WHERE request_id="legacy"',(legacy_sig,))
             conn.execute('UPDATE sessions SET checked_in_at="2026-11-01T10:00:00.000000Z"')
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         migrated=AttendanceService(self.db)
@@ -228,6 +230,7 @@ class CoreTests(unittest.TestCase):
             conn.execute('UPDATE requests SET payload=? WHERE request_id=?', ('{malformed', 'zz'))
             conn.execute('UPDATE sessions SET checked_in_at=?,checked_out_at=?',
                          ('2026-11-01T10:00:00.000000Z','2026-11-01T11:00:00.000000Z'))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR', lambda _: AttendanceService(self.db), None)
@@ -263,6 +266,7 @@ class CoreTests(unittest.TestCase):
                                      sort_keys=True,separators=(',',':'))
                 conn.execute('INSERT INTO requests(subject_id,request_id,operation,payload,response) '
                              'VALUES(?,?,?,?,?)',(sid,'req','checkIn',signature,response))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         migrated=AttendanceService(self.db)
@@ -282,6 +286,7 @@ class CoreTests(unittest.TestCase):
                          ('2026-11-01T10:00:00.000000Z', '2026-11-01T11:00:00.000000Z'))
             conn.execute('CREATE TRIGGER fail_migration BEFORE UPDATE ON sessions '
                          "BEGIN SELECT RAISE(ABORT, 'synthetic disk transaction fault'); END")
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         with self.assertRaises(AttendanceError) as caught:
@@ -316,6 +321,7 @@ class CoreTests(unittest.TestCase):
                          (signature,response,'checkOut','r'))
             conn.execute('UPDATE sessions SET checked_in_at=?',
                          ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -326,6 +332,7 @@ class CoreTests(unittest.TestCase):
         self.s.checkIn(self.inp())
         with closing(sqlite3.connect(self.db)) as conn:
             conn.execute('UPDATE sessions SET checked_in_at=?',('garbage-time',))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -337,6 +344,7 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             conn.execute('UPDATE sessions SET session_id=?,checked_in_at=?',
                          ('','2026-11-01T10:00:00.000000Z'))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -351,6 +359,7 @@ class CoreTests(unittest.TestCase):
             conn.execute('UPDATE requests SET payload=?,response=? WHERE request_id=?',
                          (signature, json.dumps({'session_id':None,'subject_id':'s1',
                           'checked_in_at':False,'checked_out_at':{}}),'r'))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -361,6 +370,7 @@ class CoreTests(unittest.TestCase):
             conn.execute('DROP TABLE requests')
             conn.execute('CREATE TABLE requests (subject_id TEXT, request_id TEXT, '
                          'operation TEXT, payload TEXT, response TEXT)')
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR', lambda _: AttendanceService(self.db), None)
@@ -375,6 +385,7 @@ class CoreTests(unittest.TestCase):
                          'VALUES(?,?,?,?)',
                          (uuid.uuid4().hex,'s1','2026-11-01T11:00:00.000000Z',
                           '2026-11-01T13:00:00.000000Z'))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -405,6 +416,7 @@ class CoreTests(unittest.TestCase):
             conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('orphan',))
             conn.execute('UPDATE sessions SET checked_in_at=?',
                          ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -441,6 +453,7 @@ class CoreTests(unittest.TestCase):
                          'WHERE checked_out_at IS NULL AND 1=0')
             conn.execute('UPDATE sessions SET checked_in_at=?',
                          ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('DROP TABLE IF EXISTS v1_provenance')
             conn.execute('PRAGMA user_version=1')
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
@@ -466,6 +479,62 @@ class CoreTests(unittest.TestCase):
         self.must_fail('STORAGE_ERROR', self.s.getState, {'subject_id':'s1'})
         self.must_fail('STORAGE_ERROR', self.s.listSessions,
                        {'subject_id':'s1','from':T0,'to':T3})
+
+    def test_v1_additional_unique_index_and_trigger_rejected(self):
+        for extra_sql in (
+            'CREATE UNIQUE INDEX untrusted_unique ON sessions(subject_id)',
+            'CREATE TRIGGER untrusted_drop BEFORE INSERT ON sessions '
+            "BEGIN SELECT RAISE(IGNORE); END"
+        ):
+            with self.subTest(extra_sql=extra_sql):
+                with tempfile.TemporaryDirectory() as tempdir:
+                    path=str(Path(tempdir)/'legacy.sqlite')
+                    AttendanceService(path).checkIn(self.inp())
+                    with closing(sqlite3.connect(path)) as conn:
+                        conn.execute('UPDATE sessions SET checked_in_at=?',
+                                     ('2026-11-01T10:00:00.000000Z',))
+                        conn.execute(extra_sql)
+                        conn.execute('DROP TABLE IF EXISTS v1_provenance')
+                        conn.execute('PRAGMA user_version=1')
+                        conn.commit()
+                    self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(path),None)
+                    with closing(sqlite3.connect(path)) as conn:
+                        self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+
+    def test_v2_altered_partial_index_rejected(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('DROP INDEX one_open_session')
+            conn.execute('CREATE UNIQUE INDEX one_open_session ON sessions(subject_id) '
+                         'WHERE checked_out_at IS NULL AND 1=0')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+
+    def test_fraction_resource_budget_exact(self):
+        digits='1'*8192
+        self.s.checkIn(self.inp('2026-11-01T10:00:00.'+digits+'Z'))
+        self.must_fail('INVALID_ARGUMENT', self.s.checkOut,
+                       self.inp('2026-11-01T11:00:00.'+digits+'1Z'))
+        self.s.checkOut(self.inp(T1))
+
+    def test_list_sessions_full_result_or_typed_budget(self):
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('s1',))
+            data=[]
+            for index in range(10000):
+                stamp=f'2026-11-01T10:00:00.{index:06d}'
+                data.append((uuid.uuid4().hex,'s1',stamp,'2026-11-01T11:00:00'))
+            conn.executemany('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
+                             'VALUES(?,?,?,?)',data)
+            conn.commit()
+        self.assertEqual(len(self.s.listSessions({'subject_id':'s1','from':T0,'to':T2})),10000)
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
+                         'VALUES(?,?,?,?)',
+                         (uuid.uuid4().hex,'s1','2026-11-01T10:00:00.010000','2026-11-01T11:00:00'))
+            conn.commit()
+        self.must_fail('INVALID_ARGUMENT',self.s.listSessions,
+                       {'subject_id':'s1','from':T0,'to':T2})
 
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):

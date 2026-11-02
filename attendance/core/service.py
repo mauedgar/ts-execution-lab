@@ -48,10 +48,14 @@ def utc(value: Any) -> str:
     fractional portion sorts correctly as text in SQLite. The public API
     converts them back to RFC3339 with at least six decimal places.
     """
+    if isinstance(value, str) and len(value) > 8218:
+        raise AttendanceError("INVALID_ARGUMENT", "timestamp exceeds H6 V0 resource budget")
     match = _RFC3339.fullmatch(value) if isinstance(value, str) else None
     if match is None:
         raise AttendanceError("INVALID_ARGUMENT", "timestamp must be RFC3339 with timezone")
     day, clock, fraction, zone = match.groups()
+    if fraction is not None and len(fraction) > 8192:
+        raise AttendanceError("INVALID_ARGUMENT", "RFC3339 fractional precision exceeds H6 V0 budget")
     zone = "+00:00" if zone.upper() == "Z" else zone
     if zone != "+00:00":
         hours, minutes = int(zone[1:3]), int(zone[4:6])
