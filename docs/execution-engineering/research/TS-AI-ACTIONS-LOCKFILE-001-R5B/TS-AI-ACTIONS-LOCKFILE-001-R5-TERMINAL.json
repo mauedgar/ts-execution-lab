@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "python": "3.12.15",
+    "cli": "v0.4.0",
+    "ruamel_yaml": "0.18.17"
+  },
+  "runner_sha256": "9289fc8cd6045f6f8368a80146ebdeae52a6cc919d87b173813ff007c2707fec",
+  "effects": {
+    "GitPush": "NONE_AUTHORIZED",
+    "ActionDispatch": "NONE_AUTHORIZED",
+    "Product": "NONE_AUTHORIZED"
+  },
+  "gate": "TS-AI-ACTIONS-LOCKFILE-001-R5",
+  "results": [
+    {
+      "id": "T01_python_policy_37_tests",
+      "exit_code": 1,
+      "expected_exit": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "58b639cdefba6ea3d1ce51a3c9073de8ba1fec5be5acdea2d21402ac7566a73c",
+      "expected_text": "Ran 37 tests",
+      "semantic_pass": false
+    }
+  ],
+  "terminal_stage": "T01_python_policy_37_tests",
+  "input_sha256": {
+    "test_policy.py": "51e8bedd503f0fd1372dbaa2db8bc5f4155683d0d2b39e2a8660cbc509fe5c67",
+    "fixture/catalog.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+    "cli_binary": "a64179817d7605d705e805475a09b5ef0be12a3469477d8607350f1f3cc26d8b",
+    "fixture/.github/workflows/baseline.yml": "377f7e61d06600b57d054acaea0bd6f5f2231d9200401c056dc08418691abd99",
+    "policy.py": "86b348b41c01929c6172704221b6f0f576d2f530e5480079481611e21b5a8505",
+    "fixture/.github/workflows/actions.lock": "bad92b372467c06dc8de4d1339caec4a1557a9d7d6eaf723dc047d759f94d9bc"
+  },
+  "status": "R5_FAILED_OR_BLOCKED",
+  "failure_reason": "FAILED_CASE T01_python_policy_37_tests"
+}
