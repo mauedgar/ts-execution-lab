@@ -12,9 +12,16 @@ from attendance.core.service import AttendanceError, to_public
 
 class SQLiteAttendanceStore:
     def __init__(self, database_path: str):
-        if not isinstance(database_path, (str, Path)) or not str(database_path) or str(database_path) == ':memory:':
+        if not isinstance(database_path, (str, Path)):
             raise AttendanceError('INVALID_ARGUMENT', 'a filesystem SQLite path is required')
-        self.path = str(database_path)
+        try:
+            path = str(database_path)
+            path.encode('utf-8', errors='strict')
+        except (UnicodeError, ValueError, TypeError) as exc:
+            raise AttendanceError('INVALID_ARGUMENT', 'invalid SQLite filesystem path') from exc
+        if not path or path == ':memory:' or '\x00' in path:
+            raise AttendanceError('INVALID_ARGUMENT', 'invalid SQLite filesystem path')
+        self.path = path
         self._setup()
 
     def _connect(self):
@@ -43,31 +50,53 @@ class SQLiteAttendanceStore:
                     payload TEXT NOT NULL, response TEXT NOT NULL,
                     PRIMARY KEY (subject_id, request_id), FOREIGN KEY(subject_id) REFERENCES subjects(subject_id))''')
                 if version == 1:
-                    # Existing v1 UTC RFC3339 session timestamps used a terminal Z.
-                    # Convert both columns under one exclusive transaction so the
-                    # new exact-precision, lexicographically sortable format holds.
-                    rows = conn.execute('SELECT session_id,checked_in_at,checked_out_at FROM sessions').fetchall()
-                    for row in rows:
-                        entered = _legacy_key(row['checked_in_at'])
-                        exited = _legacy_key(row['checked_out_at']) if row['checked_out_at'] is not None else None
-                        conn.execute('UPDATE sessions SET checked_in_at=?, checked_out_at=? WHERE session_id=?',
-                                     (entered, exited, row['session_id']))
-                    # Version 1 had no original raw timestamp; preserve the
-                    # historical canonical-instant replay policy under a
-                    # marked legacy signature, separate from v2 literal keys.
-                    requests = conn.execute('SELECT subject_id, request_id, payload FROM requests').fetchall()
+                    # Migrate in keyset batches, with bounded memory usage.
+                    # Original v1 stored canonical UTC but not raw argument bytes.
+                    last_session_id = ''
+                    while True:
+                        rows = conn.execute(
+                            'SELECT session_id,checked_in_at,checked_out_at FROM sessions '
+                            'WHERE session_id>? ORDER BY session_id LIMIT 128',
+                            (last_session_id,)).fetchall()
+                        if not rows:
+                            break
+                        for row in rows:
+                            entered = _legacy_key(row['checked_in_at'])
+                            exited = _legacy_key(row['checked_out_at']) if row['checked_out_at'] is not None else None
+                            conn.execute('UPDATE sessions SET checked_in_at=?, checked_out_at=? WHERE session_id=?',
+                                         (entered, exited, row['session_id']))
+                        last_session_id = rows[-1]['session_id']
+                    last_subject, last_request = '', ''
                     from attendance.core.service import utc
-                    for req in requests:
-                        try:
-                            old = json.loads(req['payload'])
-                            marked = json.dumps({'signature_version': 1,
-                              'operation': old['operation'],
-                              'utc_occurred_at': utc(old['occurred_at'])},
-                              sort_keys=True, separators=(',', ':'))
-                        except (KeyError, ValueError, TypeError, AttendanceError) as exc:
-                            raise AttendanceError('STORAGE_ERROR', 'corrupt historical request signature') from exc
-                        conn.execute('UPDATE requests SET payload=? WHERE subject_id=? AND request_id=?',
-                                     (marked, req['subject_id'], req['request_id']))
+                    while True:
+                        requests = conn.execute(
+                            'SELECT subject_id,request_id,payload,response FROM requests '
+                            'WHERE (subject_id,request_id)>(?,?) '
+                            'ORDER BY subject_id,request_id LIMIT 128',
+                            (last_subject, last_request)).fetchall()
+                        if not requests:
+                            break
+                        for req in requests:
+                            try:
+                                old = json.loads(req['payload'])
+                                response = json.loads(req['response'])
+                                if (not isinstance(old, dict) or
+                                    old.get('operation') not in ('checkIn', 'checkOut') or
+                                    not isinstance(old.get('occurred_at'), str) or
+                                    not isinstance(response, dict) or
+                                    not all(x in response for x in
+                                            ('session_id','subject_id','checked_in_at','checked_out_at')) or
+                                    response['subject_id'] != req['subject_id']):
+                                    raise ValueError('invalid historical idempotency row')
+                                marked = json.dumps({'signature_version': 1,
+                                  'operation': old['operation'],
+                                  'utc_occurred_at': utc(old['occurred_at'])},
+                                  sort_keys=True, separators=(',', ':'))
+                            except (KeyError, ValueError, TypeError, AttendanceError) as exc:
+                                raise AttendanceError('STORAGE_ERROR', 'corrupt historical request row') from exc
+                            conn.execute('UPDATE requests SET payload=? WHERE subject_id=? AND request_id=?',
+                                         (marked, req['subject_id'], req['request_id']))
+                        last_subject, last_request = requests[-1]['subject_id'], requests[-1]['request_id']
                 if version < 2:
                     conn.execute('PRAGMA user_version=2')
                 conn.commit()
@@ -91,17 +120,30 @@ class SQLiteAttendanceStore:
             if request_id is not None:
                 previous = conn.execute('SELECT payload,response FROM requests WHERE subject_id=? AND request_id=?', (subject, request_id)).fetchone()
                 if previous is not None:
-                    previous_sig = json.loads(previous['payload'])
+                    try:
+                        previous_sig = json.loads(previous['payload'])
+                        if not isinstance(previous_sig, dict):
+                            raise ValueError('request signature must be object')
+                    except (ValueError, TypeError) as exc:
+                        raise AttendanceError('STORAGE_ERROR', 'corrupt stored request signature') from exc
                     if previous_sig.get('signature_version') == 1:
-                        # A v1 request originally used normalized UTC, never raw
-                        # bytes; the raw value cannot be recovered retroactively.
+                        # Control-approved historical exception: original v1
+                        # persisted normalized UTC, not raw occurred_at bytes.
                         identical = (previous_sig.get('operation') == operation and
                                      previous_sig.get('utc_occurred_at') == occurred_at)
-                    else:
+                    elif previous_sig.get('signature_version') is None:
                         identical = previous['payload'] == signature
+                    else:
+                        raise AttendanceError('STORAGE_ERROR', 'unsupported stored request signature')
                     if not identical:
                         raise AttendanceError('REQUEST_CONFLICT', 'request_id used for different arguments')
-                    response = json.loads(previous['response'])
+                    try:
+                        response = json.loads(previous['response'])
+                        if not isinstance(response, dict) or not all(k in response for k in
+                                 ('session_id','subject_id','checked_in_at','checked_out_at')):
+                            raise ValueError('invalid persisted response')
+                    except (ValueError, TypeError) as exc:
+                        raise AttendanceError('STORAGE_ERROR', 'corrupt stored request response') from exc
                     conn.commit()
                     return response
             active = conn.execute('SELECT * FROM sessions WHERE subject_id=? AND checked_out_at IS NULL', (subject,)).fetchone()

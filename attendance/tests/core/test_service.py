@@ -192,6 +192,116 @@ class CoreTests(unittest.TestCase):
         self.must_fail('REQUEST_CONFLICT',migrated.checkOut,
                        self.inp('2026-11-01T13:00:00+02:00',request_id='new'))
 
+    def test_invalid_sqlite_paths_report_typed_argument_errors(self):
+        for path in ('bad\x00path.sqlite', 'bad\ud800path.sqlite', ':memory:', ''):
+            with self.subTest(path=repr(path)):
+                with self.assertRaises(AttendanceError) as caught:
+                    AttendanceService(path)
+                self.assertEqual(caught.exception.code, 'INVALID_ARGUMENT')
+
+    def test_invalid_stored_request_response_fail_closed(self):
+        self.s.checkIn(self.inp(request_id='abc'))
+        for field in ('payload', 'response'):
+            with self.subTest(field=field):
+                with closing(sqlite3.connect(self.db)) as conn:
+                    old = conn.execute('SELECT '+field+' FROM requests WHERE request_id=?', ('abc',)).fetchone()[0]
+                    conn.execute('UPDATE requests SET '+field+'=? WHERE request_id=?', ('{broken-json', 'abc'))
+                    conn.commit()
+                try:
+                    self.must_fail('STORAGE_ERROR', self.s.checkIn, self.inp(request_id='abc'))
+                finally:
+                    with closing(sqlite3.connect(self.db)) as conn:
+                        conn.execute('UPDATE requests SET '+field+'=? WHERE request_id=?', (old, 'abc'))
+                        conn.commit()
+
+    def test_corrupt_legacy_request_rolls_back_entire_migration(self):
+        self.s.checkIn(self.inp(request_id='aa'))
+        self.s.checkOut(self.inp(T1, request_id='zz'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            for request_id in ('aa','zz'):
+                operation = 'checkIn' if request_id == 'aa' else 'checkOut'
+                stamp = T0 if request_id == 'aa' else T1
+                original = json.dumps({'operation':operation,'occurred_at':stamp.replace('Z','.000000Z')},
+                                      sort_keys=True,separators=(',',':'))
+                conn.execute('UPDATE requests SET payload=? WHERE request_id=?', (original,request_id))
+            conn.execute('UPDATE requests SET payload=? WHERE request_id=?', ('{malformed', 'zz'))
+            conn.execute('UPDATE sessions SET checked_in_at=?,checked_out_at=?',
+                         ('2026-11-01T10:00:00.000000Z','2026-11-01T11:00:00.000000Z'))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR', lambda _: AttendanceService(self.db), None)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+            self.assertEqual(conn.execute('SELECT checked_in_at FROM sessions').fetchone()[0],
+                             '2026-11-01T10:00:00.000000Z')
+
+    def test_leap_second_edges_and_offsets(self):
+        self.must_fail('INVALID_ARGUMENT',self.s.checkIn,self.inp('2016-12-31T23:58:60Z'))
+        self.must_fail('INVALID_ARGUMENT',self.s.checkIn,self.inp('2016-12-31T23:59:60+01:00'))
+        self.must_fail('INVALID_ARGUMENT',self.s.checkIn,self.inp('2026-11-01T00:00:60Z'))
+        self.s.checkIn(self.inp('2016-12-31T23:59:59.99999999Z'))
+        self.s.checkOut(self.inp('2016-12-31T23:59:60Z'))
+        self.s.checkIn(self.inp('2017-01-01T00:00:00Z'))
+        records = self.s.listSessions({'subject_id':'s1',
+                                      'from':'2016-12-31T23:59:59Z',
+                                      'to':'2017-01-01T00:00:00.5Z'})
+        self.assertEqual(len(records),2)
+        self.assertLess(records[0]['checked_out_at'],records[1]['checked_in_at'])
+
+    def test_legacy_migration_many_rows_uses_bounded_batches(self):
+        with closing(sqlite3.connect(self.db)) as conn:
+            for index in range(260):
+                sid=f's{index:04d}'
+                session=f'c{index:04d}'
+                conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',(sid,))
+                conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
+                             'VALUES(?,?,?,?)',(session,sid,'2026-11-01T10:00:00.000000Z','2026-11-01T11:00:00.000000Z'))
+                response=json.dumps({'session_id':session,'subject_id':sid,
+                    'checked_in_at':'2026-11-01T10:00:00.000000Z','checked_out_at':None})
+                signature=json.dumps({'operation':'checkIn','occurred_at':'2026-11-01T10:00:00.000000Z'})
+                conn.execute('INSERT INTO requests(subject_id,request_id,operation,payload,response) '
+                             'VALUES(?,?,?,?,?)',(sid,'req','checkIn',signature,response))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        migrated=AttendanceService(self.db)
+        self.assertEqual(len(migrated.listSessions({'subject_id':'s0259',
+             'from':T0,'to':T3})),1)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],2)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0],260)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM requests WHERE payload LIKE ?',
+                            ('%signature_version%',)).fetchone()[0],260)
+
+    def test_sqlite_trigger_fault_rolls_back_v1_migration(self):
+        self.s.checkIn(self.inp())
+        self.s.checkOut(self.inp(T1))
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE sessions SET checked_in_at=?,checked_out_at=?',
+                         ('2026-11-01T10:00:00.000000Z', '2026-11-01T11:00:00.000000Z'))
+            conn.execute('CREATE TRIGGER fail_migration BEFORE UPDATE ON sessions '
+                         "BEGIN SELECT RAISE(ABORT, 'synthetic disk transaction fault'); END")
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        with self.assertRaises(AttendanceError) as caught:
+            AttendanceService(self.db)
+        self.assertEqual(caught.exception.code, 'STORAGE_ERROR')
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+            self.assertEqual(conn.execute('SELECT checked_in_at FROM sessions').fetchone()[0],
+                             '2026-11-01T10:00:00.000000Z')
+            conn.execute('DROP TRIGGER fail_migration')
+            conn.commit()
+        self.assertEqual(len(AttendanceService(self.db).listSessions(
+            {'subject_id':'s1','from':T0,'to':T3})),1)
+
+    def test_long_fraction_no_silent_loss(self):
+        digits='1234567890'*500
+        opened=self.s.checkIn(self.inp('2026-11-01T10:00:00.'+digits+'Z'))
+        self.assertEqual(opened['checked_in_at'],'2026-11-01T10:00:00.'+digits.rstrip('0')+'Z')
+        self.s.checkOut(self.inp(T1))
+        self.assertEqual(len(self.s.listSessions({'subject_id':'s1',
+             'from':T0,'to':T2})),1)
+
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):
             AttendanceService(self.db)
