@@ -1,0 +1,18 @@
+{
+  "artifact_id": "TS-TAILDROP-REVERSE-20261102-001",
+  "kind": "EE_TRANSPORT_VALIDATION",
+  "status": "PASS",
+  "observed_date": "2026-11-02",
+  "direction": "DESKTOP-3LJ0E54_TO_DESKTOP-DJLBEQH",
+  "file": "TS-EE-TAILDROP-REVERSE-20261102-001.txt",
+  "payload": "renamed_copy_of_previously_verified_benign_report",
+  "bytes": 1535,
+  "source_hash": "e1cc27ee30e9009211e123f97349c57c34f0ef74fea689b0501385655ddac402",
+  "receiver_hash": "e1cc27ee30e9009211e123f97349c57c34f0ef74fea689b0501385655ddac402",
+  "precondition": "unique_destination_not_existing_and_source_hash_verified",
+  "send": "tailscale file cp ... desktop-djlbeqh: exit 0",
+  "receiver": "specific_download_path_exists_plus_size_and_SHA256_MATCH",
+  "canonical_product_effects": 0,
+  "other_effects": "NONE",
+  "limit": "single_benign_1535_byte_TXT; large/concurrent/unknown_not_qualified"
+}
