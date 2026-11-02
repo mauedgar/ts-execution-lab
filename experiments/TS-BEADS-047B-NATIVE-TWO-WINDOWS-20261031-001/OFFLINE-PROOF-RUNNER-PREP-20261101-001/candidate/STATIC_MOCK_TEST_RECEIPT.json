@@ -1,0 +1,17 @@
+{
+  "executionAttempt": "TS-BEADS-047B-OFFLINE-PROOF-RUNNER-PREP-20261101-001",
+  "status": "REVIEW_REQUIRED",
+  "scope": "PowerShell parser plus pure injected-provider mocks; no Dolt or SQL process invoked",
+  "cases": [
+    "wrong binary/hash/host", "root exists/junction/ACL", "wrong grant", "prior UNKNOWN",
+    "active listener/Serve", "malformed SQL", "privilege-file mismatch/readback missing",
+    "process ambiguous timeout", "correct PRECHECK then guarded effect and separate readback"
+  ],
+  "productionSyntheticApproval": false,
+  "artifacts": [
+    { "file": "Proof-OfflineDoltPrivilege.ps1", "sha256": "B8DBE980B7F1C1FF48F24418327DF080733937174008618B00E4C772C0D9E0CA", "gitBlob": "e2bb25674d607241b49179bb224a0845fb25cd4a" },
+    { "file": "Test-Proof-OfflineDoltPrivilege.Mock.ps1", "sha256": "371BB0C16BB20A20C537D9BA40A59140515B09760C110D6AFD0B7C0603215E7F", "gitBlob": "cd450b00cd0664417451a9d5c2040940418d6b74" },
+    { "file": "PROCEDURE.md", "sha256": "D353F081FFCB1B01E9B0A0B1F526A304F6B3E3945D321053AB209B337D2AED0E", "gitBlob": "3ac93e8aa65944286cb694061e574435477d0132" }
+  ],
+  "publication": "BLOCKED_PUBLICATION: repository-local Git identity unavailable; no global configuration changed"
+}
