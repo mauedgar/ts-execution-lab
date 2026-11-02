@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "class": "INNOCUOUS_EXTERNAL_CAS_NO_PRODUCT",
+  "baseCommit": "11d88fe9cea033a05a3978bfedcaf64fd77dbd29",
+  "epoch": 1,
+  "claimant": "ALPHA",
+  "claimToken": "TS047B-A002-EXTERNAL-CAS-ALPHA-001",
+  "assertedEffects": "NONE",
+  "sql": false,
+  "beads": false,
+  "product": false
+}
