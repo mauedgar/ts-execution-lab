@@ -1,0 +1,82 @@
+{
+  "manifestVersion": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "candidate": "OFFLINE-PRIVILEGE-FIXTURE-V5-20261102-001",
+  "baselineV4R": "0d262c2987bd4a306cde4ed4c7486ab8a4d77205",
+  "sourceOnlyNotDispatchable": true,
+  "grantPresent": false,
+  "trustedIssuerProvisioned": false,
+  "realOffHostClaimProven": false,
+  "sqlExecuted": false,
+  "windowsNativeTestsExecuted": false,
+  "sourceRegressionChecks": {
+    "expectedPins": true,
+    "arityFixed": true,
+    "preimportFix": true,
+    "signedCommitHead": true,
+    "exitGuard": true,
+    "negativePinned": true,
+    "astTest": true,
+    "sourceSuite": true,
+    "encoding": true
+  },
+  "manifestSelfHash": "EXCLUDED",
+  "files": [
+    {
+      "path": "candidate/Security-047B-V5.psm1",
+      "gitBlobSha1": "32eb389c771c42576238fc1e308fdb76f77f7207",
+      "sha256Utf8Lf": "AB579F03D085183F4A4C3ADDAC3BEE3628E5CC41172F62CBEF8D39EA92BB89B6",
+      "bytes": 13301,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "candidate/Invoke-047B-V5-Fixture.ps1",
+      "gitBlobSha1": "cbfb45238c4e45af0db95e9853139a574599c9d8",
+      "sha256Utf8Lf": "3F4582EE30B9759ECF7BA686D6BF36CAFBDC8C5D289A73E82FB1298E9B8162FE",
+      "bytes": 12000,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "candidate/Start-047B-V5.ps1",
+      "gitBlobSha1": "af06633d104a8c860773fda4b96bc3f9200c1f7b",
+      "sha256Utf8Lf": "3A1A9C3A8FB7E15B2AC7D335DDD41E014ED9F80940C17CCD2ABB0878B559C5A0",
+      "bytes": 1964,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/Test-V5-Negative.ps1",
+      "gitBlobSha1": "456e69ec90b5b51444eb25a4714ae51795a6948d",
+      "sha256Utf8Lf": "AA8838CDBE7AD9B848894DF7E8B92913889A39F6F4FEB3E997C8251B5AF78372",
+      "bytes": 1601,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/Test-V5-ParserAndAst.ps1",
+      "gitBlobSha1": "4e1f80c17b41194ec0e0a2c329742169da617e98",
+      "sha256Utf8Lf": "6DDBFB29FF526A44C6ADE1E28D5557536AEF72EF6084ABDF5DCFFC3D124820BD",
+      "bytes": 1477,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/test_source_contract.py",
+      "gitBlobSha1": "b5ecf4315b8bb188a5cc0685ad21809d4bcd67e8",
+      "sha256Utf8Lf": "350DDDAD6176EBC03E0A7DB869AC460DF714DA4F82C6274DE567CD7DACE0B124",
+      "bytes": 3411,
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "README.md",
+      "gitBlobSha1": "636d64e5684aeda4dfcba72e1626178373dba1f1",
+      "sha256Utf8Lf": "27C000E0BA156C94BA6D3871FDBB679776539646F6064F3044687224CA1FE6AA",
+      "bytes": 4143,
+      "lfOnly": true,
+      "noBom": true
+    }
+  ]
+}
