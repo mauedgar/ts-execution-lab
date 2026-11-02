@@ -522,7 +522,7 @@ class CoreTests(unittest.TestCase):
             conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('s1',))
             data=[]
             for index in range(10000):
-                stamp=f'2026-11-01T10:00:00.{index:06d}'
+                stamp='2026-11-01T10:00:00' + ('.'+f'{index:06d}'.rstrip('0') if index else '')
                 data.append((uuid.uuid4().hex,'s1',stamp,'2026-11-01T11:00:00'))
             conn.executemany('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
                              'VALUES(?,?,?,?)',data)
@@ -531,7 +531,7 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
                          'VALUES(?,?,?,?)',
-                         (uuid.uuid4().hex,'s1','2026-11-01T10:00:00.010000','2026-11-01T11:00:00'))
+                         (uuid.uuid4().hex,'s1','2026-11-01T10:00:00.01','2026-11-01T11:00:00'))
             conn.commit()
         self.must_fail('INVALID_ARGUMENT',self.s.listSessions,
                        {'subject_id':'s1','from':T0,'to':T2})
