@@ -1,0 +1,82 @@
+{
+  "manifestVersion": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "candidate": "OFFLINE-PRIVILEGE-FIXTURE-V6-20261102-001",
+  "baseV5": "16f4aab38ba99f97f492cf663a0a28e58e132c6e",
+  "sourceOnly": true,
+  "notDispatchable": true,
+  "noSqlGrant": true,
+  "noNativeWindowsTests": true,
+  "noRealCAS": false,
+  "sourceAssertions": {
+    "noReservedWrites": true,
+    "childIdentity": true,
+    "profileIdentity": true,
+    "pins": true,
+    "correctAcl": true,
+    "negativePin": true,
+    "astGuards": true,
+    "pyGuards": true,
+    "noSqlExecuted": true,
+    "allLF": true
+  },
+  "selfHash": "EXCLUDED",
+  "files": [
+    {
+      "path": "candidate/Security-047B-V6.psm1",
+      "sha256Utf8Lf": "B883AC6BBBC8ED2F924280B5E614043CCFCB68F99BFC4D47B74178EEC9818ACA",
+      "bytes": 13323,
+      "gitBlobSha1": "70f5bee86358cf48ac6cded50c619ce46fed8f42",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "candidate/Invoke-047B-V6-Fixture.ps1",
+      "sha256Utf8Lf": "37112F17A57180223B1CAF5B7DCFF1FBB6B2E4F542B99440E13B4B171E85ECB8",
+      "bytes": 12048,
+      "gitBlobSha1": "21b48eb337dfe20a84b36408fe9c9ed98546febb",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "candidate/Start-047B-V6.ps1",
+      "sha256Utf8Lf": "3F01081000DA61363A2899E80C8E50D17197C70B0FE13E73ED6B2AAD36997DC8",
+      "bytes": 1964,
+      "gitBlobSha1": "694abdf96b693a1d66d384ba1543237947248ef5",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/test_source_contract.py",
+      "sha256Utf8Lf": "0F84F1E83BEC6A3886C110DD2C7E87C3C55ACDC7C32694A7156887C72222B654",
+      "bytes": 3918,
+      "gitBlobSha1": "72904716fb18aea83157de7c10d8d3e981011aa7",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/Test-V6-Negative.ps1",
+      "sha256Utf8Lf": "5C6BEC20D422B490DBC12A6C00F6922EE2BEE389E6225C97E314C019DDFDE6A6",
+      "bytes": 1601,
+      "gitBlobSha1": "06c9bf7163e84ebdc11ad7ba35fe47635d3251a5",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "tests/Test-V6-ParserAndAst.ps1",
+      "sha256Utf8Lf": "684EA50D87A9C9B9222F5E259691F037CD1441ED38AD8603941C069901A28B60",
+      "bytes": 1848,
+      "gitBlobSha1": "5730d30884cc60984e42e2b899f75818355eeb8c",
+      "lfOnly": true,
+      "noBom": true
+    },
+    {
+      "path": "README.md",
+      "sha256Utf8Lf": "63469AA1E41CB8B0E66968A4103883A812B76C72EBD8A08E15B8FCDBD315BC11",
+      "bytes": 3260,
+      "gitBlobSha1": "eac5bf326e0e8d372bfe315f240fd9049b5b1727",
+      "lfOnly": true,
+      "noBom": true
+    }
+  ]
+}
