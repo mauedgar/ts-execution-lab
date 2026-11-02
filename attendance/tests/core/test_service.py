@@ -259,7 +259,8 @@ class CoreTests(unittest.TestCase):
                              'VALUES(?,?,?,?)',(session,sid,'2026-11-01T10:00:00.000000Z','2026-11-01T11:00:00.000000Z'))
                 response=json.dumps({'session_id':session,'subject_id':sid,
                     'checked_in_at':'2026-11-01T10:00:00.000000Z','checked_out_at':None})
-                signature=json.dumps({'operation':'checkIn','occurred_at':'2026-11-01T10:00:00.000000Z'})
+                signature=json.dumps({'operation':'checkIn','occurred_at':'2026-11-01T10:00:00.000000Z'},
+                                     sort_keys=True,separators=(',',':'))
                 conn.execute('INSERT INTO requests(subject_id,request_id,operation,payload,response) '
                              'VALUES(?,?,?,?,?)',(sid,'req','checkIn',signature,response))
             conn.execute('PRAGMA user_version=1')
