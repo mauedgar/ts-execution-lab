@@ -355,6 +355,84 @@ class CoreTests(unittest.TestCase):
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
 
+    def test_legacy_schema_must_retain_request_unique_constraint(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('DROP TABLE requests')
+            conn.execute('CREATE TABLE requests (subject_id TEXT, request_id TEXT, '
+                         'operation TEXT, payload TEXT, response TEXT)')
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR', lambda _: AttendanceService(self.db), None)
+
+    def test_v1_overlap_rejected_atomically(self):
+        self.s.checkIn(self.inp())
+        self.s.checkOut(self.inp(T2))
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE sessions SET checked_in_at=?,checked_out_at=?',
+                         ('2026-11-01T10:00:00.000000Z','2026-11-01T12:00:00.000000Z'))
+            conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
+                         'VALUES(?,?,?,?)',
+                         (uuid.uuid4().hex,'s1','2026-11-01T11:00:00.000000Z',
+                          '2026-11-01T13:00:00.000000Z'))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0],1)
+
+    def test_v2_corrupt_valid_json_response_fail_closed(self):
+        self.s.checkIn(self.inp(request_id='req1'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE requests SET response=? WHERE request_id=?',
+                         (json.dumps({'session_id':None,'subject_id':'s1',
+                          'checked_in_at':False,'checked_out_at':{}}),'req1'))
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',self.s.checkIn,self.inp(request_id='req1'))
+
+    def test_v2_boolean_legacy_marker_does_not_grant_grandfather(self):
+        self.s.checkIn(self.inp(request_id='req1'))
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('UPDATE requests SET payload=? WHERE request_id=?',
+                         (json.dumps({'signature_version':True,'operation':'checkIn',
+                         'utc_occurred_at':'2026-11-01T10:00:00'}),'req1'))
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',self.s.checkIn,self.inp(request_id='req1'))
+
+    def test_v1_orphan_subject_must_not_survive_migration(self):
+        self.s.checkIn(self.inp())
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('orphan',))
+            conn.execute('UPDATE sessions SET checked_in_at=?',
+                         ('2026-11-01T10:00:00.000000Z',))
+            conn.execute('PRAGMA user_version=1')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+
+    def test_unversioned_existing_schema_must_not_be_adopted(self):
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('PRAGMA user_version=0')
+            conn.commit()
+        self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
+
+    def test_sessions_many_rows_return_all_results(self):
+        with closing(sqlite3.connect(self.db)) as conn:
+            conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('s1',))
+            for i in range(260):
+                minute=i*2
+                hh=minute//60
+                mm=minute%60
+                hh2=(minute+1)//60
+                mm2=(minute+1)%60
+                entered=f'2026-11-01T{hh:02d}:{mm:02d}:00'
+                finished=f'2026-11-01T{hh2:02d}:{mm2:02d}:00'
+                conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
+                             'VALUES(?,?,?,?)',(uuid.uuid4().hex,'s1',entered,finished))
+            conn.commit()
+        results=self.s.listSessions({'subject_id':'s1',
+            'from':'2026-11-01T00:00:00Z','to':'2026-11-02T00:00:00Z'})
+        self.assertEqual(len(results),260)
+
     def test_setup_idempotence_and_concurrent_connections(self):
         for _ in range(3):
             AttendanceService(self.db)
