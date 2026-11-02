@@ -66,7 +66,7 @@ class SourceSecurity(unittest.TestCase):
 
     def test_no_protected_automatic_variable_assignments(self):
         # PowerShell automatic variable identifiers are case insensitive.
-        protected=r'(?i)\\$(?:script:|global:|local:)?(?:pid|home|lastexitcode)\\s*=(?!=)'
+        protected=r'(?i)\$(?:script:|global:|local:)?(?:pid|home|lastexitcode)\s*=(?!=)'
         for source in (self.sec,self.run,self.launch):
             self.assertIsNone(re.search(protected,source))
         self.assertIn('$script:ChildProcessId',self.run)
