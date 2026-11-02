@@ -1,0 +1,72 @@
+name: TS-BEADS-047B V6P1 Windows no-SQL patched unittest proof 003
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p1-pyfix-20261102-003
+    paths:
+      - .github/workflows/ts-beads047b-v6p1-windows-pyfix-003.yml
+permissions:
+  contents: read
+jobs:
+  v6p1_native_original_attempt_003:
+    if: ${{ github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Pin Git raw checkout policy BEFORE source materialization
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config --global core.autocrlf false
+          if($LASTEXITCODE -ne 0){throw 'CONFIG_AUTOCRLF_FAILED'}
+          git config --global core.safecrlf true
+          if($LASTEXITCODE -ne 0){throw 'CONFIG_SAFECRLF_FAILED'}
+          git config --global core.eol lf
+          if($LASTEXITCODE -ne 0){throw 'CONFIG_EOL_FAILED'}
+          if((git config --global --get core.autocrlf) -cne 'false'){throw 'GIT_CONFIG_NOT_FROZEN'}
+      - name: Checkout immutable V6P1 original source
+        uses: actions/checkout@v4
+        with:
+          ref: 0118028c2508c2ce274fd42240f847adf7ff2187
+          path: source
+          persist-credentials: false
+      - name: Checkout immutable runner from original workflow event
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: gate
+          persist-credentials: false
+      - name: Select Python for real native source contract tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify runner binding and enforce raw LF from original Git index
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if($env:GITHUB_RUN_ATTEMPT -cne '1'){throw 'RETRY_NOT_AUTHORIZED'}
+          if($env:GITHUB_REF_NAME -cne 'experiment/ts-beads-047b-v6p1-pyfix-20261102-003'){throw 'BRANCH_NOT_EXPECTED'}
+          $source=Join-Path $env:GITHUB_WORKSPACE 'source'
+          $gate=Join-Path $env:GITHUB_WORKSPACE 'gate'
+          $runner=Join-Path $gate 'experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\WINDOWS-NOSQL-V6P1-PYFIX-20261102-003\Invoke-WindowsPyfixNoSql-V6P1.ps1'
+          $original=(& git -C $source rev-parse HEAD).Trim()
+          if($LASTEXITCODE -ne 0 -or $original -cne '0118028c2508c2ce274fd42240f847adf7ff2187') {throw 'NOT_ORIGINAL_SOURCE'}
+          $actualBlob=(& git -C $gate -c core.autocrlf=false hash-object --no-filters $runner).Trim()
+          if($LASTEXITCODE -ne 0 -or $actualBlob -cne '4d89cfdce577fed128a6ee6c350c25d6c5eded4c') {throw 'RUNNER_BLOB_NOT_PINNED'}
+          & git -C $source -c core.autocrlf=false -c core.safecrlf=true checkout-index --force --all
+          if($LASTEXITCODE -ne 0){throw 'RAW_INDEX_MATERIALIZATION_FAILED'}
+          $example=Join-Path $source 'experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001\candidate\Security-047B-V6.psm1'
+          $eol=(& git -C $source ls-files --eol -- $example) -join ' '
+          if($LASTEXITCODE -ne 0 -or $eol -notmatch 'i/lf\s+w/lf'){throw 'SOURCE_LF_INDEX_WORKTREE_NOT_EQUAL'}
+          Write-Output 'TS047B_LF_CHECKOUT=i/lf,w/lf;source=PINNED;execution=NO_SQL'
+          & pwsh.exe -NoLogo -NoProfile -NonInteractive -File $runner -SourceCheckoutRoot $source
+          if($LASTEXITCODE -ne 0){throw 'NATIVE_LF_TEST_REPORTED_FAILURE'}
+          Write-Output 'TS047B_WINDOWS_PYFIX003=PASS_PATCHED_COPY_NATIVE_NO_SQL_GITHUB_HOST_ONLY'
+      - name: Publish original result once, even if tests fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-beads047b-windows-pyfix003-${{ github.run_id }}
+          path: ${{ runner.temp }}/TS_BEADS_047B_V6P1_WINDOWS_PYFIX_003_RESULT.json
+          if-no-files-found: warn
+          retention-days: 30
