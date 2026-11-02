@@ -7,7 +7,7 @@
   "notDispatchable": true,
   "noSqlGrant": true,
   "noNativeWindowsTests": true,
-  "noRealCAS": false,
+  "noRealCAS": true,
   "sourceAssertions": {
     "noReservedWrites": true,
     "childIdentity": true,
