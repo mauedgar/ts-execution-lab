@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 import uuid
 
-from attendance.core.service import AttendanceError
+from attendance.core.service import AttendanceError, to_public
 
 
 class SQLiteAttendanceStore:
@@ -28,6 +28,9 @@ class SQLiteAttendanceStore:
         try:
             with closing(self._connect()) as conn:
                 conn.execute('BEGIN IMMEDIATE')
+                version = conn.execute('PRAGMA user_version').fetchone()[0]
+                if version not in (0, 1, 2):
+                    raise AttendanceError('STORAGE_ERROR', 'unsupported future SQLite schema version')
                 conn.execute('CREATE TABLE IF NOT EXISTS subjects (subject_id TEXT PRIMARY KEY)')
                 conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(subject_id),
@@ -39,17 +42,32 @@ class SQLiteAttendanceStore:
                     subject_id TEXT NOT NULL, request_id TEXT NOT NULL, operation TEXT NOT NULL,
                     payload TEXT NOT NULL, response TEXT NOT NULL,
                     PRIMARY KEY (subject_id, request_id), FOREIGN KEY(subject_id) REFERENCES subjects(subject_id))''')
-                conn.execute('PRAGMA user_version=1')
+                if version == 1:
+                    # Existing v1 UTC RFC3339 session timestamps used a terminal Z.
+                    # Convert both columns under one exclusive transaction so the
+                    # new exact-precision, lexicographically sortable format holds.
+                    rows = conn.execute('SELECT session_id,checked_in_at,checked_out_at FROM sessions').fetchall()
+                    for row in rows:
+                        entered = _legacy_key(row['checked_in_at'])
+                        exited = _legacy_key(row['checked_out_at']) if row['checked_out_at'] is not None else None
+                        conn.execute('UPDATE sessions SET checked_in_at=?, checked_out_at=? WHERE session_id=?',
+                                     (entered, exited, row['session_id']))
+                if version < 2:
+                    conn.execute('PRAGMA user_version=2')
                 conn.commit()
         except sqlite3.Error as exc:
             raise AttendanceError('STORAGE_ERROR', 'SQLite setup failure') from exc
 
     @staticmethod
     def _session(row):
-        return {k: row[k] for k in ('session_id', 'subject_id', 'checked_in_at', 'checked_out_at')}
+        result = {k: row[k] for k in ('session_id', 'subject_id', 'checked_in_at', 'checked_out_at')}
+        result['checked_in_at'] = to_public(result['checked_in_at'])
+        result['checked_out_at'] = to_public(result['checked_out_at'])
+        return result
 
-    def transition(self, operation: str, subject: str, occurred_at: str, request_id: str | None):
-        signature = json.dumps({'operation': operation, 'occurred_at': occurred_at}, sort_keys=True, separators=(',', ':'))
+    def transition(self, operation: str, subject: str, occurred_at: str, request_id: str | None, raw_occurred_at: str):
+        # Identical arguments means literal caller arguments, NOT UTC equivalence.
+        signature = json.dumps({'operation': operation, 'occurred_at': raw_occurred_at}, sort_keys=True, separators=(',', ':'))
         conn = None
         try:
             conn = self._connect()
@@ -70,7 +88,7 @@ class SQLiteAttendanceStore:
                 if last and last['finished'] is not None and occurred_at <= last['finished']:
                     raise AttendanceError('NON_MONOTONIC_TIME', 'check-in must follow last check-out')
                 conn.execute('INSERT OR IGNORE INTO subjects(subject_id) VALUES(?)', (subject,))
-                session = {'session_id': uuid.uuid4().hex, 'subject_id': subject, 'checked_in_at': occurred_at, 'checked_out_at': None}
+                session = {'session_id': uuid.uuid4().hex, 'subject_id': subject, 'checked_in_at': to_public(occurred_at), 'checked_out_at': None}
                 conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) VALUES(?,?,?,NULL)',
                              (session['session_id'], subject, occurred_at))
             elif operation == 'checkOut':
@@ -80,7 +98,7 @@ class SQLiteAttendanceStore:
                     raise AttendanceError('NON_MONOTONIC_TIME', 'check-out must follow check-in')
                 conn.execute('UPDATE sessions SET checked_out_at=? WHERE session_id=?', (occurred_at, active['session_id']))
                 session = self._session(active)
-                session['checked_out_at'] = occurred_at
+                session['checked_out_at'] = to_public(occurred_at)
             else:
                 raise AttendanceError('INVALID_ARGUMENT', 'unsupported transition')
             if request_id is not None:
@@ -122,3 +140,11 @@ class SQLiteAttendanceStore:
                 return [self._session(row) for row in rows]
         except sqlite3.Error as exc:
             raise AttendanceError('STORAGE_ERROR', 'SQLite read failure') from exc
+
+
+def _legacy_key(value: str) -> str:
+    # SQLite v1 values are UTC RFC3339 and the old parser always stored
+    # exactly six decimal places; stripping Z and insignificant zeros gives
+    # an exact sorting key for the v2 schema without loss of instant value.
+    from attendance.core.service import utc
+    return utc(value)
