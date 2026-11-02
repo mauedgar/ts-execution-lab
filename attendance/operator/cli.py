@@ -7,8 +7,13 @@ import sys
 from typing import Callable
 
 
+class StructuredArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+
 def build_parser():
-    parser = argparse.ArgumentParser(prog='attendance')
+    parser = StructuredArgumentParser(prog='attendance')
     parser.add_argument('--db', required=True, help='Path to isolated Attendance SQLite database')
     sub = parser.add_subparsers(dest='action', required=True)
     for name in ('check-in', 'check-out'):
@@ -31,12 +36,16 @@ def main(argv=None, *, service_factory: Callable | None = None, out=None, err=No
     try:
         args = build_parser().parse_args(argv)
     except SystemExit as exc:
+        # Explicit --help succeeds and remains human-readable; failures use JSON.
         return int(exc.code)
-    if service_factory is None:
-        # Late dependency resolution: isolated operator tests use an injected service.
-        from attendance.core.service import AttendanceService
-        service_factory = AttendanceService
+    except ValueError as exc:
+        print(json.dumps({'ok': False, 'error': {'code': 'INVALID_ARGUMENT', 'message': str(exc)}}, sort_keys=True), file=err)
+        return 1
     try:
+        if service_factory is None:
+            # Late dependency resolution: isolated operator tests use a mock.
+            from attendance.core.service import AttendanceService
+            service_factory = AttendanceService
         service = service_factory(args.db)
         if args.action in ('check-in', 'check-out'):
             payload = {'subject_id': args.subject_id, 'occurred_at': args.occurred_at}

@@ -66,6 +66,38 @@ class OperatorTests(unittest.TestCase):
                 self.assertFalse(response['ok'])
                 self.assertEqual(response['error']['code'],err)
 
+    def test_parser_negative_json_and_injected_error_stream(self):
+        bad = [
+            ('check-in','--subject-id','s1'),
+            ('check-out','--subject-id','s1'),
+            ('state',),
+            ('--unknown','a','state','--subject-id','s1'),
+            ('unknown-action','--subject-id','s1'),
+        ]
+        for args in bad:
+            with self.subTest(args=args):
+                self.out,self.err=io.StringIO(),io.StringIO()
+                status, data=self.run_cli(*args)
+                self.assertEqual(status,1)
+                self.assertFalse(data['ok'])
+                self.assertEqual(data['error']['code'],'INVALID_ARGUMENT')
+                self.assertFalse(self.out.getvalue())
+                self.assertTrue(self.err.getvalue().startswith('{'))
+                self.assertEqual(self.service.calls,[])
+
+    def test_missing_runtime_dependency_is_structured(self):
+        from unittest.mock import patch
+        import builtins
+        original=builtins.__import__
+        def fail_attendance_core(name,*args,**kwargs):
+            if name == 'attendance.core.service':
+                raise ModuleNotFoundError('Domain not installed')
+            return original(name,*args,**kwargs)
+        with patch('builtins.__import__',side_effect=fail_attendance_core):
+            status=main(['--db','mock.sqlite','state','--subject-id','s1'],out=self.out,err=self.err)
+        self.assertEqual(status,1)
+        self.assertEqual(json.loads(self.err.getvalue())['error']['code'],'STORAGE_ERROR')
+
     def test_no_database_or_schema_access(self):
         from pathlib import Path
         text=Path(__file__).parents[2].joinpath('operator','cli.py').read_text()
