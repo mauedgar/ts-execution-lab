@@ -1,0 +1,92 @@
+{
+  "artifact_id": "TS-EE-STACK-GATES-20261102-001",
+  "date": "2026-11-02",
+  "status": "QUALIFIED_ACTIONS_LOCKFILE_NARROW__OPENCODE_RUNTIME_PARTIAL",
+  "authority": {
+    "Product": "NONE",
+    "TaskCycle": "NONE",
+    "workstation_upgrade": "NONE",
+    "CI_dispatch": "NONE",
+    "AI_API": "NONE"
+  },
+  "transport": "OneDrive_education_SharePoint_to_notebook_exact_write_integrity_verified",
+  "actions_lock": {
+    "release": "github/gh-actions-lock v0.4.0",
+    "platform": "Windows-amd64",
+    "sha256": "a64179817d7605d705e805475a09b5ef0be12a3469477d8607350f1f3cc26d8b",
+    "offline_cli": "PASS_ISOLATED_OFFLINE",
+    "runs": [
+      {
+        "case": "positive_matching",
+        "exit": 0
+      },
+      {
+        "case": "negative_unlisted",
+        "exit": 1
+      },
+      {
+        "case": "negative_missing_lock",
+        "exit": 1
+      },
+      {
+        "case": "negative_local_path",
+        "exit": 0,
+        "warning": "Cannot follow workspace-local action. Does not fail offline."
+      },
+      {
+        "case": "observe_container_tag",
+        "exit": 0,
+        "warning": "No built-in enforcement demonstrated"
+      },
+      {
+        "case": "observe_external_reusable",
+        "exit": 0,
+        "warning": "No consumer lockfile enforcement demonstrated"
+      }
+    ],
+    "online_provenance": {
+      "attempt": "TS-EE-ACTIONS-LOCKFILE-ONLINE-002",
+      "status": "PASS",
+      "exit": 0,
+      "provider_output": "Scanning 1 workflow; All 1 workflow valid",
+      "lockfile_modified": false
+    },
+    "limits": [
+      "One synthetic manually authored lockfile with upstream metadata; not a fully generated lockfile",
+      "Negative action-local diagnostic exits 0",
+      "No real CI dispatch",
+      "No Product repository writes",
+      "Independent review not yet performed"
+    ]
+  },
+  "opencode2": {
+    "release": "anomalyco/opencode v2.2.5",
+    "archive_sha256": "2f3bfd6b3527c60c2a882557b20ddc9ba6bdff4b5a8fe61c853da8fcfb3076e8",
+    "isolated_version": "PASS",
+    "source_command": "--standalone debug config",
+    "source_command_exit": 0,
+    "initial_config_verifier": "CONFIG_DIFFERENCE due to incorrect assumption debug config returns resolved config",
+    "diagnosis": {
+      "root_count": 2,
+      "element0_keys": [
+        "type",
+        "path"
+      ],
+      "element1_keys": [
+        "type",
+        "path",
+        "info"
+      ],
+      "conclusion": "debug config enumerates config sources; not a permission-engine runtime evaluation"
+    },
+    "static_hardening": "16/16 synthetic oracle PASS; separate review candidate v2 prepared; not applied",
+    "limits": [
+      "No model call or goal/schedule execution",
+      "No runtime permission resolution or tools exercised",
+      "Real-time permission behavior not qualified",
+      "No upgrade to shared OpenCode2",
+      "Independent review pending"
+    ]
+  },
+  "stop": "No retry of already completed process; any further runtime effect requires a distinct mechanically defined gate and observation of existing process states."
+}
