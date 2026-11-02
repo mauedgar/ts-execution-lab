@@ -1,0 +1,44 @@
+# TS-BEADS 047B — calificación de la prueba Dolt 2.2.0 desechable
+
+**Fecha:** 2026-11-01. **Clase:** EXPERIMENTAL_DECISION_SUPPORT / SOURCE-ONLY. **Autoridad:** EXPERIMENTAL_CONTROL_ONLY. **Estado:** `DESIGN_FEASIBLE_CONDITIONED / NOT_DISPATCHABLE / NO_SQL_EFFECT`. Esta nota no es un nuevo TaskCycle, grant, review independiente, receipt ni aceptación Product.
+
+## Identidad y fuentes adquiridas
+
+- Operación preexistente, sin reiniciar: `TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001`.
+- Handoff recibido: `mauedgar/ts-execution-transport@f74ac6f4d263d7b8ccd458e12e14aa6d31083c09:handoffs/TS-BEADS-047B-OPERATIONAL-ROTATION-IR006-20261101-001/HANDOFF.md` (blob `1e25c40ce56689c0ef4ce3772f0190527cc8166e`).
+- Lab observado antes de esta nota: `experiment/beads-047b-native-two-windows-20261031-001@6019d22f1175899525a3607a7807880fb10f4c1e`; Transport `main@f74ac6f4d263d7b8ccd458e12e14aa6d31083c09`; Product `tools@bc9e60b9cad79037b40c298d5c9a84f17a33d909`.
+- DoD original: `experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md` (blob `26388665fc0782fd10b24adca96a7dfa47c6a952`).
+- IR006: `mauedgar/ts-execution-transport@d98dc80ad7fc498cb1e2d646d41d754a2dda1740:handoffs/TS-BEADS-047B-OFFLINE-PROOF-IR005-REPAIR-20261101-002/WEB_INLINE_IR006-SECURITY-20261101.md` (blob `1450e082d20230ad7267a797d1c3803f28720727`): `PASS_LIMITED_FAIL_CLOSED_STATIC / NO_GO_DISPOSABLE_SQL_EFFECT`.
+- F001 original SHA256 mismatch cerrado únicamente mediante el addendum `IR006-PROVENANCE-F001-CORRECTION.md` (blob `09e40580b7afdff23f244ea9382ef6f3d5190333`); no reescribir originales, no re-ejecutar ni re-juzgar IR005/IR006.
+- Código upstream concreto: `dolthub/dolt@v2.2.0:go/cmd/dolt/commands/sql.go`, Git blob `4a1101d562ed5cf00b70bd271b9ef07e081a1608`. El CLI declara `DataDirFlag`, `CfgDirFlag`, `PrivsFilePathFlag`, batch stdin/`-f`, y requiere posicionar argumentos globales antes del subcomando. Esta lectura **no** equivale a prueba empírica del binario instalado.
+- Documentación oficial: https://www.dolthub.com/docs/sql-reference/server/access-management/ y https://www.dolthub.com/docs/sql-reference/server/configuration/. Los cambios de GRANT mediante sentencias estándar se persisten en `privileges.db`; modificaciones directas de tablas grant no son un sustituto confiable de persistencia.
+
+## Calificación técnica y límite del experimento
+
+**Viabilidad de diseño:** la versión fuente fijada tiene interfaces suficientes para intentar una prueba offline de persistencia de privilegios con un archivo explícito y un almacén aislado. No se demostró todavía la semántica del binario nativo ni que el nombre/host/privilegio y el archivo elegido sobrevivan correctamente a un proceso reiniciado. **No autorizar SQL por esta nota.**
+
+**Limitación crítica:** `dolt sql` local dispone de privilegios de superusuario en la propia base Dolt; comprobar `SHOW GRANTS` como superusuario NO demuestra que un reader autenticado será rechazado en el servidor. El alcance máximo de una prueba puramente offline exitosa es `OFFLINE_PRIVILEGE_PERSISTENCE_OBSERVED`. No prueba ACL efectiva del endpoint, root securizado, acceso denegado, Beads multi-host, ni equivalencia del Kernel.
+
+**Criterio de salida:** producir un único candidato de efecto **real** revisable, no otro stub que devuelva BLOCKED por defecto. Si los flags de la versión fijada, la persistencia del archivo de privilegios o los controles de host no permiten prueba segura, el resultado debe ser `TECHNICAL_NO_GO_OFFLINE_PRIVILEGE_PERSISTENCE`; no iterar indefinidamente sobre mocks.
+
+## Especificación mínima del futuro fixture (sin ejecutarlo)
+
+1. **Precondiciones con origen externo:** mismo owner notebook `DESKTOP-DJLBEQH`, equipo Commander `40cc0b10-fa7b-4a6a-98cf-1c94f93791b2`, `ExecutionAttempt` nuevo y único solo cuando haya autorización específica; sujeto Git y hashes completos, original intento/receipt/PID verificados. Verificar ausencia inequívoca de efectos previos: un folder vacío o ausente NO es prueba de no efecto. Si `UNKNOWN`, parar sin matar, limpiar ni repetir.
+2. **Host aislado:** comprobar binario Dolt v2.2.0 con SHA256 `BED880C0E6B522498A563FCD1F0FC1E25527BA07E66C1E0A85C2242B64DFD967`; rutas canónicas debajo de `LOCALAPPDATA`, sin junction/reparse point ni fixture anterior, ACL y owner restrictivos también en directorios NUEVOS. No rutas Product, no carpeta del Kernel, no almacén Dolt/Beads anterior.
+3. **Sin exposición:** antes de cualquier effect observar **todos** los procesos que escuchan en el puerto SQL seleccionado, no solo `dolt.exe`; validar estructuralmente estado Tailscale Serve/Funnel y ausencia de forwarding sin interpretar falta del CLI como estado seguro. La prueba offline NO necesita abrir listener. Si se detecta exposición previa o las observaciones son incompletas, bloquear.
+4. **Ejecución propuesta, condicionada:** con binario y sintaxis comprobados, usar flags globales `--data-dir`, `--doltcfg-dir`, `--privilege-file` apuntando a directorios exclusivos; crear en una sola fixture usuarios sintéticos de permisos limitados mediante `CREATE USER`/`GRANT` (no DML directo sobre `mysql.user`); terminar el primer proceso, luego abrir otro proceso local sobre el MISMO archivo y verificar de manera estructurada `mysql.user`, `mysql.db` y/o `mysql.tables_priv` y el contenido esperado. Una ejecución sin cambios/grants o con readback ambiguo no es PASS. Ninguna credencial en argv, repositorio, log, Commander ni receipt público; generación/lectura solo dentro del contexto Windows restringido y sin revelar valores.
+5. **Cerca del efecto:** verificar una concesión experimental separada y condicionada, inmutable, con emisor autorizado, operación, `ExecutionAttempt`, owner, host, sujeto, ruta/hash y efecto limitado; lock exclusivo y receipt original durable **antes** de lanzar el primer subproceso SQL. Drenar stdout/stderr de forma concurrente y acotada, preservar PID y resultado, distinguir EXIT/BLOCK/FAIL/UNKNOWN. Timeout o respuesta ambigua preservan estado y prohíben retry/cleanup automático. El preflight READY no es grant.
+6. **Evidencia:** emitir hash del archivo de privilegios con y sin reinicio, resultados SQL normalizados y sin secretos, proceso/PID original, log de denegación solo si se ejecutó un auténtico cliente remoto bajo grant separado, fechas, inputs exactos y contraste del segundo proceso. Una falla puede cerrar como `NO_GO`; el cleanup del fixture requiere condición y receipt propios, nunca proceder por asumir éxito.
+
+**Separar siguiente dependencia:** autenticación y denegación real requieren una futura prueba de servidor loopback `127.0.0.1`, inicialmente no conectado a Tailscale, con root no vacío y clientes distintos (no el CLI local superusuario), más tests negativos y propia revisión/autoridad. Solo tras eso considerar Serve TCP privado con verificación de ACL/puerto, Beads desde notebook+desktop, outage fail-closed, recuperación y backup off-host. No mezclar estos efectos en el experimento offline.
+
+## Disposición para Beta Run (NO adoptada)
+
+- `042`: capacidad experimental de grafo/estado histórico Beads de un host; **no** durabilidad multi-host.
+- `047B`: `HOST_INDEPENDENCE_INCOMPLETE`; fixture offline **aún sin candidato effectful revisado, sin IR de ese candidato y sin grant experimental SQL**.
+- Trabajo integral objetivo: Beads/Dolt como propietario de grafo, dependencias, ready, status e historia de trabajo; Git/Transport para sujetos y evidencias; Control/Developer y Execution Engineering mantienen selección, autoridad, provenance, reconciliación y no-retry. **No crear segundo Kernel general**.
+- No declarar equivalencia del State Kernel: 036 identificó diferencias materiales de revision global, event count, hash-chain, snapshot y `UNKNOWN`; requerirá evidencia de equivalencia o decisión competente explícita sobre invariantes. Product `State_Kernel.final_disposition=UNDECIDED`.
+- Umbral de retorno a Beta Control: DoD 047B empírico completo (dos hosts independientes, auth/denegación, identidad de grafo/historia, caída fail-closed, restore/off-host backup, RPO/RTO, recibos originales y limitaciones 028/030/036 reconciliadas) MÁS propuesta de ownership/consumers para decisión Developer. Una prueba offline PASS no habilita la incorporación integral.
+- #34 `CLOSED_PASS`, #35 H6 sin Beads ni TaskCycle prematuro. Cero cambios Product, cero SQL, cero Tailscale Serve, cero Beads graph, cero aceptación o migración por esta calificación.
+
+**Siguiente acción competente:** implementar **solo mediante un nuevo candidato fuente inmutable independiente**, y someterlo a IR sobre el runner real, su fencing y las observaciones de host; si y solo si pasa, solicitar un grant explícito, separado y de uso único para el fixture Dolt desechable. Preservar los intentos terminales y cualquier futuro `UNKNOWN` sin retries.
