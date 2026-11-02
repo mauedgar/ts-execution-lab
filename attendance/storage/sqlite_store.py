@@ -9,6 +9,7 @@ import uuid
 
 from attendance.core.service import AttendanceError, to_public
 from attendance.storage.legacy_v1 import original_stamp, validate_session_identity, migrate_request
+from attendance.storage.integrity import verify_original_v1_schema, verify_original_v1_intervals, verify_persisted_response
 
 
 class SQLiteAttendanceStore:
@@ -43,6 +44,13 @@ class SQLiteAttendanceStore:
                 version = conn.execute('PRAGMA user_version').fetchone()[0]
                 if version not in (0, 1, 2):
                     raise AttendanceError('STORAGE_ERROR', 'unsupported future SQLite schema version')
+                if version == 0:
+                    if conn.execute("SELECT 1 FROM sqlite_master WHERE type IN ('table','view','trigger','index') "
+                                    "AND name NOT LIKE 'sqlite_%' LIMIT 1").fetchone() is not None:
+                        raise AttendanceError('STORAGE_ERROR','unknown unversioned nonempty SQLite file')
+                if version == 1:
+                    verify_original_v1_schema(conn)
+                    verify_original_v1_intervals(conn)
                 conn.execute('CREATE TABLE IF NOT EXISTS subjects (subject_id TEXT PRIMARY KEY)')
                 conn.execute('''CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(subject_id),
@@ -119,7 +127,7 @@ class SQLiteAttendanceStore:
             conn = self._connect()
             conn.execute('BEGIN IMMEDIATE')
             if request_id is not None:
-                previous = conn.execute('SELECT payload,response FROM requests WHERE subject_id=? AND request_id=?', (subject, request_id)).fetchone()
+                previous = conn.execute('SELECT operation,payload,response FROM requests WHERE subject_id=? AND request_id=?', (subject, request_id)).fetchone()
                 if previous is not None:
                     try:
                         previous_sig = json.loads(previous['payload'])
@@ -127,24 +135,25 @@ class SQLiteAttendanceStore:
                             raise ValueError('request signature must be object')
                     except (ValueError, TypeError) as exc:
                         raise AttendanceError('STORAGE_ERROR', 'corrupt stored request signature') from exc
-                    if previous_sig.get('signature_version') == 1:
-                        # Control-approved historical exception: original v1
-                        # persisted normalized UTC, not raw occurred_at bytes.
-                        identical = (previous_sig.get('operation') == operation and
-                                     previous_sig.get('utc_occurred_at') == occurred_at)
-                    elif previous_sig.get('signature_version') is None:
-                        identical = previous['payload'] == signature
+                    kind=previous_sig.get('signature_version')
+                    if type(kind) is int and kind == 1 and set(previous_sig) == {
+                        'signature_version','operation','utc_occurred_at'
+                    }:
+                        if not isinstance(previous_sig.get('utc_occurred_at'),str):
+                            raise AttendanceError('STORAGE_ERROR','invalid historical signature')
+                        identical=(previous_sig.get('operation')==operation and
+                                   previous_sig['utc_occurred_at']==occurred_at)
+                    elif 'signature_version' not in previous_sig:
+                        if set(previous_sig)!={'operation','occurred_at'}:
+                            raise AttendanceError('STORAGE_ERROR','invalid v2 signature')
+                        identical=previous['payload']==signature
                     else:
-                        raise AttendanceError('STORAGE_ERROR', 'unsupported stored request signature')
+                        raise AttendanceError('STORAGE_ERROR','unsupported signature version')
+                    if previous['operation']!=operation or previous_sig.get('operation')!=operation:
+                        raise AttendanceError('REQUEST_CONFLICT','request_id reused across operations')
                     if not identical:
-                        raise AttendanceError('REQUEST_CONFLICT', 'request_id used for different arguments')
-                    try:
-                        response = json.loads(previous['response'])
-                        if not isinstance(response, dict) or not all(k in response for k in
-                                 ('session_id','subject_id','checked_in_at','checked_out_at')):
-                            raise ValueError('invalid persisted response')
-                    except (ValueError, TypeError) as exc:
-                        raise AttendanceError('STORAGE_ERROR', 'corrupt stored request response') from exc
+                        raise AttendanceError('REQUEST_CONFLICT','request_id used for different arguments')
+                    response=verify_persisted_response(conn,previous,subject,operation)
                     conn.commit()
                     return response
             active = conn.execute('SELECT * FROM sessions WHERE subject_id=? AND checked_out_at IS NULL', (subject,)).fetchone()
@@ -202,9 +211,16 @@ class SQLiteAttendanceStore:
         try:
             with closing(self._connect()) as conn:
                 self._known(conn, subject)
-                rows = conn.execute('''SELECT * FROM sessions WHERE subject_id=? AND checked_in_at>=? AND checked_in_at<?
-                                      ORDER BY checked_in_at, session_id''', (subject, start, end)).fetchall()
-                return [self._session(row) for row in rows]
+                cursor=conn.execute('''SELECT * FROM sessions WHERE subject_id=? AND checked_in_at>=? AND checked_in_at<?
+                                       ORDER BY checked_in_at, session_id''', (subject,start,end))
+                # The V0 Session[] necessarily materializes final output, but SQL fetch is bounded.
+                result=[]
+                while True:
+                    chunk=cursor.fetchmany(128)
+                    if not chunk:
+                        break
+                    result.extend(self._session(row) for row in chunk)
+                return result
         except sqlite3.Error as exc:
             raise AttendanceError('STORAGE_ERROR', 'SQLite read failure') from exc
 
