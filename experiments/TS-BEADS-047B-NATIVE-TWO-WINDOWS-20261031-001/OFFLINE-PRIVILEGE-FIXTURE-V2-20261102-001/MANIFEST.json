@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "candidate": "OFFLINE-PRIVILEGE-FIXTURE-V2-20261102-001",
+  "sourceRepo": "mauedgar/ts-execution-lab",
+  "sourceBranch": "experiment/beads-047b-native-two-windows-20261031-001",
+  "baselineCommit": "f3cca8b455e4ca3b23cfd0d551ed1615bc9231bf",
+  "sourceBeforeManifestCommit": "4b0a9d96ab3b30f69f5b30b131632b785e86a406",
+  "status": "SOURCE_ONLY_NOT_DISPATCHABLE",
+  "grantPresent": false,
+  "trustedIssuerKeyProvisioned": false,
+  "sqlExecuted": false,
+  "nativeWindowsTestsExecuted": false,
+  "sourceOnlyChecksPerformed": true,
+  "encoding": "UTF-8 LF; no BOM; exact bytes",
+  "manifestSelfHash": "EXCLUDED_TO_AVOID_SELF_REFERENCE",
+  "files": [
+    {
+      "path": "candidate/Security-047B-V2.psm1",
+      "gitBlobSha1": "d4e78a6de4f51d0d9c33afdeb5392916f1d7be16",
+      "sha256Utf8Lf": "101D9737C198DA7FD6070F9F8C961BF900499EA05857314E4F97701777239F77",
+      "bytes": 9427
+    },
+    {
+      "path": "candidate/Invoke-047B-V2-Fixture.ps1",
+      "gitBlobSha1": "8f9b66ada9b52e2d793a3aef3d8fea96c1d90291",
+      "sha256Utf8Lf": "4330E9F529CF294106EBDD03C0378015EEB4B7B4C8D3D503DE43308B55118498",
+      "bytes": 10811
+    },
+    {
+      "path": "candidate/Start-047B-V2.ps1",
+      "gitBlobSha1": "04f62daff16794fc718eef2e71d29d43755fbef0",
+      "sha256Utf8Lf": "E9DF44831B9F10A0C7448E9F1A07B1737021F9535AE36874D653FEC6AE44F8F6",
+      "bytes": 1844
+    },
+    {
+      "path": "tests/test_source_contract.py",
+      "gitBlobSha1": "345bc01d1948a485777449b4092b2d9bdd6839df",
+      "sha256Utf8Lf": "BC7C74FDC884766203809E1DB563AE901BA1DEA782340FB8EF46D13ED23678F6",
+      "bytes": 3110
+    },
+    {
+      "path": "tests/Test-V2-Negative.ps1",
+      "gitBlobSha1": "eba9a39b7a63cb1503a19fd2d692fababaa34d88",
+      "sha256Utf8Lf": "DEC467560604C86F0C91069433FFA93E69C95EEB2F5B38690373800EF44AFA42",
+      "bytes": 1227
+    },
+    {
+      "path": "tests/Test-V2-ParserOnly.ps1",
+      "gitBlobSha1": "fee55b7ec6dede24ef7f17ad77802104913e7df3",
+      "sha256Utf8Lf": "785FE909753BD9F960DFE7CED151222CB0126D80D0FEDFC40FB9C9BBF00C4BE1",
+      "bytes": 638
+    },
+    {
+      "path": "README.md",
+      "gitBlobSha1": "c1b329ccc0476367d2415e0a1ec3fc0e35a4075b",
+      "sha256Utf8Lf": "596075B5BDFB2EE4A34DD78A7A52D131A332E9CF07DDA07AA9E7BC8827E7C953",
+      "bytes": 7966
+    }
+  ]
+}
