@@ -1,0 +1,55 @@
+{
+  "id": "TS-SP-ONEDRIVE-OPERATIONS-QUALIFICATION-20261102-001",
+  "date": "2026-11-02",
+  "kind": "EE_CONNECTOR_QUALIFICATION_ONLY",
+  "account": "EDUCATIONAL_BUSINESS_ONLY",
+  "safe_isolation": "DEDICATED_SYNTHETIC_FOLDER",
+  "authority": {
+    "transport_method": "CANONICAL_NARROW",
+    "Product": "NONE",
+    "unrelated_files": "NO_WRITE",
+    "open_sharing": "NO_GRANT",
+    "execution": "NONE"
+  },
+  "observed": {
+    "identity_with_explicit_account": "PASS",
+    "list_drives_with_explicit_account": "PASS",
+    "list_recent_documents_with_explicit_account": "PASS",
+    "get_site_educational": "PASS",
+    "list_site_drives": "PASS",
+    "list_site_lists": "PASS_FIRST_PAGE_ONLY",
+    "list_folder_items": "PASS",
+    "get_drive_item_explicit": "PASS",
+    "fetch_text_explicit": "PASS",
+    "fetch_binary_download_raw_file_explicit": "PASS",
+    "list_item_versions_explicit": "PASS",
+    "list_item_permissions_explicit": "PASS_NO_LINK_CREATION",
+    "update_file_exact_text_explicit": "PASS_183_BYTES",
+    "update_file_exact_binary_explicit": "PASS_32768_BYTES",
+    "local_sync_sha256": "PASS_BOTH_TEXT_AND_BINARY",
+    "create_folder_sandbox": "PASS",
+    "move_or_rename_item_sandbox": "PASS_EMPTY_FILE",
+    "copy_item_sandbox": "PASS_ASYNC_202_THEN_DESTINATION_READBACK",
+    "graph_search_for_newly_synced_synthetic": "PASS_EMPTY_RESULTS_NOT_DELIVERY_PROOF",
+    "list_drive_item_children_no_account_selector": "ERROR_INTERNAL_AFTER_ACCOUNT_CHANGE",
+    "search_drive_items_no_account_selector": "ERROR_INTERNAL_AFTER_ACCOUNT_CHANGE",
+    "upload_drive_item_content_no_account_selector": "PRIOR_400_OBJECT_HANDLE_INVALID_TWO_ACCOUNTS_NOT_RETRIED_AFTER_CHANGE"
+  },
+  "local_hashes": {
+    "text_183": "452f5cf5450f76dfbca6018516aab82c595e7f024af882a3dd4cd173f31c53dd",
+    "binary_32768": "316843070c0b9dcda0fc0f0d3587820125d733ff2f76a69143f9626f2bec614d"
+  },
+  "untested_categories": [
+    "anonymous/organization sharing link creation",
+    "recipient invitations",
+    "delete and restore version",
+    "bulk mutation",
+    "personal default-drive create/upload/move endpoints",
+    "overwrite arbitrary existing files",
+    "large binary or parallel uploads",
+    "sensitivity label catalog",
+    "list-row operations"
+  ],
+  "safety": "UNQUALIFIED and failed operations not authorized by this receipt; do not auto-retry or assume write success",
+  "provenance": "Direct SharePoint MCP connector responses and notebook mechanical SHA256 receipts in this conversation"
+}
