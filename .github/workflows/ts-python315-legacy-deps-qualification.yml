@@ -1,0 +1,93 @@
+name: Tecnotron CPython 3.15.2 legacy dependency qualification
+on:
+  push:
+    branches:
+      - experiment/python315-legacy-deps-matrix-20261102-001
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact Tecnotron Product baseline
+        uses: actions/checkout@v4
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: bc9e60b9cad79037b40c298d5c9a84f17a33d909
+          path: source
+          persist-credentials: false
+      - name: Guard exact Product source and requirements blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = 'bc9e60b9cad79037b40c298d5c9a84f17a33d909'
+          test "$(git -C source rev-parse HEAD:python/requirements.txt)" = 'b1a9f877be8b54618942e295e95bf43bda264e42'
+      - name: Install Python 3.15.2
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.15.2'
+      - name: Install pinned uv 0.13.6
+        shell: bash
+        run: python -m pip install uv==0.13.6
+      - name: Qualify original requirements and isolated platform-marker candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, platform, pathlib, subprocess, sys, time
+          assert sys.version_info[:3] == (3,15,2), sys.version
+          root = pathlib.Path('source/python/requirements.txt')
+          original = root.read_text(encoding='utf-8-sig')
+          # Derived only, not a change to the authoritative Product manifest.
+          derived = []
+          modified = []
+          for line in original.splitlines():
+              if line.strip().lower().startswith(('pywin32==','win32_setctime==')):
+                  marker = ' ; sys_platform == "win32"'
+                  derived.append(line.rstrip() + marker)
+                  modified.append(line.split('==',1)[0])
+              else:
+                  derived.append(line)
+          pathlib.Path('derived-platform-markers.txt').write_text('\n'.join(derived)+'\n',encoding='utf-8')
+          result = {'schema':'ts-python315-dependency-qualification/v1',
+                    'product_authority':'NONE', 'effect':'NONE',
+                    'product_subject':'bc9e60b9cad79037b40c298d5c9a84f17a33d909',
+                    'requirements_git_blob':'b1a9f877be8b54618942e295e95bf43bda264e42',
+                    'python':sys.version,'os':platform.platform(),
+                    'runner_os':os.environ.get('RUNNER_OS'), 'run_id':os.environ.get('GITHUB_RUN_ID'),
+                    'workflow_sha':os.environ.get('GITHUB_SHA'),
+                    'platform_specific_requirements':modified,'probes':[]}
+          def run(label, req):
+              envdir = '.venv-'+label
+              venv = subprocess.run(['uv','venv',envdir,'--python',sys.executable],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=90)
+              if venv.returncode:
+                  return {'label':label,'status':'BLOCKED_VENV','exit':venv.returncode,'tail':venv.stdout[-2600:]}
+              t = time.monotonic()
+              try:
+                  p = subprocess.run(['uv','pip','install','--python',envdir,'--only-binary',':all:','-r',req],
+                                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=420)
+                  return {'label':label,'status':'PASS' if p.returncode==0 else 'BLOCKED_DEPENDENCIES',
+                          'exit':p.returncode,'elapsed_seconds':round(time.monotonic()-t,3),
+                          'tail':p.stdout[-9000:]}
+              except subprocess.TimeoutExpired as ex:
+                  tail=ex.stdout or b''
+                  if isinstance(tail,bytes): tail=tail.decode('utf-8','replace')
+                  return {'label':label,'status':'TIMEOUT','elapsed_seconds':round(time.monotonic()-t,3),'tail':tail[-9000:]}
+          result['probes'].append(run('original',str(root)))
+          if result['probes'][-1]['status'] != 'PASS' or os.name != 'nt':
+              result['probes'].append(run('derived','derived-platform-markers.txt'))
+          pathlib.Path('python315-qualification-result.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({k:v for k,v in result.items() if k!='python'},indent=2))
+          PY
+      - name: Upload exact original probe observation
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python315-legacy-${{ matrix.os }}
+          path: python315-qualification-result.json
+          if-no-files-found: warn
