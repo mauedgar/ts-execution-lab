@@ -1,0 +1,105 @@
+name: Python 3.15.2 compatibility experiment (not Product gate)
+on:
+  push:
+    branches:
+      - experiment/python315-baseline-20261102-001
+permissions:
+  contents: read
+
+jobs:
+  python315-stdlib-compat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout experimental runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout frozen Domain source
+        uses: actions/checkout@v4
+        with:
+          ref: 2aab8ed12525e3a85b044120c8d5e4d19a083fcf
+          path: domain
+          persist-credentials: false
+      - name: Checkout frozen Operator source (NOT latest unpublished repair)
+        uses: actions/checkout@v4
+        with:
+          ref: d161f86006440f09a900ad0620a6ed5199ff69e9
+          path: operator
+          persist-credentials: false
+      - name: Checkout independent Parent E2E source
+        uses: actions/checkout@v4
+        with:
+          ref: 39571b53cbc83eecdb3fef3839328a35a6145a6f
+          path: parent
+          persist-credentials: false
+      - name: Guard immutable Git identities and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C domain rev-parse HEAD)" = '2aab8ed12525e3a85b044120c8d5e4d19a083fcf'
+          test "$(git -C domain rev-parse 'HEAD^{tree}')" = 'beba803123c1d5008721a126894a20e73a680bbc'
+          test "$(git -C operator rev-parse HEAD)" = 'd161f86006440f09a900ad0620a6ed5199ff69e9'
+          test "$(git -C operator rev-parse 'HEAD^{tree}')" = 'e80e8c6bdda7e5fd983c5a2149e9fa4ae86f4a42'
+          test "$(git -C parent rev-parse HEAD)" = '39571b53cbc83eecdb3fef3839328a35a6145a6f'
+          test "$(git -C domain rev-parse HEAD:attendance/contracts/attendance-v0.md)" = '2e939672a8401154289ea94aab83194f689247f0'
+          test "$(git -C operator rev-parse HEAD:attendance/contracts/attendance-v0.md)" = '2e939672a8401154289ea94aab83194f689247f0'
+      - name: Set up stable CPython 3.15.2
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.15.2'
+      - name: Smoke 3.15 features without changing consumer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          assert sys.version_info[:3] == (3, 15, 2), sys.version
+          from builtins import frozendict
+          frozen = frozendict({"owner": "tecnotron"})
+          assert frozen["owner"] == "tecnotron"
+          exec('lazy import json\nassert json.loads("{\\\"ok\\\": true}")["ok"] is True')
+          print("PYTHON315_FEATURE_SMOKE_PASS")
+          PY
+      - name: Validate frozen Attendance stdlib consumer (experimental only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd domain && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/core -p 'test_*.py' -v)
+          (cd operator && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/operator -p 'test_*.py' -v)
+          mkdir -p combined/attendance
+          cp -a domain/attendance/. combined/attendance/
+          cp -a operator/attendance/operator combined/attendance/
+          cp -a operator/attendance/tests/operator combined/attendance/tests/
+          cp -a parent/attendance/tests/e2e combined/attendance/tests/
+          (cd combined && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/e2e -p 'test_*.py' -v)
+      - name: Capture experimental provenance (not Product acceptance)
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,pathlib,sys
+          result={
+            "schema":"tecnotron-python315-compatibility-experiment/v0",
+            "Product_effect":"NONE", "TaskCycle_effect":"NONE",
+            "basis":"EXPERIMENTAL_QUALIFICATION_ONLY",
+            "run_id":os.environ.get("GITHUB_RUN_ID"),
+            "run_attempt":os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "job_status":"${{ job.status }}",
+            "python_version":sys.version,
+            "domain_commit":"2aab8ed12525e3a85b044120c8d5e4d19a083fcf",
+            "operator_commit":"d161f86006440f09a900ad0620a6ed5199ff69e9",
+            "operator_note":"historical published candidate, not latest corrected unpublished bytes",
+            "parent_e2e_commit":"39571b53cbc83eecdb3fef3839328a35a6145a6f",
+            "frozen_contract":"2e939672a8401154289ea94aab83194f689247f0",
+            "acceptance":"NOT_GRANTED",
+            "phase2":"NOT_GRANTED"
+          }
+          pathlib.Path("python315-experiment-receipt.json").write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
+          PY
+      - name: Upload provisional experiment receipt
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python315-experiment-receipt
+          path: python315-experiment-receipt.json
