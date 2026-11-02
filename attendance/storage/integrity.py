@@ -31,7 +31,7 @@ def _unique_index(conn, table, cols, partial=None):
                 continue
             norm = re.sub(r'\s+', '', sql[0]).lower()
             original = re.sub(r'\s+', '',
-                'CREATE UNIQUE INDEX IF NOT EXISTS one_open_session '
+                'CREATE UNIQUE INDEX one_open_session '
                 'ON sessions(subject_id) WHERE checked_out_at IS NULL').lower()
             if norm != original:
                 continue
@@ -51,12 +51,12 @@ def verify_original_v1_schema(conn):
     # The original producer DDL is a stronger invariant than PRAGMA version.
     # In particular CHECK, foreign-key and partial-index semantics must match.
     original_ddl = {
-        'subjects': 'CREATE TABLE IF NOT EXISTS subjects (subject_id TEXT PRIMARY KEY)',
-        'sessions': ('CREATE TABLE IF NOT EXISTS sessions ('
+        'subjects': 'CREATE TABLE subjects (subject_id TEXT PRIMARY KEY)',
+        'sessions': ('CREATE TABLE sessions ('
                      'session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(subject_id), '
                      'checked_in_at TEXT NOT NULL, checked_out_at TEXT, '
                      'CHECK (checked_out_at IS NULL OR checked_out_at > checked_in_at))'),
-        'requests': ('CREATE TABLE IF NOT EXISTS requests ('
+        'requests': ('CREATE TABLE requests ('
                      'subject_id TEXT NOT NULL, request_id TEXT NOT NULL, operation TEXT NOT NULL, '
                      'payload TEXT NOT NULL, response TEXT NOT NULL, '
                      'PRIMARY KEY (subject_id, request_id), FOREIGN KEY(subject_id) REFERENCES subjects(subject_id))')
