@@ -1,0 +1,50 @@
+name: H6 Domain IR003 native Python312 (isolated)
+on:
+  push:
+    branches:
+      - validation/h6-domain-ir003-python312-20261102-001
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2aab8ed12525e3a85b044120c8d5e4d19a083fcf
+          persist-credentials: false
+      - name: Verify immutable Domain tree and V0 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '2aab8ed12525e3a85b044120c8d5e4d19a083fcf'
+          test "$(git rev-parse 'HEAD^{tree}')" = 'beba803123c1d5008721a126894a20e73a680bbc'
+          test "$(git rev-parse HEAD:attendance/contracts/attendance-v0.md)" = '2e939672a8401154289ea94aab83194f689247f0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run actual Domain unit, concurrency and migration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.version_info[:2]==(3,12),sys.version; print(sys.version)'
+          PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/core -p 'test_*.py' -v
+      - name: Preserve original validation identity
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,json,sys,pathlib
+          receipt={'classification':'validation_not_independent_review',
+           'run_id':os.environ.get('GITHUB_RUN_ID'),'status':'${{ job.status }}',
+           'candidate':'2aab8ed12525e3a85b044120c8d5e4d19a083fcf',
+           'tree':'beba803123c1d5008721a126894a20e73a680bbc',
+           'python':sys.version, 'TaskCycle_effect':'NONE','phase2':'NOT_GRANTED'}
+          pathlib.Path('domain-312-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n',encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: domain-ir003-native312
+          path: domain-312-receipt.json
