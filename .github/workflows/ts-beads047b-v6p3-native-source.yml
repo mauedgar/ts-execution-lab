@@ -1,0 +1,64 @@
+name: TS-BEADS 047B V6P3 independent Windows source-only native check
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p3-source-hardening-20261102-001
+    paths:
+      - .github/workflows/ts-beads047b-v6p3-native-source.yml
+permissions:
+  contents: read
+jobs:
+  native_v6p3_source_only:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Set LF checkout policy before source materialization
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.safecrlf true
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+        with:
+          ref: 71321ed6e2c1905afc68c4bbec2c46c276df1158
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Assert immutable V6P3 exact subject and manifest
+        shell: pwsh
+        env:
+          CANDIDATE_PATH: experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3-20261102-001
+        run: |
+          $ErrorActionPreference='Stop'
+          $head=(git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -cne '71321ed6e2c1905afc68c4bbec2c46c276df1158') { throw 'V6P3_FROZEN_SHA_MISMATCH' }
+          $m=Get-Content -LiteralPath (Join-Path $env:CANDIDATE_PATH 'MANIFEST.json') -Raw | ConvertFrom-Json
+          if (-not $m.sourceOnly -or -not $m.notDispatchable -or $m.grantPresent -or $m.sqlExecuted -or $m.originalProviderEffectsReconciled -or @($m.files).Count -ne 8) {throw 'V6P3_NOT_SOURCE_ONLY'}
+          foreach($f in @($m.files)){
+            $p=Join-Path $env:CANDIDATE_PATH $f.path
+            $bytes=[IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $p))
+            $sha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+            $blob=(git hash-object $p).Trim()
+            if ($bytes.Length -ne $f.bytes -or $sha -cne $f.sha256Utf8Lf -or $blob -cne $f.gitBlobSha1) {throw ('V6P3_PIN_FAIL_'+$f.path)}
+            if (@($bytes | Where-Object {$_ -eq 13}).Count -ne 0) {throw ('V6P3_CRLF_FAIL_'+$f.path)}
+          }
+          'TS047B_V6P3_PINS=PASS_8_OF_8_LF'
+      - name: Run Python source contract tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3-20261102-001/tests' -p test_source_contract.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'V6P3_PYTHON_UNITTTEST_FAIL' }
+      - name: Run native PowerShell AST adversarial tests
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3-20261102-001/tests/Test-V6P3-ParserAndAst.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V6P3_AST_FAIL' }
+      - name: Run negative unprovisioned issuer test
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P3-20261102-001/tests/Test-V6P3-Negative.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V6P3_NEGATIVE_FAIL' }
+      - name: No-effects result statement
+        shell: pwsh
+        run: |
+          'TS047B_V6P3=PASS_NATIVE_WINDOWS_SOURCE_ONLY_NO_SQL_NO_BEADS_NO_PRODUCT'
+          'TS047B_NOTEBOOK_ORIGINAL=UNKNOWN_NOT_RETRIED'
