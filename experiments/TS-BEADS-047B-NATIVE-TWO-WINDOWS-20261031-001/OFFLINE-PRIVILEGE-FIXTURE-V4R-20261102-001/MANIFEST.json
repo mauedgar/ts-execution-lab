@@ -1,0 +1,72 @@
+{
+  "manifestVersion": 1,
+  "operation": "TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001",
+  "candidate": "OFFLINE-PRIVILEGE-FIXTURE-V4R-20261102-001",
+  "baseFrozenV3": "b2bb1f26206000abe61e971f51be0a7c9d4051f3",
+  "sourceState": "NOT_DISPATCHABLE_SOURCE_ONLY",
+  "issuerKeyProvisioned": false,
+  "offHostClaimVerified": false,
+  "sqlExecuted": false,
+  "verifiedStructuralChecks": 16,
+  "originalPythonTestsExecuted": false,
+  "nativeWindowsTestsExecuted": false,
+  "selfHash": "EXCLUDED_TO_AVOID_SELF_REFERENCE",
+  "files": [
+    {
+      "path": "candidate/Security-047B-V4R.psm1",
+      "gitBlobSha1": "2451f61a401be1fe2b920b1752d554d8a6ab27e9",
+      "sha256Utf8Lf": "5C93D836E5FE2D8597C423C303714A5FF23BAE8018F884753CD19E3FAE8E6331",
+      "bytes": 12981,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "candidate/Invoke-047B-V4R-Fixture.ps1",
+      "gitBlobSha1": "5e3f5b56d5ac474081dff82eb022120587ebc7a8",
+      "sha256Utf8Lf": "D50FFF8CEF47CE80D341A6614142EC661D671FF89F08404841B5130F6A6DD7E4",
+      "bytes": 12029,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "candidate/Start-047B-V4R.ps1",
+      "gitBlobSha1": "0a5b7f69dc73414e263a25cacd512047f6faea48",
+      "sha256Utf8Lf": "D030220B6B14845F9C369B338BC0C8900E156D098C52252DC6B7B57960AEB365",
+      "bytes": 1811,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "tests/test_source_contract.py",
+      "gitBlobSha1": "ae939ba560fc6baa03da14a7134e2f90d321e11b",
+      "sha256Utf8Lf": "1CF1688A9963EC193ABCD3F44AD124DD29906BBEE7A51562EDA565BBD400D25E",
+      "bytes": 3187,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "tests/Test-V4R-Negative.ps1",
+      "gitBlobSha1": "6a769c8a23a53402d7490bffe4355b9cf45ed341",
+      "sha256Utf8Lf": "717433134C406A5CD39EDF3F98049361F02795DA41BB28B0C0C86D14703B7EF8",
+      "bytes": 1132,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "tests/Test-V4R-ParserOnly.ps1",
+      "gitBlobSha1": "375ba4c06bb7fa93e5830458d88aac7d2814f418",
+      "sha256Utf8Lf": "4985729AA9D24117201BC10DDCB6F90E5BD86E352F1CC8D999C85947EA574266",
+      "bytes": 641,
+      "lfOnly": true,
+      "bomAbsent": true
+    },
+    {
+      "path": "README.md",
+      "gitBlobSha1": "582aa36566caec64647338881f17c94eb94d11d8",
+      "sha256Utf8Lf": "DC822E327B25150C675BB8A06C3CE387E63B748FBD51E78C5CA490AE3C672C94",
+      "bytes": 4334,
+      "lfOnly": true,
+      "bomAbsent": true
+    }
+  ]
+}
