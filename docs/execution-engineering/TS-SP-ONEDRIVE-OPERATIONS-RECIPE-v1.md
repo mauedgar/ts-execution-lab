@@ -103,3 +103,17 @@ Tool catalogue is per installed connector version; if an operation disappears or
 - Keep concrete educational account link/drive/site binding, when needed for fast re-use, in **private** `mauedgar/ts-execution-transport` and treat it as a cache requiring validity verification.
 - Before a new connector call: consult this recipe; inspect just the live schema for the selected action, not all apps or the repository.
 - This document is an operational recipe under `TS-EXECUTION-TRANSPORT-ONEDRIVE-TAILDROP-v1`, not a new Product grant.
+
+## 7. Live schema reconciliation — single educational account (2026-11-02)
+
+After the user disconnected the separate personal Microsoft account from the **SharePoint plugin** (not Windows OneDrive), live tool schemas changed. The methods `get_profile`, `fetch` and `update_file_exact` **no longer advertise or accept `link_id`**. Supplying the previously valid ID results in `InvalidActionArgumentsError` *before* any provider effect. The active `get_profile({})` returned the educational identity. `list_folder_items` verified two unique cloud targets were zero bytes. With the account-selector argument **omitted**, `update_file_exact({target:{type:'drive_item',drive_id:EDU_DRIVE_ID,item_id:KNOWN_SLOT_ID},file_uri:PAYLOAD,mime_type:MIME})` successfully delivered a fixture ZIP and two pre-materialized PowerShell runners to notebook OneDrive, with SHA-256 verified on notebook before execution.
+
+**Effective deterministic branching for all future calls:**
+
+1. Inspect only the **selected** live tool schema. When the tool advertises `link_id`, pass the verified educational link explicitly; otherwise **omit** `link_id` completely.
+2. When there is exactly one SharePoint connection, call `get_profile({})` and require the expected educational identity before **each effectful transport session**. Do not infer the account from the Windows OneDrive registry alone; they are separate authentication surfaces.
+3. Independently verify the exact educational drive/site/item (do not assume the default); use `get_drive_item` with its live schema or `list_folder_items` scoped to the known educational site. Validate that the precreated slot is zero bytes before the first write.
+4. Never retry a failed command with the same arguments. Distinguish client-side rejected arguments (provider not invoked) from transport uncertainty; read back the exact slot before any new, identified write.
+5. Do not generalize this to generic upload/create: only **exact-target writes** and the isolated readback/hash verification are qualified in the current single-account configuration.
+
+The previous references to mandatory `link_id` describe the **two-connection** schema, not the current one. This addendum takes precedence for the single-connection live schema. No account relinking, Product grant or generic tool adoption is implied.
