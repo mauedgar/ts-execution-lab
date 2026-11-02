@@ -1,11 +1,11 @@
 # Bounded original 047B no-SQL native Windows test; GitHub-hosted runner, NOT notebook.
-[CmdletBinding()] param()
+[CmdletBinding()] param([Parameter(Mandatory=$true)][string]$SourceCheckoutRoot)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $PSNativeCommandUseErrorActionPreference=$false
 $attempt='TS-BEADS-047B-V6P1-WINDOWS-NOSQL-20261102-001'
 $subject='0118028c2508c2ce274fd42240f847adf7ff2187'
-$root=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$root=(Resolve-Path -LiteralPath $SourceCheckoutRoot).Path
 $base=Join-Path $root 'experiments\TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001\OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001'
 $reportPath=Join-Path $env:RUNNER_TEMP 'TS_BEADS_047B_V6P1_WINDOWS_NOSQL_RESULT.json'
 $report=[ordered]@{
