@@ -62,6 +62,14 @@ class SQLiteAttendanceStore:
                     subject_id TEXT NOT NULL, request_id TEXT NOT NULL, operation TEXT NOT NULL,
                     payload TEXT NOT NULL, response TEXT NOT NULL,
                     PRIMARY KEY (subject_id, request_id), FOREIGN KEY(subject_id) REFERENCES subjects(subject_id))''')
+                # Atomic provenance ledger is populated ONLY by verified v1
+                # migration; future schema-v2 keys are never grandfathered.
+                conn.execute('''CREATE TABLE IF NOT EXISTS v1_provenance (
+                    subject_id TEXT NOT NULL, request_id TEXT NOT NULL,
+                    operation TEXT NOT NULL, utc_occurred_at TEXT NOT NULL,
+                    PRIMARY KEY(subject_id,request_id),
+                    FOREIGN KEY(subject_id,request_id)
+                    REFERENCES requests(subject_id,request_id))''')
                 if version == 1:
                     # Migrate in keyset batches, with bounded memory usage.
                     # Original v1 stored canonical UTC but not raw argument bytes.
@@ -103,6 +111,11 @@ class SQLiteAttendanceStore:
                             break
                         for req in requests:
                             marked = migrate_request(conn, req)
+                            proof = json.loads(marked)
+                            conn.execute('INSERT INTO v1_provenance '
+                                         '(subject_id,request_id,operation,utc_occurred_at) VALUES(?,?,?,?)',
+                                         (req['subject_id'],req['request_id'],proof['operation'],
+                                          proof['utc_occurred_at']))
                             conn.execute('UPDATE requests SET payload=? WHERE subject_id=? AND request_id=?',
                                          (marked, req['subject_id'], req['request_id']))
                         last_subject, last_request = requests[-1]['subject_id'], requests[-1]['request_id']
@@ -114,10 +127,26 @@ class SQLiteAttendanceStore:
 
     @staticmethod
     def _session(row):
+        from attendance.core.service import utc
         result = {k: row[k] for k in ('session_id', 'subject_id', 'checked_in_at', 'checked_out_at')}
-        result['checked_in_at'] = to_public(result['checked_in_at'])
-        result['checked_out_at'] = to_public(result['checked_out_at'])
-        return result
+        try:
+            if (not isinstance(result['session_id'],str) or not result['session_id'] or
+                not isinstance(result['subject_id'],str) or
+                not isinstance(result['checked_in_at'],str) or
+                not (result['checked_out_at'] is None or isinstance(result['checked_out_at'],str))):
+                raise ValueError('invalid Session type')
+            entered = to_public(result['checked_in_at'])
+            if utc(entered) != result['checked_in_at']:
+                raise ValueError('noncanonical stored check-in time')
+            closed = (to_public(result['checked_out_at'])
+                      if result['checked_out_at'] is not None else None)
+            if closed is not None:
+                if utc(closed) != result['checked_out_at'] or result['checked_out_at'] <= result['checked_in_at']:
+                    raise ValueError('invalid stored check-out time')
+            result['checked_in_at'], result['checked_out_at'] = entered, closed
+            return result
+        except (ValueError, TypeError, AttendanceError) as exc:
+            raise AttendanceError('STORAGE_ERROR', 'corrupt stored Session') from exc
 
     def transition(self, operation: str, subject: str, occurred_at: str, request_id: str | None, raw_occurred_at: str):
         # Identical arguments means literal caller arguments, NOT UTC equivalence.
@@ -141,6 +170,12 @@ class SQLiteAttendanceStore:
                     }:
                         if not isinstance(previous_sig.get('utc_occurred_at'),str):
                             raise AttendanceError('STORAGE_ERROR','invalid historical signature')
+                        proof = conn.execute('SELECT operation,utc_occurred_at FROM v1_provenance '
+                                             'WHERE subject_id=? AND request_id=?',
+                                             (subject,request_id)).fetchone()
+                        if (proof is None or proof['operation'] != previous_sig.get('operation') or
+                            proof['utc_occurred_at'] != previous_sig['utc_occurred_at']):
+                            raise AttendanceError('STORAGE_ERROR','missing original v1 provenance')
                         identical=(previous_sig.get('operation')==operation and
                                    previous_sig['utc_occurred_at']==occurred_at)
                     elif 'signature_version' not in previous_sig:

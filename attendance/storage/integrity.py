@@ -29,7 +29,11 @@ def _unique_index(conn, table, cols, partial=None):
                                ('index',row[1])).fetchone()
             if sql is None or sql[0] is None:
                 continue
-            if 'wherechecked_out_atisnull' not in re.sub(r'\s+','',''.join(sql[0].lower().split('"'))):
+            norm = re.sub(r'\s+', '', sql[0]).lower()
+            original = re.sub(r'\s+', '',
+                'CREATE UNIQUE INDEX IF NOT EXISTS one_open_session '
+                'ON sessions(subject_id) WHERE checked_out_at IS NULL').lower()
+            if norm != original:
                 continue
         return True
     return False
@@ -44,6 +48,27 @@ def verify_original_v1_schema(conn):
         actual = [(r[1],r[2].upper(),r[5]) for r in conn.execute(f'PRAGMA table_info("{name}")')]
         if actual != expected:
             _reject('altered historical table constraints')
+    # The original producer DDL is a stronger invariant than PRAGMA version.
+    # In particular CHECK, foreign-key and partial-index semantics must match.
+    original_ddl = {
+        'subjects': 'CREATE TABLE IF NOT EXISTS subjects (subject_id TEXT PRIMARY KEY)',
+        'sessions': ('CREATE TABLE IF NOT EXISTS sessions ('
+                     'session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(subject_id), '
+                     'checked_in_at TEXT NOT NULL, checked_out_at TEXT, '
+                     'CHECK (checked_out_at IS NULL OR checked_out_at > checked_in_at))'),
+        'requests': ('CREATE TABLE IF NOT EXISTS requests ('
+                     'subject_id TEXT NOT NULL, request_id TEXT NOT NULL, operation TEXT NOT NULL, '
+                     'payload TEXT NOT NULL, response TEXT NOT NULL, '
+                     'PRIMARY KEY (subject_id, request_id), FOREIGN KEY(subject_id) REFERENCES subjects(subject_id))')
+    }
+    for name, expected_sql in original_ddl.items():
+        row = conn.execute('SELECT sql FROM sqlite_master WHERE type=? AND name=?',
+                           ('table',name)).fetchone()
+        if row is None or not isinstance(row[0],str):
+            _reject('missing historical table definition')
+        if re.sub(r'\s+','',row[0]).lower() != re.sub(r'\s+','',expected_sql).lower():
+            _reject('nonoriginal v1 DDL')
+
     for table, cols, partial in (
         ('subjects', ['subject_id'],False),
         ('sessions',['session_id'],False),
