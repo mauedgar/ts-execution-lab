@@ -1,0 +1,50 @@
+{
+  "artifact_id": "TS-TRANSPORT-ADOPTION-VERIFICATION-20261102-001",
+  "kind": "EXECUTION_ENGINEERING_VERIFICATION_RECEIPT",
+  "observed_date": "2026-11-02",
+  "scope": "TRANSPORT_ONLY_NON_PRODUCT",
+  "authority": {
+    "execution_engineering_transport": "USER_APPROVED_CANONICAL_PROMOTION",
+    "product": "NONE",
+    "taskcycle": "NONE",
+    "execution_effects": "NONE"
+  },
+  "cloud_to_notebook": {
+    "status": "PASS_LIMITED",
+    "storage": "OneDrive_for_Business_educational",
+    "connector": "Microsoft_SharePoint",
+    "method": "precreated_unique_empty_slot_then_update_file_exact_with_explicit_educational_connection",
+    "file_name": "SHAREPOINT-EDU-SLOT-20261102-001.txt",
+    "bytes": 183,
+    "sha256": "452f5cf5450f76dfbca6018516aab82c595e7f024af882a3dd4cd173f31c53dd",
+    "evidence": {
+      "notebook_slot_created_empty": true,
+      "explicit_educational_fetch_of_empty_slot": "PASS",
+      "write_exact_with_educational_connection": "PASS",
+      "cloud_read_after_write": "PASS",
+      "notebook_local_sha256_match": "PASS"
+    },
+    "limitations": [
+      "Not a successful generic upload_drive_item_content; that API failed with ObjectHandle is Invalid.",
+      "No broad permission to replace pre-existing files.",
+      "Large files, concurrent writers, recovery, and generic cloud-created slots not qualified."
+    ]
+  },
+  "taildrop": {
+    "status": "PASS_NOTEBOOK_TO_DESKTOP_ONLY",
+    "source": "DESKTOP-DJLBEQH",
+    "destination": "DESKTOP-3LJ0E54",
+    "bytes": 1535,
+    "sha256": "e1cc27ee30e9009211e123f97349c57c34f0ef74fea689b0501385655ddac402",
+    "evidence_immutable": "mauedgar/ts-execution-transport@ff9eee804bc7a738adc243d1a54c230a61343a2e:handoffs/TF-EVAL-006-EXTERNAL-NOTEBOOK-TRANSPORT-20261101-001/TF-EVAL-TAILDROP-PROOF-20261101-001.json",
+    "reverse_direction_transfer": "UNQUALIFIED"
+  },
+  "negative": {
+    "error": "HTTP_400_OBJECT_HANDLE_IS_INVALID",
+    "reproduced_when": "educational_drive_target_routed_via_default_personal_connection",
+    "positive_control": "explicit_educational_link_id_get_drive_item_pass",
+    "default_account": "personal",
+    "avoid_blind_retry": true
+  },
+  "state": "VERIFIED_NARROW_TRANSPORT_NO_PRODUCT_ACCEPTANCE"
+}
