@@ -48,8 +48,19 @@ def utc(value: Any) -> str:
     fractional portion sorts correctly as text in SQLite. The public API
     converts them back to RFC3339 with at least six decimal places.
     """
-    if isinstance(value, str) and len(value) > 8218:
-        raise AttendanceError("INVALID_ARGUMENT", "timestamp exceeds H6 V0 resource budget")
+    if isinstance(value, str):
+        if len(value) > 8218:
+            raise AttendanceError("INVALID_ARGUMENT", "timestamp exceeds H6 V0 resource budget")
+        # Cheap pre-regex precision guard, as required by the frozen Control
+        # resource contract. Count ASCII digits only after the time separator.
+        # Malformed strings still undergo the normal RFC3339 validation.
+        dot = value.find(".", 19)
+        if dot != -1:
+            cursor = dot + 1
+            while cursor < len(value) and "0" <= value[cursor] <= "9":
+                if cursor - dot > 8192:
+                    raise AttendanceError("INVALID_ARGUMENT", "RFC3339 fractional precision exceeds H6 V0 budget")
+                cursor += 1
     match = _RFC3339.fullmatch(value) if isinstance(value, str) else None
     if match is None:
         raise AttendanceError("INVALID_ARGUMENT", "timestamp must be RFC3339 with timezone")

@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from attendance.core.service import AttendanceError, AttendanceService
 
@@ -510,6 +511,19 @@ class CoreTests(unittest.TestCase):
             conn.commit()
         self.must_fail('STORAGE_ERROR',lambda _: AttendanceService(self.db),None)
 
+    def test_fraction_over_budget_rejected_before_regex(self):
+        from attendance.core.service import utc
+        oversized = '2026-11-01T11:00:00.' + '1' * 8193 + 'Z'
+        self.assertLessEqual(len(oversized), 8218)
+        with patch('attendance.core.service._RFC3339') as pattern:
+            with self.assertRaises(AttendanceError) as caught:
+                utc(oversized)
+            self.assertEqual(caught.exception.code, 'INVALID_ARGUMENT')
+            pattern.fullmatch.assert_not_called()
+        # Both ceiling and supported input remain precise, not truncated.
+        valid = '2026-11-01T10:00:00.' + '1' * 8192 + 'Z'
+        self.assertEqual(len(utc(valid).split('.', 1)[1]), 8192)
+
     def test_fraction_resource_budget_exact(self):
         digits='1'*8192
         self.s.checkIn(self.inp('2026-11-01T10:00:00.'+digits+'Z'))
@@ -522,8 +536,14 @@ class CoreTests(unittest.TestCase):
             conn.execute('INSERT INTO subjects(subject_id) VALUES(?)',('s1',))
             data=[]
             for index in range(10000):
-                stamp='2026-11-01T10:00:00' + ('.'+f'{index:06d}'.rstrip('0') if index else '')
-                data.append((uuid.uuid4().hex,'s1',stamp,'2026-11-01T11:00:00'))
+                # Distinct, non-overlapping, strictly monotone intervals in
+                # canonical UTC precision, within a single query window.
+                def stamp(microseconds):
+                    digits = f'{microseconds:06d}'.rstrip('0')
+                    return '2026-11-01T10:00:00' + ('.' + digits if digits else '')
+                entered, exited = stamp(index * 2), stamp(index * 2 + 1)
+                data.append((uuid.uuid4().hex,'s1',entered,exited))
+            self.assertTrue(all(data[i][3] < data[i+1][2] for i in range(len(data)-1)))
             conn.executemany('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
                              'VALUES(?,?,?,?)',data)
             conn.commit()
@@ -531,7 +551,7 @@ class CoreTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as conn:
             conn.execute('INSERT INTO sessions(session_id,subject_id,checked_in_at,checked_out_at) '
                          'VALUES(?,?,?,?)',
-                         (uuid.uuid4().hex,'s1','2026-11-01T10:00:00.01','2026-11-01T11:00:00'))
+                         (uuid.uuid4().hex,'s1','2026-11-01T10:00:00.02','2026-11-01T10:00:00.020001'))
             conn.commit()
         self.must_fail('INVALID_ARGUMENT',self.s.listSessions,
                        {'subject_id':'s1','from':T0,'to':T2})
