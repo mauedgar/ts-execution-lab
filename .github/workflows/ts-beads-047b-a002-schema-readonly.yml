@@ -1,0 +1,42 @@
+name: TS-BEADS 047B A002 GitHub GraphQL CAS schema readonly
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-a002-graphql-cas-schema-readonly-20261102-001
+    paths:
+      - .github/workflows/ts-beads-047b-a002-schema-readonly.yml
+permissions:
+  contents: read
+jobs:
+  readonly_graphql_introspection:
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - name: Configure LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: a11fbf2e5073c53da583bb73e95336074dddaf56
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact immutable read-only subject
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne 'a11fbf2e5073c53da583bb73e95336074dddaf56') {throw 'WRONG_FROZEN_A002_SCHEMA_SOURCE'}
+          $src='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-GRAPHQL-CAS-SCHEMA-20261102-001/Read-Graphql-Cas-Schema.ps1'
+          if ((git hash-object $src).Trim() -cne '4818729c575fd5a331918f50812c6d6d1dd16766') {throw 'A002_SCHEMA_BLOB_MISMATCH'}
+          $parseErrors=$null
+          $parseTokens=$null
+          [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $src),[ref]$parseTokens,[ref]$parseErrors)
+          if (@($parseErrors).Count -ne 0) {throw 'A002_SCHEMA_POWERSHELL_PARSER_FAIL'}
+      - name: Read authenticated GitHub GraphQL schema without mutation
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-GRAPHQL-CAS-SCHEMA-20261102-001/Read-Graphql-Cas-Schema.ps1'
+          if ($LASTEXITCODE -ne 0) {throw 'A002_GRAPHQL_SCHEMA_QUERY_FAILED'}
+          'TS047B_A002_GRAPHQL_QUERY_ONLY=TERMINAL_NO_GIT_REF_UPDATE'
