@@ -1,0 +1,15 @@
+# TS-BEADS 047B — isolated external Git-ref compare-and-swap experiment
+
+**Scope:** EXPERIMENTAL_CONTROL_ONLY, same existing responsibility `TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001`. No Product, SQL, Dolt, Beads graph, Kernel or local host process effects. An actual GitHub branch ref in `mauedgar/ts-execution-lab` is the ONLY mutable external subject.
+
+**External CAS ref:** `refs/heads/experiment/ts-beads-047b-a002-offhost-cas-20261102-001`. Existing branch created from frozen lab `79625a256a7d22aac339d8e41ceaf06aec19d876`. Contract publication commit is CAS generation **G0**, observed and frozen before any two competing proposals. No other actor should update this isolated ref during the test.
+
+**Two competing *logical* actors:** A and B. Each prepares a distinct *immutable Git commit* with the **same parent G0**, and one synthetic `CLAIM.json` representing an incompatible claim of single-writer authority `epoch=1`. These commits are staged as Git objects, not yet branch effects. Neither actor may dispatch any external operation dependent on its claim before it observes a successful ref update and reads the resulting head.
+
+**Conditioned effects:** invoke the existing GitHub `update_ref` operation with `force=false`, `expected_sha=G0`, and destination commit A **once**, then the same stale G0 with destination B **once**. Record original provider success/rejection and independent `GET branch HEAD` readback. Rejected B must not retry or force-update. A's winning ref movement is an actual harmless external Git state mutation, and must be distinguished from source/test PASS. A fast-forward-only update is not by itself an authority gate or a quorum.
+
+**Safety properties to test:** A can hold generation 1; B cannot write over it with a stale expected head; the branch head is exactly the winning SHA. Parentage and `expected_sha` can reduce concurrent lost updates for this **one** ref. A future epoch=2 would require exact observed head, conditioned transition, and separate authority. Do not simulate a future epoch automatically.
+
+**Limits:** Both logical actors originate in one ChatGPT Control session, **not** two native Windows hosts. GitHub is off the user's notebook, but a repository ref is not an authenticated Dolt SQL writer lock, a lease service, a fencing token enforced by Beads, nor a durable process PID witness. A provider CAS conflict must be confirmed via actual response; no fabricated pass. A force-with-lease provider call, API token holder, branch admin or unrelated API could overwrite the ref unless separately governed. No live 047B effects until native dual-host auth, original V6P2 UNKNOWN reconciliation, issuer/grant, own write-set and backup are proven.
+
+**Evidence preservation:** original IR017 `mauedgar/ts-execution-transport@0effd94e399a41237f3bba23cd54f910310c9bcc:results/TS-BEADS-047B-A002-WEB_INLINE-IR017-20261102-001/ORIGINAL_REVIEW.md`, blob `ef2518ec9c6f6ca91b68ff9668fa6704fac0762f`, `A002_LOCAL_CONTROLLER_LOSS_SOURCE_PASS_LIMITED`, 6 advisories. `NO_GO_EFFECT` refers to SQL/Beads/Product, not this separately authorized benign Git ref experiment.
