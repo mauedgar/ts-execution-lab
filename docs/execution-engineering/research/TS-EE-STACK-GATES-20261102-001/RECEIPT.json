@@ -1,7 +1,7 @@
 {
   "artifact_id": "TS-EE-STACK-GATES-20261102-001",
   "date": "2026-11-02",
-  "status": "QUALIFIED_ACTIONS_LOCKFILE_NARROW__OPENCODE_RUNTIME_PARTIAL",
+  "status": "ACTIONS_OFFLINE_AND_ONLINE_PASS__OPENCODE_CONFIG_DISCOVERY_PASS_PERMISSION_EFFECTS_UNQUALIFIED",
   "authority": {
     "Product": "NONE",
     "TaskCycle": "NONE",
@@ -86,7 +86,17 @@
       "Real-time permission behavior not qualified",
       "No upgrade to shared OpenCode2",
       "Independent review pending"
-    ]
+    ],
+    "further_diagnostics": {
+      "source_inspection": "PASS; debug config returns list of config sources, not effective merged policy",
+      "scratch_source_seen": "PASS in TS-EE-OPENCODE2-REVIEW-004",
+      "debug_agents_exit": 0,
+      "debug_agents_format": "JSON_Object[]",
+      "candidate_hard_denies_declared": true,
+      "runtime_denial_on_actual_tool_call": "NOT_TESTED",
+      "runner_terminal": "RESULT_EMITTED_BUT_SESSION_LINGERED; exact lab session 12848 terminated; not running on last inspection",
+      "outcome": "CONFIG_DISCOVERY_PASS_RUNTIME_PERMISSION_ENFORCEMENT_PENDING"
+    }
   },
   "stop": "No retry of already completed process; any further runtime effect requires a distinct mechanically defined gate and observation of existing process states."
 }
