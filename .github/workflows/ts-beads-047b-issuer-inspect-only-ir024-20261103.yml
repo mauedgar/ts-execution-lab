@@ -1,0 +1,48 @@
+name: TS047B issuer inspect-only IR024 repair
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-issuer-inspect-only-ir024-repair-20261103-001
+    paths:
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-INSPECT-ONLY-IR024-REPAIR-20261103-001/**
+      - .github/workflows/ts-beads-047b-issuer-inspect-only-ir024-20261103.yml
+permissions:
+  contents: read
+jobs:
+  native_source_only:
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - name: Preserve immutable LF
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 6
+      - name: Verify exact source boundary and reject unsafe issuer source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_HEAD' }
+          $base='7184ea0461f3fd4c25b4e9a4b6f157e40c92a754'
+          git cat-file -e ($base + '^{commit}')
+          if($LASTEXITCODE -ne 0){ throw 'BASE_NOT_FOUND' }
+          $actual=@(git diff --name-only $base HEAD)
+          $allow=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-INSPECT-ONLY-IR024-REPAIR-20261103-001/Inspect-047B-IssuerEvidence.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-INSPECT-ONLY-IR024-REPAIR-20261103-001/Test-047B-IssuerInspectOnly.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-INSPECT-ONLY-IR024-REPAIR-20261103-001/README.md','.github/workflows/ts-beads-047b-issuer-inspect-only-ir024-20261103.yml')
+          if($actual.Count -ne $allow.Count){throw 'UNEXPECTED_PATH_COUNT'}
+          foreach($name in $actual){if($name -cnotin $allow){throw 'UNEXPECTED_PATH'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/MANIFEST.json').Trim() -cne '401e5e11fb88f537ed0b0bd6b25b346afa1e3d96'){throw 'V6P1_MANIFEST_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Security-047B-V6.psm1').Trim() -cne '70f5bee86358cf48ac6cded50c619ce46fed8f42'){throw 'V6P1_SECURITY_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Invoke-047B-V6-Fixture.ps1').Trim() -cne '21b48eb337dfe20a84b36408fe9c9ed98546febb'){throw 'V6P1_RUNNER_CHANGED'}
+          if(Test-Path -LiteralPath 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/Inspect-047B-IssuerCustody.ps1'){throw 'UNSAFE_IR024_SOURCE_MUST_NOT_EXIST'}
+          'IR024_REPAIR_FROZEN_INSPECT_ONLY=PASS'
+      - name: Parser AST allowlist and wrong-host/provision negative
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-INSPECT-ONLY-IR024-REPAIR-20261103-001/Test-047B-IssuerInspectOnly.ps1'
+          if($LASTEXITCODE -ne 0){throw 'INSPECT_ONLY_NATIVE_TEST_FAILED'}
+          'IR024_REPAIR_INSPECT_ONLY_PASS_NO_KEYS_SQL_PRODUCT'
