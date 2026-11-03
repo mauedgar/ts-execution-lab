@@ -42,5 +42,5 @@ $full=[IO.File]::ReadAllText($source)
 if(-not $full.Contains("GRAPHQL_PROVIDER_BODY_ORIGINAL")){throw 'F03_RAW_BODY_MARKER_MISSING'}
 if(-not $full.Contains("bodyUtf8Base64")){throw 'F03_BODY_BYTES_MISSING'}
 if(-not $full.Contains("A002_NO_RERUN_ALLOWED")){throw 'SINGLE_ATTEMPT_GUARD_MISSING'}
-if(-not $full.Contains("beforeOid=$g0")){throw 'GENERATION_MATCH_GUARD_MISSING'}
+if(-not $full.Contains('beforeOid=$g0')){throw 'GENERATION_MATCH_GUARD_MISSING'}
 [pscustomobject]@{result='PASS_V2_STRICT_CLASSIFIER_SOURCE_ONLY';negativeCases=($tested-2);positiveSyntheticCases=2;graphqlMutationExecuted=$false;sqlExecuted=$false;beadsMutated=$false;offHostReceiptProven=$false}
