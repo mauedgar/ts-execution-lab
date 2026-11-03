@@ -32,7 +32,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'HEAD_MISMATCH'}
-          if((git rev-parse HEAD^).Trim() -cne '3b71f898cf54b0ad696b63f0309a475996f08ad4'){throw 'PARENT_MISMATCH'}
+          if((git rev-parse HEAD^).Trim() -cne 'dcff364b84e93291032b00804ff9e01ac42ce9e4'){throw 'PARENT_MISMATCH'}
           $base='84e40c89e15e721dbf5a09d980eeb05973373297'
           git cat-file -e ($base+'^{commit}')
           if($LASTEXITCODE -ne 0){throw 'BASE_UNAVAILABLE'}
@@ -72,8 +72,13 @@ jobs:
             $bins=@(Get-ChildItem -LiteralPath $target -File -Recurse -Filter $x.bin)
             if($bins.Count -ne 1){throw ('VENDOR_BIN_COUNT_'+$x.name)}
             $exe=$bins[0].FullName
-            $version=(& $exe version 2>&1|Select-Object -First 1)
-            if($LASTEXITCODE -ne 0 -or $version -notmatch $x.ver){throw ('VENDOR_VERSION_MISMATCH_'+$x.name)}
+            $versionOut=(& $exe version 2>&1 | Out-String).Trim()
+            $versionExit=$LASTEXITCODE
+            if($versionExit -ne 0 -or $versionOut -notmatch $x.ver){
+              'VERSION_CHECK_'+$x.name+'_EXIT='+$versionExit
+              'VERSION_CHECK_'+$x.name+'_CONTAINS_EXPECTED='+(($versionOut -match $x.ver).ToString())
+              throw ('VENDOR_VERSION_MISMATCH_'+$x.name)
+            }
             if($x.name -eq 'bd'){$env:TS047B_BD_BIN=$exe}else{$env:TS047B_DOLT_BIN=$exe}
           }
           if(-not $env:TS047B_BD_BIN -or -not $env:TS047B_DOLT_BIN){throw 'BINARIES_NOT_RESOLVED'}
