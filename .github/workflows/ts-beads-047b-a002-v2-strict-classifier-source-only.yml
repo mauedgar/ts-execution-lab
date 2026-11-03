@@ -1,0 +1,38 @@
+name: TS047B A002 V2 strict classifier source-only
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-a002-atomic-cas-v2-control-20261102-001
+    paths:
+      - .github/workflows/ts-beads-047b-a002-v2-strict-classifier-source-only.yml
+permissions:
+  contents: read
+jobs:
+  classifier_source_only:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - name: Set LF
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: 088f6e934240e1ced44d8587cf9ec02fbe70b4de
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact source and negative test
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne '088f6e934240e1ced44d8587cf9ec02fbe70b4de') { throw 'WRONG_GIT_SUBJECT' }
+          $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001'
+          if ((git hash-object (Join-Path $root 'Invoke-A002-AtomicCas-V2.ps1')).Trim() -cne '50c49ab5654a7f2fefab26f832ad0b69fd7cba39') { throw 'WRONG_RUNNER_BLOB' }
+          if ((git hash-object (Join-Path $root 'Test-A002-Cas-Classifier-SourceOnly.ps1')).Trim() -cne 'e22b9b4d9a68185f22d267d49cf3820df67b6f1e') { throw 'WRONG_TEST_BLOB' }
+          if (Test-Path -LiteralPath '.github/workflows/ts-beads-047b-a002-atomic-cas-v2-authorized.yml') { throw 'UNEXPECTED_EFFECT_WORKFLOW_PRESENT' }
+      - name: Run source-extracted strict classifier synthetic negatives
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001/Test-A002-Cas-Classifier-SourceOnly.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V2_STRICT_CLASSIFIER_FAILED' }
+          'TS047B_A002_F02_CLASSIFIER=PASS_NO_GRAPHQL_MUTATION'
