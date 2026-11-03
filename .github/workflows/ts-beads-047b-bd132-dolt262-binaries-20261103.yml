@@ -1,0 +1,57 @@
+name: TS047B experimental pinned Beads 1.3.2 and Dolt 2.6.2
+on:
+  push:
+    branches: [experiment/ts-beads-047b-dual-host-dependency-matrix-20261103-001]
+    paths: ['.github/workflows/ts-beads-047b-bd132-dolt262-binaries-20261103.yml']
+permissions: {contents: read}
+jobs:
+  pinned_native_binaries:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Enforce LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Exact source and release checks, no SQL service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_COMMIT'}
+          if((git rev-parse HEAD^).Trim() -cne '38cb689c04d54a694e73f1a29646884c5b8cd6f0'){throw 'WRONG_PARENT'}
+          $diff=@(git diff --name-only HEAD^ HEAD)
+          if($diff.Count -ne 1 -or $diff[0] -cne '.github/workflows/ts-beads-047b-bd132-dolt262-binaries-20261103.yml'){throw 'UNEXPECTED_WRITESET'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md').Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'ORIGINAL_DOD_CHANGED'}
+          $base=Join-Path $env:RUNNER_TEMP 'native-047b-deps'
+          if(Test-Path $base){throw 'NONEMPTY_TEST_DIRECTORY'}
+          [IO.Directory]::CreateDirectory($base)|Out-Null
+          $targets=@(
+            @{name='bd';url='https://github.com/gastownhall/beads/releases/download/v1.3.2/beads_1.3.2_windows_amd64.zip';sha='E59CB7742278185493E30C2EB97CB318DB8D7A58C28EE5E88C2A30C7630C0975';exe='bd.exe';version='bd version 1[.]3[.]2'},
+            @{name='dolt';url='https://github.com/dolthub/dolt/releases/download/v2.6.2/dolt-windows-amd64.zip';sha='D804A06806A91B9E6ACD2A0AC6EBEC5C5D64756AFF4572FA079FBC5499F1916C';exe='dolt.exe';version='dolt version 2[.]6[.]2'}
+          )
+          foreach($target in $targets){
+            $archive=Join-Path $base ($target.name+'.zip')
+            Invoke-WebRequest -Uri $target.url -OutFile $archive -MaximumRedirection 5 -ErrorAction Stop
+            if((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne $target.sha){throw ('ARCHIVE_DIGEST_FAIL_'+$target.name)}
+            $dest=Join-Path $base $target.name
+            Expand-Archive -LiteralPath $archive -DestinationPath $dest -ErrorAction Stop
+            $exe=@(Get-ChildItem -LiteralPath $dest -Recurse -File -Filter $target.exe)
+            if($exe.Count -ne 1){throw ('BINARY_SHAPE_FAIL_'+$target.name)}
+            $ver=(& $exe[0].FullName version 2>&1|Select-Object -First 1)
+            if($LASTEXITCODE -ne 0 -or $ver -notmatch $target.version){throw ('BINARY_VERSION_FAIL_'+$target.name)}
+            if($target.name -eq 'bd'){
+              $help=(& $exe[0].FullName init --help 2>&1|Out-String)
+              if($LASTEXITCODE -ne 0 -or $help -notmatch '--server' -or $help -notmatch '--database'){throw 'BEADS_INIT_FLAGS_FAIL'}
+            }
+          }
+          'BEADS_132_DOLT_262_NATIVE_BINARIES_PINNED_PASS'
+          'SERVER_PAIR_COMPATIBILITY_NOT_TESTED'
+          'SQL_SERVER_STARTED=FALSE'
+          'PRODUCT_WRITES=ZERO'
