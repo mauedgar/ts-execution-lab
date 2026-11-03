@@ -1,0 +1,59 @@
+name: TS047B V6P1 native NO-SQL source qualification
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p1-native-nosql-ci-20261103-001
+    paths:
+      - .github/workflows/ts-beads-047b-v6p1-native-nosql-ci-20261103.yml
+permissions:
+  contents: read
+jobs:
+  windows_native_no_sql:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Preserve LF before checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact subject and immutable V6P1 sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_GIT_SUBJECT' }
+          if ((git rev-parse HEAD^).Trim() -cne '0118028c2508c2ce274fd42240f847adf7ff2187') { throw 'WRONG_FROZEN_V6P1_PARENT' }
+          $changes=@(git diff --name-only HEAD^ HEAD)
+          if ($changes.Count -ne 1 -or $changes[0] -cne '.github/workflows/ts-beads-047b-v6p1-native-nosql-ci-20261103.yml') { throw 'UNEXPECTED_SOURCE_CHANGE' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Security-047B-V6.psm1').Trim() -cne '70f5bee86358cf48ac6cded50c619ce46fed8f42') { throw 'PIN_MISMATCH_candidate_Security_047B_V6_psm1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Invoke-047B-V6-Fixture.ps1').Trim() -cne '21b48eb337dfe20a84b36408fe9c9ed98546febb') { throw 'PIN_MISMATCH_candidate_Invoke_047B_V6_Fixture_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Start-047B-V6.ps1').Trim() -cne '694abdf96b693a1d66d384ba1543237947248ef5') { throw 'PIN_MISMATCH_candidate_Start_047B_V6_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-Negative.ps1').Trim() -cne '06c9bf7163e84ebdc11ad7ba35fe47635d3251a5') { throw 'PIN_MISMATCH_tests_Test_V6_Negative_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-ParserAndAst.ps1').Trim() -cne '5730d30884cc60984e42e2b899f75818355eeb8c') { throw 'PIN_MISMATCH_tests_Test_V6_ParserAndAst_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/test_source_contract.py').Trim() -cne '32f11d20ee312a51ec59a01212ac88daea2aec5c') { throw 'PIN_MISMATCH_tests_test_source_contract_py' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/README.md').Trim() -cne '5f7f3c81995c6c56bedf8c83842b7664382ea039') { throw 'PIN_MISMATCH_README_md' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/MANIFEST.json').Trim() -cne '401e5e11fb88f537ed0b0bd6b25b346afa1e3d96') { throw 'PIN_MISMATCH_MANIFEST_json' }
+          if (Test-Path '.github/workflows/ts-beads-047b-a002-atomic-cas-v2-authorized.yml') { throw 'EFFECT_WORKFLOW_UNEXPECTED' }
+          'V6P1_EXACT_SOURCE_AND_PARENT=PASS'
+      - name: Native Python source contract (no package install)
+        shell: pwsh
+        run: |
+          python --version
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests' -p 'test_source_contract.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PYTHON_SOURCE_CONTRACT_FAIL' }
+      - name: Native PowerShell parser AST and automatic-variable checks
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-ParserAndAst.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V6P1_AST_FAIL' }
+      - name: Native PowerShell fail-closed grant negative
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-Negative.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'V6P1_NEGATIVE_FAIL' }
+          'V6P1_NATIVE_SOURCE_ONLY_PASS_NO_SQL_NO_GRANT_NO_TAILSCALE_NO_BEADS'
