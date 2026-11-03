@@ -9,9 +9,6 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$tok
 if(@($err).Count -ne 0){throw 'ISSUER_COMMISSION_PARSER_FAIL'}
 if(@($ast.ParamBlock.Parameters).Count -ne 0){throw 'UNEXPECTED_CALLER_PARAMETERS'}
 $code=[IO.File]::ReadAllText($source)
-$must=@("('0'*64)","COMPETENT_AUTHORITY_ANCHOR_NOT_BOUND",
- 'Get-CurrentUserSid','NONEXISTENT_SENTINEL_PLACEHOLDER')
-# Two generic placeholder strings above are NOT used: test concrete expectations.
 $must=@(
  'COMPETENT_AUTHORITY_ANCHOR_NOT_BOUND','New-SelfSignedCertificate',
  'Security.Cryptography.RSASignaturePadding]::Pss',
