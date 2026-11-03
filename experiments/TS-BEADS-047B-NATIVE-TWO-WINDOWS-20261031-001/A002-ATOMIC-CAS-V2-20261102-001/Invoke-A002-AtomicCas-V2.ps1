@@ -35,10 +35,11 @@ function Read-Head {
   return [string]$h.object.sha
 }
 function Classify-BetaCasError {
-  param([int]$HttpStatus,[object[]]$Errors,[string]$ExpectedOid,[string]$ObservedOid)
-  if($HttpStatus -ne 200 -or $null -eq $Errors -or @($Errors).Count -ne 1){return 'BETA_REJECTED_UNTYPED'}
+  param([int]$HttpStatus,[object[]]$Errors,[string]$ExpectedOid,[string]$ObservedOid,[bool]$HasSuccessData=$false)
+  if($HasSuccessData -or $HttpStatus -ne 200 -or $null -eq $Errors -or @($Errors).Count -ne 1){return 'BETA_REJECTED_UNTYPED'}
   $e=$Errors[0]
-  if($null -eq $e -or -not $e.ContainsKey('code') -or -not $e.ContainsKey('message')){return 'BETA_REJECTED_UNTYPED'}
+  if($null -eq $e -or $e -isnot [System.Collections.IDictionary]){return 'BETA_REJECTED_UNTYPED'}
+  if(-not $e.Contains('code') -or -not $e.Contains('message')){return 'BETA_REJECTED_UNTYPED'}
   if([string]$e.code -cnotmatch '^(STALE_BEFORE_OID|EXPECTED_OID_MISMATCH)$'){return 'BETA_REJECTED_UNTYPED'}
   $msg=[string]$e.message
   if($ExpectedOid -cnotmatch '^[0-9a-f]{40}$' -or $ObservedOid -cnotmatch '^[0-9a-f]{40}$' -or $ExpectedOid -ceq $ObservedOid){return 'BETA_REJECTED_UNTYPED'}
@@ -46,6 +47,21 @@ function Classify-BetaCasError {
   if($msg -cnotmatch '(?i)(stale|out.of.date|mismatch|does not match|different from current)'){return 'BETA_REJECTED_UNTYPED'}
   if($msg -cnotmatch '(?i)(beforeOid|expected (oid|sha|object))'){return 'BETA_REJECTED_UNTYPED'}
   return 'BETA_EXPLICIT_BEFOREOID_REJECTION'
+}
+function Get-A002-BodyEvidence {
+  param([AllowEmptyString()][string]$DecodedContent)
+  # This is a UTF-8 re-encoding of decoded response.Content, NOT original HTTP wire bytes.
+  $bytes=[Text.UTF8Encoding]::new($false).GetBytes($DecodedContent)
+  $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+  $sensitive=($DecodedContent -match '(?i)(Bearer\s+\S+|gh[pousr]_[A-Za-z0-9_]{12,}|github_pat_[A-Za-z0-9_]{12,}|"(?:access_token|refresh_token|token|authorization|api[_-]?key|client[_-]?secret|password)"\s*:\s*"[^"]+")')
+  $safe=($bytes.Length -le 65536 -and -not $sensitive)
+  return [pscustomobject]@{
+    safe=$safe
+    byteCount=$bytes.Length
+    sha256=$hash
+    utf8Base64=$(if($safe){[Convert]::ToBase64String($bytes)}else{''})
+    captureKind='DECODED_CONTENT_REENCODED_UTF8_NOT_WIRE'
+  }
 }
 function Call-AtomicGraphql([string]$Actor,[string]$After,[string]$RepositoryNodeId) {
   $mutation='mutation($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }'
@@ -67,37 +83,49 @@ function Call-AtomicGraphql([string]$Actor,[string]$After,[string]$RepositoryNod
   $http=[int]$response.StatusCode
   $requestId=''
   try {$requestId=[string]$response.Headers['x-github-request-id']}catch {}
-  $rawBody=[string]$response.Content
-  $rawBytes=[Text.UTF8Encoding]::new($false).GetBytes($rawBody)
-  $bodyHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($rawBytes))
-  if($rawBytes.Length -gt 65536 -or $rawBody -match '(?i)(Bearer[ ]+[A-Za-z0-9_.-]+|gh[pousr]_[A-Za-z0-9_]{12,}|github_pat_[A-Za-z0-9_]{12,})'){
-    Append-Event 'GRAPHQL_RESPONSE_SENSITIVE_OR_OVERSIZE' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash;bodyBytes=$rawBytes.Length}
+  $bodyEvidence=Get-A002-BodyEvidence -DecodedContent ([string]$response.Content)
+  if(-not $bodyEvidence.safe){
+    Append-Event 'GRAPHQL_RESPONSE_SENSITIVE_OR_OVERSIZE' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyEvidence.sha256;bodyBytes=$bodyEvidence.byteCount;captureKind=$bodyEvidence.captureKind}
     return 'UNKNOWN_RESPONSE_NOT_PRESERVED'
   }
-  # Full response.Content bytes captured before classification; external publication F03-02 remains blocked.
-  Append-Event 'GRAPHQL_PROVIDER_BODY_ORIGINAL' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash;bodyBytes=$rawBytes.Length;bodyUtf8Base64=[Convert]::ToBase64String($rawBytes)}
+  # Decoded response.Content re-encoded to UTF-8 BEFORE parsing; never claim original wire bytes.
+  # F03-02 off-host receipt remains BLOCKED.
+  Append-Event 'GRAPHQL_PROVIDER_CONTENT_UTF8_REENCODED' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyEvidence.sha256;bodyBytes=$bodyEvidence.byteCount;contentUtf8Base64=$bodyEvidence.utf8Base64;captureKind=$bodyEvidence.captureKind}
   $parsed=$null
   try{$parsed=[string]$response.Content|ConvertFrom-Json -AsHashtable -Depth 24}catch{
     Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='UNPARSEABLE_JSON'}
     return 'UNKNOWN_RESPONSE'
   }
+  if($null -eq $parsed -or $parsed -isnot [System.Collections.IDictionary]){
+    Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='MALFORMED_TOP_LEVEL'}
+    return 'UNKNOWN_RESPONSE'
+  }
   $errors=@()
-  if($parsed.ContainsKey('errors') -and $null -ne $parsed.errors){
+  if($parsed.Contains('errors') -and $null -ne $parsed.errors){
     foreach($errorItem in @($parsed.errors)){
+      if($null -eq $errorItem -or $errorItem -isnot [System.Collections.IDictionary] -or -not $errorItem.Contains('message') -or $errorItem.message -isnot [string]){
+        Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='MALFORMED_ERROR_OBJECT'}
+        return 'UNKNOWN_RESPONSE'
+      }
+      # Do not truncate error messages before classifying; bounded response was journaled first.
       $msg=[string]$errorItem.message
-      if($msg.Length -gt 400){$msg=$msg.Substring(0,400)}
       $code=''
-      if($errorItem.ContainsKey('extensions') -and $null -ne $errorItem.extensions -and $errorItem.extensions.ContainsKey('code')){$code=[string]$errorItem.extensions.code}
+      if($errorItem.Contains('extensions') -and $errorItem.extensions -is [System.Collections.IDictionary] -and $errorItem.extensions.Contains('code')){$code=[string]$errorItem.extensions.code}
       $errors+=@{code=$code;message=$msg}
     }
   }
+  $hasSuccessPayload=($parsed.Contains('data') -and $parsed.data -is [System.Collections.IDictionary] -and $parsed.data.Contains('updateRefs') -and $null -ne $parsed.data.updateRefs)
+  if($hasSuccessPayload -and $errors.Count -gt 0){
+    Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='MIXED_SUCCESS_AND_ERRORS'}
+    return 'UNKNOWN_RESPONSE'
+  }
   # Store observed server response BEFORE interpreting success/failure.
-  $accepted=($http -ge 200 -and $http -lt 300 -and $errors.Count -eq 0 -and $null -ne $parsed.data -and $null -ne $parsed.data.updateRefs)
+  $accepted=($http -ge 200 -and $http -lt 300 -and $errors.Count -eq 0 -and $hasSuccessPayload)
   Append-Event 'GRAPHQL_PROVIDER_RESPONSE' @{actor=$Actor;httpStatus=$http;errors=$errors;accepted=$accepted;providerBodyParsed=$true}
   if($accepted){return 'SERVER_ACCEPTED'}
   if($errors.Count -eq 0){return 'UNKNOWN_RESPONSE'}
   if($Actor -cne 'BETA'){return 'PROVIDER_REJECTED_ALPHA'}
-  return Classify-BetaCasError -HttpStatus $http -Errors $errors -ExpectedOid $g0 -ObservedOid $alpha
+  return Classify-BetaCasError -HttpStatus $http -Errors $errors -ExpectedOid $g0 -ObservedOid $alpha -HasSuccessData $hasSuccessPayload
 }
 $disposition='UNRESOLVED'
 try{

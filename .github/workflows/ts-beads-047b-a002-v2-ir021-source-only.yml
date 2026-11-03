@@ -1,0 +1,37 @@
+name: TS047B A002 IR021 source-only regressions
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-a002-v2-ir021-source-only-20261103-001
+    paths:
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001/Invoke-A002-AtomicCas-V2.ps1
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001/Test-A002-Cas-Classifier-SourceOnly.ps1
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001/IR021-SOURCE-ONLY-REPAIR-NOTES.md
+      - .github/workflows/ts-beads-047b-a002-v2-ir021-source-only.yml
+permissions:
+  contents: read
+jobs:
+  source_only_ir021:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - name: Keep LF
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Exact event subject and source-only guard
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_SOURCE_CANDIDATE' }
+          if (Test-Path -LiteralPath '.github/workflows/ts-beads-047b-a002-atomic-cas-v2-authorized.yml') { throw 'UNEXPECTED_MUTATING_WORKFLOW_PRESENT' }
+          $test='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-ATOMIC-CAS-V2-20261102-001/Test-A002-Cas-Classifier-SourceOnly.ps1'
+          if (!(Test-Path -LiteralPath $test)) { throw 'MISSING_SOURCE_ONLY_TEST' }
+          pwsh -NoLogo -NoProfile -NonInteractive -File $test
+          if ($LASTEXITCODE -ne 0) { throw 'IR021_SOURCE_ONLY_TEST_FAILED' }
+          'TS047B_A002_IR021_SOURCE_ONLY=PASS_NO_CAS_NO_SQL_NO_BEADS'
