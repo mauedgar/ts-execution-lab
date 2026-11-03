@@ -1,0 +1,53 @@
+name: H6 Domain Product native Phase1 effect reconciliation original
+on:
+  push:
+    branches:
+      - validation/h6-domain-native-phase1-effect-reconcile-20261102-001
+permissions:
+  contents: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: harness
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: ca0d2c5dc4b9623b2260651d9398b4b4b2777265
+          path: candidate
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: mauedgar/ts-execution-transport
+          ref: e44ce45eeb10b1719f4ede69cd4f81ad89bdf11b
+          path: transport
+          persist-credentials: false
+      - name: Verify Product native source and original initialization envelope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = ca0d2c5dc4b9623b2260651d9398b4b4b2777265
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = a550bf73748345e7b6d30b26ffe4db2da1140888
+          test "$(git -C candidate rev-parse HEAD^)" = add3f2525b3b711ce4e396a2e5ce2864f3ceef10
+          test "$(git -C candidate rev-parse HEAD:src/deterministic-taskcycle-substrate-v0/taskcycle-initialization.js)" = cc98ae664a8ff2e791c8e6604e4305d9c8459788
+          test "$(git -C candidate rev-parse HEAD:src/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.js)" = 08141dbacc5b445f2efd9642211446baecbc49ae
+          test "$(git -C transport rev-parse HEAD)" = e44ce45eeb10b1719f4ede69cd4f81ad89bdf11b
+          test "$(git -C transport rev-parse HEAD:handoffs/TECNOTRON-H6-ORIGINAL-NATIVE-INITIALIZATION-20261102-001/ORIGINAL_ENVELOPE.txt)" = 35118fe51023d878cfe96487374b42fb68631275
+          printf '%s  %s\n' '187725e02986a895c9cd6876f27e15c990230219cc9218dfd2d7f5bddc8c0db3' 'transport/handoffs/TECNOTRON-H6-ORIGINAL-NATIVE-INITIALIZATION-20261102-001/ORIGINAL_ENVELOPE.txt' | sha256sum -c -
+          node --version
+      - name: Consume original initialization and perform one native Phase1 effect reconciliation
+        shell: bash
+        run: node harness/experiments/H6-DOMAIN-PRODUCT-PHASE1-RECONCILIATION-20261102-001/reconcile.js
+      - name: Upload original reconciliation receipt
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: h6-domain-phase1-reconciliation-original
+          path: native-receipt/
+          if-no-files-found: error
+          retention-days: 30
