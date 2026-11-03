@@ -14,7 +14,10 @@ $api='https://api.github.com'
 $script:ReceiptPath=$null
 if($env:GITHUB_ACTIONS -cne 'true' -or [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)){throw 'A002_HOSTED_ACTIONS_ONLY'}
 if([string]::IsNullOrWhiteSpace($env:GH_TOKEN)){throw 'A002_GITHUB_EPHEMERAL_TOKEN_MISSING'}
+if($env:GITHUB_RUN_ATTEMPT -cne '1'){throw 'A002_NO_RERUN_ALLOWED'}
+if($env:GITHUB_REF -cne 'refs/heads/experiment/ts-beads-047b-a002-atomic-cas-v2-control-20261102-001'){throw 'A002_WRONG_CONTROL_REF'}
 $script:ReceiptPath=Join-Path $env:RUNNER_TEMP 'TS047B_A002_V2_ORIGINAL_PROVIDER_JOURNAL.jsonl'
+if([IO.File]::Exists($script:ReceiptPath)){throw 'A002_RECEIPT_ALREADY_PRESENT'}
 $script:Header=@{Authorization=('Bearer '+$env:GH_TOKEN);Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
 function Append-Event([string]$Name,[hashtable]$Fields) {
   $obj=[ordered]@{event=$Name;utc=[datetimeoffset]::UtcNow.ToString('o');operation=$operation;attempt='ATTEMPT-001';ref=$ref}
@@ -49,6 +52,10 @@ function Call-AtomicGraphql([string]$Actor,[string]$After,[string]$RepositoryNod
     return 'UNKNOWN_TRANSPORT'
   }
   $http=[int]$response.StatusCode
+  $requestId=''
+  try {$requestId=[string]$response.Headers['x-github-request-id']}catch {}
+  $bodyHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes([string]$response.Content)))
+  Append-Event 'GRAPHQL_HTTP_RESPONSE_METADATA' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash}
   $parsed=$null
   try{$parsed=[string]$response.Content|ConvertFrom-Json -AsHashtable -Depth 24}catch{
     Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='UNPARSEABLE_JSON'}
