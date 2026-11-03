@@ -81,7 +81,7 @@ function Call-AtomicGraphql([string]$Actor,[string]$After,[string]$RepositoryNod
 }
 $disposition='UNRESOLVED'
 try{
-  Append-Event 'ATTEMPT_OPEN' @{g0=$g0;alpha=$alpha;beta=$beta;sql=false;beads=false;product=false}
+  Append-Event 'ATTEMPT_OPEN' @{g0=$g0;alpha=$alpha;beta=$beta;sql=$false;beads=$false;product=$false}
   $metadata=Read-Provider ($api+'/repos/'+$repo)
   if($metadata.full_name -cne $repo -or [string]::IsNullOrWhiteSpace([string]$metadata.node_id)){throw 'A002_REPOSITORY_IDENTITY'}
   foreach($sha in @($alpha,$beta)){
