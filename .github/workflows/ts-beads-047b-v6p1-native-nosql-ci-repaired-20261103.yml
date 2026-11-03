@@ -1,0 +1,61 @@
+name: TS047B V6P1 native NO-SQL qualified test fix
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-v6p1-native-nosql-testrepair-20261103-001
+    paths:
+      - .github/workflows/ts-beads-047b-v6p1-native-nosql-ci-repaired-20261103.yml
+permissions:
+  contents: read
+jobs:
+  windows_native_v6p1:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Preserve exact LF
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+          persist-credentials: false
+      - name: Freeze source identity and unmodified V6P1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_HEAD' }
+          if ((git rev-parse HEAD^).Trim() -cne 'c6e39b3711daf0cc2bd0a391f137de6c478ea597') { throw 'WRONG_PARENT' }
+          if ((git rev-parse HEAD^^^).Trim() -cne '0118028c2508c2ce274fd42240f847adf7ff2187') { throw 'WRONG_V6P1_BASE' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Security-047B-V6.psm1').Trim() -cne '70f5bee86358cf48ac6cded50c619ce46fed8f42') { throw 'FROZEN_SOURCE_CHANGED_candidate_Security_047B_V6_psm1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Invoke-047B-V6-Fixture.ps1').Trim() -cne '21b48eb337dfe20a84b36408fe9c9ed98546febb') { throw 'FROZEN_SOURCE_CHANGED_candidate_Invoke_047B_V6_Fixture_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Start-047B-V6.ps1').Trim() -cne '694abdf96b693a1d66d384ba1543237947248ef5') { throw 'FROZEN_SOURCE_CHANGED_candidate_Start_047B_V6_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-Negative.ps1').Trim() -cne '06c9bf7163e84ebdc11ad7ba35fe47635d3251a5') { throw 'FROZEN_SOURCE_CHANGED_tests_Test_V6_Negative_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-ParserAndAst.ps1').Trim() -cne '5730d30884cc60984e42e2b899f75818355eeb8c') { throw 'FROZEN_SOURCE_CHANGED_tests_Test_V6_ParserAndAst_ps1' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/test_source_contract.py').Trim() -cne '32f11d20ee312a51ec59a01212ac88daea2aec5c') { throw 'FROZEN_SOURCE_CHANGED_tests_test_source_contract_py' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/README.md').Trim() -cne '5f7f3c81995c6c56bedf8c83842b7664382ea039') { throw 'FROZEN_SOURCE_CHANGED_README_md' }
+          if ((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/MANIFEST.json').Trim() -cne '401e5e11fb88f537ed0b0bd6b25b346afa1e3d96') { throw 'FROZEN_SOURCE_CHANGED_MANIFEST_json' }
+          $changes=@(git diff --name-only 0118028c2508c2ce274fd42240f847adf7ff2187 HEAD)
+          $allowed=@('.github/workflows/ts-beads-047b-v6p1-native-nosql-ci-20261103.yml','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/test_source_contract_native.py','.github/workflows/ts-beads-047b-v6p1-native-nosql-ci-repaired-20261103.yml')
+          foreach ($change in $changes){if($change -cnotin $allowed){throw 'UNEXPECTED_CHANGED_FILE'}}
+          if($changes.Count -ne $allowed.Count){throw 'EXPECTED_THREE_ADDED_FILES'}
+          'V6P1_FROZEN_SOURCES=PASS'
+      - name: Python 3.12 native contract (corrected test, no SQL)
+        shell: pwsh
+        run: |
+          python --version
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests' -p 'test_source_contract_native.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PYTHON_NATIVE_SOURCE_TEST_FAIL' }
+      - name: Native PowerShell source AST
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-ParserAndAst.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'AST_NATIVE_TEST_FAIL' }
+      - name: Native PowerShell no-issuer negative only
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/tests/Test-V6-Negative.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'NO_ISSUER_NEGATIVE_TEST_FAIL' }
+          'TS047B_V6P1_NATIVE_NO_SQL_PASS_EFFECTS_NONE'
