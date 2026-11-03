@@ -1,0 +1,75 @@
+name: TS047B pinned native CLI compatibility READ_ONLY
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-native-cli-compat-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-native-cli-compat-20261103.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ts047b-native-cli-compat-20261103
+  cancel-in-progress: false
+jobs:
+  pinned_cli_readonly:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/experiment/ts-beads-047b-native-cli-compat-20261103-001' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - name: Preserve exact LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify immutable source scope and original DoD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_HEAD'}
+          if((git rev-parse HEAD^).Trim() -cne '38cb689c04d54a694e73f1a29646884c5b8cd6f0'){throw 'WRONG_SOURCE_PARENT'}
+          $diff=@(git diff --name-only HEAD^ HEAD)
+          if($diff.Count -ne 1 -or $diff[0] -cne '.github/workflows/ts-beads-047b-native-cli-compat-20261103.yml'){throw 'UNEXPECTED_DIFF'}
+          $d='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md'
+          if((git hash-object $d).Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'DOD_MODIFIED'}
+          'ORIGINAL_DOD_AND_SOURCE_SCOPE_PASS'
+      - name: Fetch and verify pinned native releases without execution effects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'ts047b-cli-compat'
+          [IO.Directory]::CreateDirectory($root)|Out-Null
+          $spec=@(
+            @{name='beads';url='https://github.com/gastownhall/beads/releases/download/v1.3.1/beads_1.3.1_windows_amd64.zip';sha='48CD82E1D3E311C9BF9A5D6D67AD1A8542AE13D4E20C5BFB527656C5E666AF76'},
+            @{name='dolt';url='https://github.com/dolthub/dolt/releases/download/v2.2.0/dolt-windows-amd64.zip';sha='7A4BE662D5548BC63AE4AB6D8D93DAA2A6681F3E076817908AC4A08D782EB6F6'}
+          )
+          foreach($item in $spec){
+            $archive=Join-Path $root ($item.name+'.zip')
+            Invoke-WebRequest -Uri $item.url -OutFile $archive -MaximumRedirection 5 -ErrorAction Stop
+            if((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne $item.sha){throw ('RELEASE_SHA256_MISMATCH_'+$item.name)}
+            $dest=Join-Path $root $item.name
+            Expand-Archive -LiteralPath $archive -DestinationPath $dest -ErrorAction Stop
+          }
+          $bd=@(Get-ChildItem -LiteralPath (Join-Path $root 'beads') -Filter 'bd.exe' -Recurse -File)
+          $dolt=@(Get-ChildItem -LiteralPath (Join-Path $root 'dolt') -Filter 'dolt.exe' -Recurse -File)
+          if($bd.Count -ne 1 -or $dolt.Count -ne 1){throw 'EXPECTED_SINGLE_PINNED_BINARY_MISSING'}
+          $beadsVersion=(& $bd[0].FullName version 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $beadsVersion -notmatch 'bd version 1[.]3[.]1(?:\s|$)'){throw 'BEADS_VERSION_MISMATCH'}
+          $doltVersion=(& $dolt[0].FullName version 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $doltVersion -notmatch 'dolt version 2[.]2[.]0(?:\s|$)'){throw 'DOLT_VERSION_MISMATCH'}
+          $bdHelp=(& $bd[0].FullName init --help 2>&1 | Out-String)
+          if($LASTEXITCODE -ne 0 -or $bdHelp -notmatch '--server' -or $bdHelp -notmatch '--database'){throw 'PINNED_BEADS_SERVER_FLAGS_UNAVAILABLE'}
+          $doltHelp=(& $dolt[0].FullName sql --help 2>&1 | Out-String)
+          if($LASTEXITCODE -ne 0){throw 'PINNED_DOLT_SQL_HELP_FAILED'}
+          'PINNED_BEADS_1_3_1_WINDOWS_NATIVE_PASS'
+          'PINNED_DOLT_2_2_0_WINDOWS_NATIVE_PASS'
+          'BEADS_SERVER_FLAGS_PRESENT'
+          'DOLT_SQL_HELP_READABLE'
+          'SQL_EXECUTED=FALSE'
+          'SQL_SERVER_STARTED=FALSE'
+          'SIGNED_WORKFLOW=FALSE'
+          'PRODUCT_WRITES=ZERO'
