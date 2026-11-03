@@ -1,0 +1,57 @@
+name: TS047B native expected-negative-exit NO SIGNING
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-keyless-negative-exit-source-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-keyless-negative-exit-no-sign-20261103.yml'
+permissions:
+  contents: read
+jobs:
+  negative_exit_source_only:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/experiment/ts-beads-047b-keyless-negative-exit-source-20261103-001' && github.event_name == 'push' }}
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - name: Preserve exact LF bytes
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+          persist-credentials: false
+      - name: Confirm source boundary original fixture unchanged
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_HEAD'}
+          if((git rev-parse HEAD^).Trim() -cne 'b504d32173d1c00ed5842314b51a921d239e11e0'){throw 'WRONG_IMMEDIATE_PARENT'}
+          $base='499d172070aac6f7efb65aae425bf9d6545eba3e'
+          git cat-file -e ($base+'^{commit}')
+          if($LASTEXITCODE -ne 0){throw 'ORIGINAL_RUN_SUBJECT_ABSENT'}
+          $changed=@(git diff --name-only $base HEAD)
+          $allowed=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/KEYLESS-NEGATIVE-EXIT-SOURCE-20261103-001/Test-047B-ExpectedNegativeExit.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/KEYLESS-NEGATIVE-EXIT-SOURCE-20261103-001/README.md','.github/workflows/ts-beads-047b-keyless-negative-exit-no-sign-20261103.yml')
+          if($changed.Count -ne $allowed.Count){throw 'WRONG_NEW_PATH_COUNT'}
+          foreach($name in $changed){if($name -cnotin $allowed){throw 'UNEXPECTED_PATH'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PUBLIC_SYNTHETIC_PROBE.json').Trim() -cne 'a3b7a3314db183bb54ef905b26691187834a78f1'){throw 'PUBLIC_FIXTURE_CHANGED'}
+          if((git hash-object '.github/workflows/ts-beads-047b-keyless-public-only-20261103.yml').Trim() -cne '8385dd8429494663ad52964d3301e4e640ec9141'){throw 'ORIGINAL_SIGNING_WORKFLOW_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PRIVACY_BOUNDARY.md').Trim() -cne '122da0cddfe65d75aea78dc39adf40f237e8025d'){throw 'PRIVACY_CLASSIFICATION_CHANGED'}
+          'ORIGINAL_SIGNING_SUBJECT_UNCHANGED=PASS'
+      - name: Run exact negative process exit regression with no signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $script='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/KEYLESS-NEGATIVE-EXIT-SOURCE-20261103-001/Test-047B-ExpectedNegativeExit.ps1'
+          $passed=(& pwsh -NoLogo -NoProfile -NonInteractive -File $script -ExpectedRejectedExitCode 17 2>&1 | Out-String)
+          $passedExit=$LASTEXITCODE
+          if($passedExit -ne 0 -or $passed -notmatch 'EXPECTED_NEGATIVE_PROCESS_REJECTED'){throw 'EXPECTED_NEGATIVE_CLASSIFICATION_DID_NOT_EXIT_ZERO'}
+          $denied=(& pwsh -NoLogo -NoProfile -NonInteractive -File $script -ExpectedRejectedExitCode 19 2>&1 | Out-String)
+          $deniedExit=$LASTEXITCODE
+          if($deniedExit -eq 0 -or $denied -notmatch 'NEGATIVE_MOCK_EXIT_MISMATCH'){throw 'WRONG_NEGATIVE_EXIT_NOT_REJECTED'}
+          'EXPECTED_NATIVE_NEGATIVE_RESOLVES_EXIT_ZERO=PASS'
+          'WRONG_EXPECTED_NATIVE_EXIT_REJECTED=PASS'
+          'OIDC_NOT_REQUESTED_COSIGN_NOT_INVOKED_SIGNATURES_NONE'
+          exit 0
