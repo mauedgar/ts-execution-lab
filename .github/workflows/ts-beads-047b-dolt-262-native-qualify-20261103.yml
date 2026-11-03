@@ -1,0 +1,87 @@
+name: TS047B Dolt 2.6.2 native isolated qualification
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-dolt-262-qualify-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-dolt-262-native-qualify-20261103.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ts047b-dolt-262-native-20261103
+  cancel-in-progress: false
+jobs:
+  isolated_native_dolt_262:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - name: Preserve checkout LF
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+          persist-credentials: false
+      - name: Immutable scope, DoD and pin
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'HEAD_MISMATCH'}
+          $base='38cb689c04d54a694e73f1a29646884c5b8cd6f0'
+          git cat-file -e ($base+'^{commit}')
+          if($LASTEXITCODE -ne 0){throw 'OLD_BASE_NOT_FOUND'}
+          $changed=@(git diff --name-only $base HEAD)
+          $allowed=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOLT-262-COMPAT-20261103-001/COMPATIBILITY_DECISION.md',
+                     '.github/workflows/ts-beads-047b-dolt-262-native-qualify-20261103.yml')
+          if($changed.Count -ne $allowed.Count){throw 'CHANGED_FILE_COUNT_MISMATCH'}
+          foreach($p in $changed){if($p -cnotin $allowed){throw 'UNEXPECTED_WRITESET'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md').Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'DOD_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SECURE_HOST_PROVISIONING_REQUEST_20261101.md').Trim() -cne '7ebec00133736a74431516171deee614f3dbaed1'){throw 'SECURE_SCOPE_CHANGED'}
+          'ORIGINAL_047B_DOD_UNCHANGED=PASS'
+      - name: Install exact official Dolt 2.6.2 in temporary runner workspace
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'ts047b_dolt262_native'
+          if(Test-Path -LiteralPath $root){throw 'EXPERIMENT_PATH_ALREADY_EXISTS'}
+          $null=[IO.Directory]::CreateDirectory($root)
+          $archive=Join-Path $root 'dolt-v2.6.2-official.zip'
+          $url='https://github.com/dolthub/dolt/releases/download/v2.6.2/dolt-windows-amd64.zip'
+          Invoke-WebRequest -Uri $url -OutFile $archive -MaximumRedirection 5 -ErrorAction Stop
+          $expected='D804A06806A91B9E6ACD2A0AC6EBEC5C5D64756AFF4572FA079FBC5499F1916C'
+          if((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne $expected){throw 'OFFICIAL_DOLT_ZIP_HASH_MISMATCH'}
+          $dest=Join-Path $root 'binary'
+          Expand-Archive -LiteralPath $archive -DestinationPath $dest -ErrorAction Stop
+          $items=@(Get-ChildItem -LiteralPath $dest -Filter 'dolt.exe' -File -Recurse)
+          if($items.Count -ne 1){throw 'DOLT_BINARY_NOT_UNIQUE'}
+          $exe=$items[0].FullName
+          $version=(& $exe version 2>&1|Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $version -notmatch 'dolt version 2[.]6[.]2'){throw 'PINNED_DOLT_VERSION_FAIL'}
+          'DOLT_2_6_2_WINDOWS_SHA256_AND_VERSION_PASS'
+          if(@(Get-NetTCPConnection -State Listen -ErrorAction Stop|Where-Object{$_.LocalPort -eq 3307}).Count -ne 0){throw 'PREEXISTING_3307_LISTENER'}
+          $passed=0
+          foreach($index in 1..8){
+            $dir=Join-Path $root ('clean-repo-'+$index)
+            if(Test-Path -LiteralPath $dir){throw 'NONEMPTY_REPO_PATH'}
+            $null=[IO.Directory]::CreateDirectory($dir)
+            Push-Location -LiteralPath $dir
+            try{
+              $out=(& $exe init --name 'TS047B-SYNTHETIC' --email 'ts047b-synthetic@example.invalid' 2>&1|Out-String)
+              if($LASTEXITCODE -ne 0){throw ('FRESH_INIT_FAILED_'+$index)}
+              $out=(& $exe sql -q 'SELECT 1' 2>&1|Out-String)
+              if($LASTEXITCODE -ne 0 -or $out -notmatch '1'){throw ('FRESH_SELECT_FAILED_'+$index)}
+              $out=(& $exe sql -q "CALL DOLT_RESET('--hard')" 2>&1|Out-String)
+              if($LASTEXITCODE -ne 0 -or $out -match 'context canceled'){throw ('FRESH_HARD_RESET_FAILED_'+$index)}
+              $passed++
+            }finally{Pop-Location}
+          }
+          if($passed -ne 8){throw 'FRESH_RESET_COUNT_MISMATCH'}
+          'DOLT_262_FRESH_HARD_RESET_SMOKE=8_OF_8_PASS'
+          'SYNTHETIC_DISPOSABLE_REPOS_ONLY'
+          'SQL_SERVER_STARTED=FALSE'
+          'TAILSCALE_MODIFIED=FALSE'
+          'PRODUCT_WRITES=ZERO'
