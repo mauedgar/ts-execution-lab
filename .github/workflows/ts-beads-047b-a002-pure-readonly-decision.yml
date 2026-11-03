@@ -1,0 +1,27 @@
+name: TS047B A002 pure read-only response qualification
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-a002-pure-readonly-decision-20261103-001
+    paths:
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-PURE-REPLY-DECISION-20261103-001/**
+      - .github/workflows/ts-beads-047b-a002-pure-readonly-decision.yml
+permissions:
+  contents: read
+jobs:
+  source_only:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Test standalone source-only library
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_SUBJECT' }
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/A002-PURE-REPLY-DECISION-20261103-001/Test-A002-Pure-Reply-Decision.ps1'
+          if ($LASTEXITCODE -ne 0) { throw 'PURE_TEST_FAILED' }
+          'PURE_READONLY_NO_PROVIDER_EFFECTS'
