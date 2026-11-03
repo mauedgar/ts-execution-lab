@@ -1,0 +1,47 @@
+name: TS047B 047B issuer custody SOURCE ONLY
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-issuer-custody-source-20261103-001
+    paths:
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/**
+      - .github/workflows/ts-beads-047b-issuer-custody-source-20261103.yml
+permissions:
+  contents: read
+jobs:
+  source_only:
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - name: Preserve original LF bytes
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 6
+          persist-credentials: false
+      - name: Verify exact original source and allowed new files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') { throw 'WRONG_HEAD' }
+          $baseline='7184ea0461f3fd4c25b4e9a4b6f157e40c92a754'
+          git cat-file -e ($baseline + '^{commit}')
+          if($LASTEXITCODE -ne 0){ throw 'BASE_COMMIT_NOT_FOUND' }
+          $diff=@(git diff --name-only $baseline HEAD)
+          $expected=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/Inspect-047B-IssuerCustody.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/Test-047B-IssuerCustody-SourceOnly.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/README.md','.github/workflows/ts-beads-047b-issuer-custody-source-20261103.yml')
+          if($diff.Count -ne $expected.Count){throw 'UNEXPECTED_DIFF_COUNT'}
+          foreach($file in $diff){if($file -cnotin $expected){throw 'UNEXPECTED_PATH'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/MANIFEST.json').Trim() -cne '401e5e11fb88f537ed0b0bd6b25b346afa1e3d96'){throw 'V6P1_MANIFEST_MODIFIED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Security-047B-V6.psm1').Trim() -cne '70f5bee86358cf48ac6cded50c619ce46fed8f42'){throw 'V6P1_AUTH_MODULE_MODIFIED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Invoke-047B-V6-Fixture.ps1').Trim() -cne '21b48eb337dfe20a84b36408fe9c9ed98546febb'){throw 'V6P1_RUNNER_MODIFIED'}
+          'ORIGINAL_V6P1_AND_ALLOWED_ISOLATED_FILES=PASS'
+      - name: Read-only Windows parser and wrong-host negative
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-CUSTODY-SOURCE-20261103-001/Test-047B-IssuerCustody-SourceOnly.ps1'
+          if($LASTEXITCODE -ne 0){throw 'ISSUER_SOURCE_QUALIFICATION_FAILED'}
+          'ISSUER_CUSTODY_SOURCE_ONLY_TEST_PASS_NO_KEY_SQL_SERVE_BEADS_PRODUCT'
