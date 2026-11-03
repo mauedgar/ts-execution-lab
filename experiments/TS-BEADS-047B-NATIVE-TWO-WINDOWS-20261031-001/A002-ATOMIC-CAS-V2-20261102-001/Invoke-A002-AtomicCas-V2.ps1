@@ -34,6 +34,284 @@ function Read-Head {
   if($h.ref -cne $ref -or $h.object.type -cne 'commit'){throw 'A002_REF_IDENTITY_INVALID'}
   return [string]$h.object.sha
 }
+function Classify-BetaCasError {
+  param([int]$HttpStatus,[object[]]$Errors,[string]$ExpectedOid,[string]$ObservedOid)
+  if($HttpStatus -ne 200 -or $null -eq $Errors -or @($Errors).Count -ne 1){return 'BETA_REJECTED_UNTYPED'}
+  $e=$Errors[0]
+  if($null -eq $e -or -not $e.ContainsKey('code') -or -not $e.ContainsKey('message')){return 'BETA_REJECTED_UNTYPED'}
+  $code=[string]$e['code']; $msg=[string]$e['message']
+  if($code -cnotmatch '^(STALE_BEFORE_OID|EXPECTED_OID_MISMATCH)
+  $mutation='mutation($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }'
+  $inputData=@{query=$mutation;variables=@{input=@{
+    repositoryId=$RepositoryNodeId
+    refUpdates=@(@{name=$ref;beforeOid=$g0;afterOid=$After;force=$false})
+    clientMutationId=($operation+'-ATTEMPT-001-'+$Actor)
+  }}}
+  $body=$inputData|ConvertTo-Json -Depth 16 -Compress
+  # Durably record intent before first network byte. No automatic retry.
+  Append-Event 'GRAPHQL_MUTATION_INTENT' @{actor=$Actor;afterOid=$After;beforeOid=$g0;force=$false;operationName='updateRefs'}
+  $response=$null
+  try{
+    $response=Invoke-WebRequest -Method Post -Uri ($api+'/graphql') -Headers $script:Header -ContentType 'application/json' -Body $body -TimeoutSec 30 -SkipHttpErrorCheck
+  }catch{
+    Append-Event 'GRAPHQL_TRANSPORT_UNKNOWN' @{actor=$Actor;exceptionClass=$_.Exception.GetType().FullName}
+    return 'UNKNOWN_TRANSPORT'
+  }
+  $http=[int]$response.StatusCode
+  $requestId=''
+  try {$requestId=[string]$response.Headers['x-github-request-id']}catch {}
+  $rawBody=[string]$response.Content
+  $rawBytes=[Text.UTF8Encoding]::new($false).GetBytes($rawBody)
+  $bodyHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($rawBytes))
+  # Fail closed on oversized or credential-looking data rather than truncating.
+  if($rawBytes.Length -gt 65536 -or $rawBody -match '(?i)(Bearer[ ]+[A-Za-z0-9_.-]+|gh[pousr]_[A-Za-z0-9_]{12,}|github_pat_[A-Za-z0-9_]{12,})'){
+    Append-Event 'GRAPHQL_RESPONSE_SENSITIVE_OR_OVERSIZE' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash;bodyBytes=$rawBytes.Length}
+    return 'UNKNOWN_RESPONSE_NOT_PRESERVED'
+  }
+  # Full response.Content UTF8 bytes before interpretation, in local flushed JSONL.
+  # F03-02 external artifact durability is NOT implemented or claimed.
+  Append-Event 'GRAPHQL_PROVIDER_BODY_ORIGINAL' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash;bodyBytes=$rawBytes.Length;bodyUtf8Base64=[Convert]::ToBase64String($rawBytes)}
+  $parsed=$null
+  try{$parsed=[string]$response.Content|ConvertFrom-Json -AsHashtable -Depth 24}catch{
+    Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='UNPARSEABLE_JSON'}
+    return 'UNKNOWN_RESPONSE'
+  }
+  $errors=@()
+  if($parsed.ContainsKey('errors') -and $null -ne $parsed.errors){
+    foreach($errorItem in @($parsed.errors)){
+      $msg=[string]$errorItem.message
+      if($msg.Length -gt 400){$msg=$msg.Substring(0,400)}
+      $code=''
+      if($errorItem.ContainsKey('extensions') -and $null -ne $errorItem.extensions -and $errorItem.extensions.ContainsKey('code')){$code=[string]$errorItem.extensions.code}
+      $errors+=@{code=$code;message=$msg}
+    }
+  }
+  # Store observed server response BEFORE interpreting success/failure.
+  $accepted=($http -ge 200 -and $http -lt 300 -and $errors.Count -eq 0 -and $null -ne $parsed.data -and $null -ne $parsed.data.updateRefs)
+  Append-Event 'GRAPHQL_PROVIDER_RESPONSE' @{actor=$Actor;httpStatus=$http;errors=$errors;accepted=$accepted;providerBodyParsed=$true}
+  if($accepted){return 'SERVER_ACCEPTED'}
+  if($errors.Count -eq 0){return 'UNKNOWN_RESPONSE'}
+  if($Actor -cne 'BETA'){return 'PROVIDER_REJECTED_ALPHA'}
+  # Only exactly one typed expected-OID mismatch on HTTP 200 can pass.
+  return Classify-BetaCasError -HttpStatus $http -Errors $errors -ExpectedOid $g0 -ObservedOid $alpha
+}
+$disposition='UNRESOLVED'
+try{
+  Append-Event 'ATTEMPT_OPEN' @{g0=$g0;alpha=$alpha;beta=$beta;sql=$false;beads=$false;product=$false}
+  $metadata=Read-Provider ($api+'/repos/'+$repo)
+  if($metadata.full_name -cne $repo -or [string]::IsNullOrWhiteSpace([string]$metadata.node_id)){throw 'A002_REPOSITORY_IDENTITY'}
+  foreach($sha in @($alpha,$beta)){
+    $commit=Read-Provider ($api+'/repos/'+$repo+'/git/commits/'+$sha)
+    if($commit.sha -cne $sha -or @($commit.parents).Count -ne 1){throw 'A002_COMMIT_IDENTITY_INVALID'}
+    $expectedParent=$(if($sha -ceq $alpha){$g0}else{$alpha})
+    if($commit.parents[0].sha -cne $expectedParent){throw 'A002_FF_ANCESTRY_MISMATCH'}
+  }
+  $initial=Read-Head
+  Append-Event 'PRECONDITIONS_OBSERVED' @{head=$initial;g0=$g0;alphaParent=$g0;betaParent=$alpha}
+  if($initial -cne $g0){throw 'A002_REF_ALREADY_MOVED_NO_DISPATCH'}
+  $a=Call-AtomicGraphql 'ALPHA' $alpha ([string]$metadata.node_id)
+  $headA=Read-Head
+  Append-Event 'ALPHA_POST_OBSERVATION' @{result=$a;head=$headA}
+  if($a -cne 'SERVER_ACCEPTED' -or $headA -cne $alpha){throw 'A002_ALPHA_UNCONFIRMED_STOP_NO_BETA'}
+  # BETA is a legal FAST-FORWARD from ALPHA, yet uses STALE beforeOid=G0.
+  # Any server refusal can therefore be contrasted with an ancestor-safe commit.
+  $b=Call-AtomicGraphql 'BETA' $beta ([string]$metadata.node_id)
+  $final=Read-Head
+  Append-Event 'BETA_POST_OBSERVATION' @{result=$b;head=$final;expectedAlpha=$alpha}
+  if($final -cne $alpha){throw 'A002_UNEXPECTED_FINAL_HEAD_NO_RETRY'}
+  if($b -cne 'BETA_EXPLICIT_BEFOREOID_REJECTION'){throw ('A002_NOT_QUALIFIED_'+$b)}
+  $disposition='PASS_ATOMIC_GRAPHQL_BEFOREOID_CONFLICT_EXPLICIT'
+  Append-Event 'TERMINAL_PASS' @{disposition=$disposition;finalHead=$final;noRetry=$true}
+  Write-Output $disposition
+}catch{
+  $reason=$_.Exception.Message
+  try{Append-Event 'TERMINAL_BLOCKED_OR_UNKNOWN' @{reason=$reason;disposition='NO_RETRY_OR_INFERRED_PASS'}}catch{}
+  throw
+}finally{
+  Remove-Variable -Name Header -Scope Script -ErrorAction SilentlyContinue
+}
+){return 'BETA_REJECTED_UNTYPED'}
+  if($ExpectedOid -cnotmatch '^[0-9a-f]{40}
+  $mutation='mutation($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }'
+  $inputData=@{query=$mutation;variables=@{input=@{
+    repositoryId=$RepositoryNodeId
+    refUpdates=@(@{name=$ref;beforeOid=$g0;afterOid=$After;force=$false})
+    clientMutationId=($operation+'-ATTEMPT-001-'+$Actor)
+  }}}
+  $body=$inputData|ConvertTo-Json -Depth 16 -Compress
+  # Durably record intent before first network byte. No automatic retry.
+  Append-Event 'GRAPHQL_MUTATION_INTENT' @{actor=$Actor;afterOid=$After;beforeOid=$g0;force=$false;operationName='updateRefs'}
+  $response=$null
+  try{
+    $response=Invoke-WebRequest -Method Post -Uri ($api+'/graphql') -Headers $script:Header -ContentType 'application/json' -Body $body -TimeoutSec 30 -SkipHttpErrorCheck
+  }catch{
+    Append-Event 'GRAPHQL_TRANSPORT_UNKNOWN' @{actor=$Actor;exceptionClass=$_.Exception.GetType().FullName}
+    return 'UNKNOWN_TRANSPORT'
+  }
+  $http=[int]$response.StatusCode
+  $requestId=''
+  try {$requestId=[string]$response.Headers['x-github-request-id']}catch {}
+  $bodyHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes([string]$response.Content)))
+  Append-Event 'GRAPHQL_HTTP_RESPONSE_METADATA' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash}
+  $parsed=$null
+  try{$parsed=[string]$response.Content|ConvertFrom-Json -AsHashtable -Depth 24}catch{
+    Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='UNPARSEABLE_JSON'}
+    return 'UNKNOWN_RESPONSE'
+  }
+  $errors=@()
+  if($parsed.ContainsKey('errors') -and $null -ne $parsed.errors){
+    foreach($errorItem in @($parsed.errors)){
+      $msg=[string]$errorItem.message
+      if($msg.Length -gt 400){$msg=$msg.Substring(0,400)}
+      $code=''
+      if($errorItem.ContainsKey('extensions') -and $null -ne $errorItem.extensions -and $errorItem.extensions.ContainsKey('code')){$code=[string]$errorItem.extensions.code}
+      $errors+=@{code=$code;message=$msg}
+    }
+  }
+  # Store observed server response BEFORE interpreting success/failure.
+  $accepted=($http -ge 200 -and $http -lt 300 -and $errors.Count -eq 0 -and $null -ne $parsed.data -and $null -ne $parsed.data.updateRefs)
+  Append-Event 'GRAPHQL_PROVIDER_RESPONSE' @{actor=$Actor;httpStatus=$http;errors=$errors;accepted=$accepted;providerBodyParsed=$true}
+  if($accepted){return 'SERVER_ACCEPTED'}
+  if($errors.Count -eq 0){return 'UNKNOWN_RESPONSE'}
+  if($Actor -cne 'BETA'){return 'PROVIDER_REJECTED_ALPHA'}
+  # Strict classification: never infer CAS on generic words like "update" or "reference".
+  $typed=$false
+  foreach($e in $errors){
+    if($e.code -cmatch '^(STALE_BEFORE_OID|EXPECTED_OID_MISMATCH|REF_UPDATE_CONFLICT)$'){$typed=$true}
+    if($e.message -cmatch '(?i)(beforeOid|expected (object|oid|sha)|does not match (the )?(current|expected) (oid|sha))'){$typed=$true}
+  }
+  if($typed){return 'BETA_EXPLICIT_BEFOREOID_REJECTION'}
+  return 'BETA_REJECTED_UNTYPED'
+}
+$disposition='UNRESOLVED'
+try{
+  Append-Event 'ATTEMPT_OPEN' @{g0=$g0;alpha=$alpha;beta=$beta;sql=$false;beads=$false;product=$false}
+  $metadata=Read-Provider ($api+'/repos/'+$repo)
+  if($metadata.full_name -cne $repo -or [string]::IsNullOrWhiteSpace([string]$metadata.node_id)){throw 'A002_REPOSITORY_IDENTITY'}
+  foreach($sha in @($alpha,$beta)){
+    $commit=Read-Provider ($api+'/repos/'+$repo+'/git/commits/'+$sha)
+    if($commit.sha -cne $sha -or @($commit.parents).Count -ne 1){throw 'A002_COMMIT_IDENTITY_INVALID'}
+    $expectedParent=$(if($sha -ceq $alpha){$g0}else{$alpha})
+    if($commit.parents[0].sha -cne $expectedParent){throw 'A002_FF_ANCESTRY_MISMATCH'}
+  }
+  $initial=Read-Head
+  Append-Event 'PRECONDITIONS_OBSERVED' @{head=$initial;g0=$g0;alphaParent=$g0;betaParent=$alpha}
+  if($initial -cne $g0){throw 'A002_REF_ALREADY_MOVED_NO_DISPATCH'}
+  $a=Call-AtomicGraphql 'ALPHA' $alpha ([string]$metadata.node_id)
+  $headA=Read-Head
+  Append-Event 'ALPHA_POST_OBSERVATION' @{result=$a;head=$headA}
+  if($a -cne 'SERVER_ACCEPTED' -or $headA -cne $alpha){throw 'A002_ALPHA_UNCONFIRMED_STOP_NO_BETA'}
+  # BETA is a legal FAST-FORWARD from ALPHA, yet uses STALE beforeOid=G0.
+  # Any server refusal can therefore be contrasted with an ancestor-safe commit.
+  $b=Call-AtomicGraphql 'BETA' $beta ([string]$metadata.node_id)
+  $final=Read-Head
+  Append-Event 'BETA_POST_OBSERVATION' @{result=$b;head=$final;expectedAlpha=$alpha}
+  if($final -cne $alpha){throw 'A002_UNEXPECTED_FINAL_HEAD_NO_RETRY'}
+  if($b -cne 'BETA_EXPLICIT_BEFOREOID_REJECTION'){throw ('A002_NOT_QUALIFIED_'+$b)}
+  $disposition='PASS_ATOMIC_GRAPHQL_BEFOREOID_CONFLICT_EXPLICIT'
+  Append-Event 'TERMINAL_PASS' @{disposition=$disposition;finalHead=$final;noRetry=$true}
+  Write-Output $disposition
+}catch{
+  $reason=$_.Exception.Message
+  try{Append-Event 'TERMINAL_BLOCKED_OR_UNKNOWN' @{reason=$reason;disposition='NO_RETRY_OR_INFERRED_PASS'}}catch{}
+  throw
+}finally{
+  Remove-Variable -Name Header -Scope Script -ErrorAction SilentlyContinue
+}
+ -or $ObservedOid -cnotmatch '^[0-9a-f]{40}
+  $mutation='mutation($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }'
+  $inputData=@{query=$mutation;variables=@{input=@{
+    repositoryId=$RepositoryNodeId
+    refUpdates=@(@{name=$ref;beforeOid=$g0;afterOid=$After;force=$false})
+    clientMutationId=($operation+'-ATTEMPT-001-'+$Actor)
+  }}}
+  $body=$inputData|ConvertTo-Json -Depth 16 -Compress
+  # Durably record intent before first network byte. No automatic retry.
+  Append-Event 'GRAPHQL_MUTATION_INTENT' @{actor=$Actor;afterOid=$After;beforeOid=$g0;force=$false;operationName='updateRefs'}
+  $response=$null
+  try{
+    $response=Invoke-WebRequest -Method Post -Uri ($api+'/graphql') -Headers $script:Header -ContentType 'application/json' -Body $body -TimeoutSec 30 -SkipHttpErrorCheck
+  }catch{
+    Append-Event 'GRAPHQL_TRANSPORT_UNKNOWN' @{actor=$Actor;exceptionClass=$_.Exception.GetType().FullName}
+    return 'UNKNOWN_TRANSPORT'
+  }
+  $http=[int]$response.StatusCode
+  $requestId=''
+  try {$requestId=[string]$response.Headers['x-github-request-id']}catch {}
+  $bodyHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes([string]$response.Content)))
+  Append-Event 'GRAPHQL_HTTP_RESPONSE_METADATA' @{actor=$Actor;httpStatus=$http;requestId=$requestId;bodySha256=$bodyHash}
+  $parsed=$null
+  try{$parsed=[string]$response.Content|ConvertFrom-Json -AsHashtable -Depth 24}catch{
+    Append-Event 'GRAPHQL_RESPONSE_UNKNOWN' @{actor=$Actor;httpStatus=$http;reason='UNPARSEABLE_JSON'}
+    return 'UNKNOWN_RESPONSE'
+  }
+  $errors=@()
+  if($parsed.ContainsKey('errors') -and $null -ne $parsed.errors){
+    foreach($errorItem in @($parsed.errors)){
+      $msg=[string]$errorItem.message
+      if($msg.Length -gt 400){$msg=$msg.Substring(0,400)}
+      $code=''
+      if($errorItem.ContainsKey('extensions') -and $null -ne $errorItem.extensions -and $errorItem.extensions.ContainsKey('code')){$code=[string]$errorItem.extensions.code}
+      $errors+=@{code=$code;message=$msg}
+    }
+  }
+  # Store observed server response BEFORE interpreting success/failure.
+  $accepted=($http -ge 200 -and $http -lt 300 -and $errors.Count -eq 0 -and $null -ne $parsed.data -and $null -ne $parsed.data.updateRefs)
+  Append-Event 'GRAPHQL_PROVIDER_RESPONSE' @{actor=$Actor;httpStatus=$http;errors=$errors;accepted=$accepted;providerBodyParsed=$true}
+  if($accepted){return 'SERVER_ACCEPTED'}
+  if($errors.Count -eq 0){return 'UNKNOWN_RESPONSE'}
+  if($Actor -cne 'BETA'){return 'PROVIDER_REJECTED_ALPHA'}
+  # Strict classification: never infer CAS on generic words like "update" or "reference".
+  $typed=$false
+  foreach($e in $errors){
+    if($e.code -cmatch '^(STALE_BEFORE_OID|EXPECTED_OID_MISMATCH|REF_UPDATE_CONFLICT)$'){$typed=$true}
+    if($e.message -cmatch '(?i)(beforeOid|expected (object|oid|sha)|does not match (the )?(current|expected) (oid|sha))'){$typed=$true}
+  }
+  if($typed){return 'BETA_EXPLICIT_BEFOREOID_REJECTION'}
+  return 'BETA_REJECTED_UNTYPED'
+}
+$disposition='UNRESOLVED'
+try{
+  Append-Event 'ATTEMPT_OPEN' @{g0=$g0;alpha=$alpha;beta=$beta;sql=$false;beads=$false;product=$false}
+  $metadata=Read-Provider ($api+'/repos/'+$repo)
+  if($metadata.full_name -cne $repo -or [string]::IsNullOrWhiteSpace([string]$metadata.node_id)){throw 'A002_REPOSITORY_IDENTITY'}
+  foreach($sha in @($alpha,$beta)){
+    $commit=Read-Provider ($api+'/repos/'+$repo+'/git/commits/'+$sha)
+    if($commit.sha -cne $sha -or @($commit.parents).Count -ne 1){throw 'A002_COMMIT_IDENTITY_INVALID'}
+    $expectedParent=$(if($sha -ceq $alpha){$g0}else{$alpha})
+    if($commit.parents[0].sha -cne $expectedParent){throw 'A002_FF_ANCESTRY_MISMATCH'}
+  }
+  $initial=Read-Head
+  Append-Event 'PRECONDITIONS_OBSERVED' @{head=$initial;g0=$g0;alphaParent=$g0;betaParent=$alpha}
+  if($initial -cne $g0){throw 'A002_REF_ALREADY_MOVED_NO_DISPATCH'}
+  $a=Call-AtomicGraphql 'ALPHA' $alpha ([string]$metadata.node_id)
+  $headA=Read-Head
+  Append-Event 'ALPHA_POST_OBSERVATION' @{result=$a;head=$headA}
+  if($a -cne 'SERVER_ACCEPTED' -or $headA -cne $alpha){throw 'A002_ALPHA_UNCONFIRMED_STOP_NO_BETA'}
+  # BETA is a legal FAST-FORWARD from ALPHA, yet uses STALE beforeOid=G0.
+  # Any server refusal can therefore be contrasted with an ancestor-safe commit.
+  $b=Call-AtomicGraphql 'BETA' $beta ([string]$metadata.node_id)
+  $final=Read-Head
+  Append-Event 'BETA_POST_OBSERVATION' @{result=$b;head=$final;expectedAlpha=$alpha}
+  if($final -cne $alpha){throw 'A002_UNEXPECTED_FINAL_HEAD_NO_RETRY'}
+  if($b -cne 'BETA_EXPLICIT_BEFOREOID_REJECTION'){throw ('A002_NOT_QUALIFIED_'+$b)}
+  $disposition='PASS_ATOMIC_GRAPHQL_BEFOREOID_CONFLICT_EXPLICIT'
+  Append-Event 'TERMINAL_PASS' @{disposition=$disposition;finalHead=$final;noRetry=$true}
+  Write-Output $disposition
+}catch{
+  $reason=$_.Exception.Message
+  try{Append-Event 'TERMINAL_BLOCKED_OR_UNKNOWN' @{reason=$reason;disposition='NO_RETRY_OR_INFERRED_PASS'}}catch{}
+  throw
+}finally{
+  Remove-Variable -Name Header -Scope Script -ErrorAction SilentlyContinue
+}
+){return 'BETA_REJECTED_UNTYPED'}
+  if($ExpectedOid -ceq $ObservedOid){return 'BETA_REJECTED_UNTYPED'}
+  if(-not $msg.Contains($ExpectedOid) -or -not $msg.Contains($ObservedOid)){return 'BETA_REJECTED_UNTYPED'}
+  if($msg -cnotmatch '(?i)(stale|out.of.date|mismatch|does not match|different from current)'){return 'BETA_REJECTED_UNTYPED'}
+  if($msg -cnotmatch '(?i)(beforeOid|expected (oid|sha|object))'){return 'BETA_REJECTED_UNTYPED'}
+  return 'BETA_EXPLICIT_BEFOREOID_REJECTION'
+}
 function Call-AtomicGraphql([string]$Actor,[string]$After,[string]$RepositoryNodeId) {
   $mutation='mutation($input: UpdateRefsInput!) { updateRefs(input: $input) { clientMutationId } }'
   $inputData=@{query=$mutation;variables=@{input=@{
