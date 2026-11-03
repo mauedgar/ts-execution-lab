@@ -1,0 +1,90 @@
+name: TS047B synthetic Dolt 2.6.2 Beads 1.3.2 localhost pair
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-server-pair-smoke-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-server-pair-smoke-20261103.yml'
+permissions: {}
+concurrency:
+  group: ts047b-server-pair-one-original
+  cancel-in-progress: false
+jobs:
+  isolated_server_pair:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/experiment/ts-beads-047b-server-pair-smoke-20261103-001' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 14
+    permissions:
+      contents: read
+    steps:
+      - name: Enforce LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+          persist-credentials: false
+      - name: Freeze source identity, scope and PowerShell parser
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'HEAD_MISMATCH'}
+          if((git rev-parse HEAD^).Trim() -cne '40c8be1f49c2ab0a80bc4c9444ac6b8165914f96'){throw 'PARENT_MISMATCH'}
+          $base='84e40c89e15e721dbf5a09d980eeb05973373297'
+          git cat-file -e ($base+'^{commit}')
+          if($LASTEXITCODE -ne 0){throw 'BASE_UNAVAILABLE'}
+          $diff=@(git diff --name-only $base HEAD)
+          $expected=@(
+            'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/Invoke-ServerPairSmoke.ps1',
+            'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/README.md',
+            '.github/workflows/ts-beads-047b-server-pair-smoke-20261103.yml'
+          )
+          if($diff.Count -ne $expected.Count){throw 'UNEXPECTED_PATH_COUNT'}
+          foreach($p in $diff){if($p -cnotin $expected){throw 'UNEXPECTED_WRITESET'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/Invoke-ServerPairSmoke.ps1').Trim() -cne '5f54d99ab86058c56166a63087f94ce46993c227'){throw 'SCRIPT_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/README.md').Trim() -cne '9a54e21b5760dca1b2148074a3003463d6184b4a'){throw 'TEST_BOUNDARY_CHANGED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md').Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'ORIGINAL_DOD_CHANGED'}
+          $tok=$null
+          $errs=$null
+          [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/Invoke-ServerPairSmoke.ps1').Path,[ref]$tok,[ref]$errs)
+          if(@($errs).Count -ne 0){throw 'SOURCE_POWERSHELL_PARSE_FAIL'}
+          'FROZEN_SOURCE_AND_PARSER_PASS'
+      - name: Download and verify exact official native binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'ts047b-pinned-tools'
+          if(Test-Path -LiteralPath $root){throw 'PINNED_TOOL_ROOT_ALREADY_EXISTS'}
+          [IO.Directory]::CreateDirectory($root)|Out-Null
+          $spec=@(
+            @{name='bd';url='https://github.com/gastownhall/beads/releases/download/v1.3.2/beads_1.3.2_windows_amd64.zip';sha='E59CB7742278185493E30C2EB97CB318DB8D7A58C28EE5E88C2A30C7630C0975';bin='bd.exe';ver='bd version 1[.]3[.]2'},
+            @{name='dolt';url='https://github.com/dolthub/dolt/releases/download/v2.6.2/dolt-windows-amd64.zip';sha='D804A06806A91B9E6ACD2A0AC6EBEC5C5D64756AFF4572FA079FBC5499F1916C';bin='dolt.exe';ver='dolt version 2[.]6[.]2'}
+          )
+          foreach($x in $spec){
+            $zip=Join-Path $root ($x.name+'.zip')
+            Invoke-WebRequest -Uri $x.url -OutFile $zip -MaximumRedirection 5 -ErrorAction Stop
+            if((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -cne $x.sha){throw ('VENDOR_SHA256_MISMATCH_'+$x.name)}
+            $target=Join-Path $root $x.name
+            Expand-Archive -LiteralPath $zip -DestinationPath $target -ErrorAction Stop
+            $bins=@(Get-ChildItem -LiteralPath $target -File -Recurse -Filter $x.bin)
+            if($bins.Count -ne 1){throw ('VENDOR_BIN_COUNT_'+$x.name)}
+            $exe=$bins[0].FullName
+            $version=(& $exe version 2>&1|Select-Object -First 1)
+            if($LASTEXITCODE -ne 0 -or $version -notmatch $x.ver){throw ('VENDOR_VERSION_MISMATCH_'+$x.name)}
+            if($x.name -eq 'bd'){$env:TS047B_BD_BIN=$exe}else{$env:TS047B_DOLT_BIN=$exe}
+          }
+          if(-not $env:TS047B_BD_BIN -or -not $env:TS047B_DOLT_BIN){throw 'BINARIES_NOT_RESOLVED'}
+          # Persist only public absolute executable paths within this single hosted CI job.
+          'TS047B_BD_BIN='+$env:TS047B_BD_BIN | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          'TS047B_DOLT_BIN='+$env:TS047B_DOLT_BIN | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          'PINNED_OFFICIAL_WIN64_BINARIES_PASS'
+      - name: One original localhost-only SQL+Beads compatibility attempt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/SERVER-PAIR-SMOKE-20261103-001/Invoke-ServerPairSmoke.ps1' -DoltExe $env:TS047B_DOLT_BIN -BeadsExe $env:TS047B_BD_BIN
+          if($LASTEXITCODE -ne 0){throw 'SERVER_PAIR_INCOMPLETE_NO_RETRY'}
+          'SERVER_PAIR_RUNNER_PASS'
