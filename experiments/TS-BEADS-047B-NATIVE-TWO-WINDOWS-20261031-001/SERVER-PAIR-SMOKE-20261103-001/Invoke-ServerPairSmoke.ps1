@@ -137,9 +137,7 @@ $common = @{
     BEADS_DOLT_SERVER_PORT = [string]$port
     BEADS_DOLT_SERVER_USER = $writer
     BEADS_DOLT_PASSWORD = $writerPw
-    BEADS_DOLT_SERVER_DB = $dbName
     BEADS_DOLT_SHARED_SERVER = '0'
-    BEADS_TEST_MODE = '1'
 }
 foreach ($workspace in @($clientA,$clientB)) {
     $gitinit = Invoke-BoundedNative -Exe 'git.exe' -ArgsList @('init','--quiet') -Cwd $workspace
