@@ -14,7 +14,7 @@ $commands=@($ast.FindAll({
   param($node)
   $node -is [System.Management.Automation.Language.CommandAst]
 },$true))
-$allowed=@('Get-ChildItem','Where-Object')
+$allowed=@('Set-StrictMode','Get-ChildItem','Where-Object')
 foreach($command in $commands){
   $name=$command.GetCommandName()
   if($null -eq $name -or $name -cnotin $allowed){
