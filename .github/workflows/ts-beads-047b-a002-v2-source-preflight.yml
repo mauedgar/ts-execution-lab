@@ -32,7 +32,7 @@ jobs:
           [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tok,[ref]$err)
           if (@($err).Count -gt 0) { throw ('POWERSHELL_PARSE_ERROR_'+(@($err) -join '|')) }
           $src=[IO.File]::ReadAllText((Resolve-Path $file))
-          foreach($needle in @("beforeOid=\$g0","afterOid=\$After","BETA_EXPLICIT_BEFOREOID_REJECTION","GRAPHQL_MUTATION_INTENT","GRAPHQL_PROVIDER_RESPONSE","GRAPHQL_HTTP_RESPONSE_METADATA","A002_NO_RERUN_ALLOWED")) {
+          foreach($needle in @('beforeOid=$g0','afterOid=$After',"BETA_EXPLICIT_BEFOREOID_REJECTION","GRAPHQL_MUTATION_INTENT","GRAPHQL_PROVIDER_RESPONSE","GRAPHQL_HTTP_RESPONSE_METADATA","A002_NO_RERUN_ALLOWED")) {
             if (-not $src.Contains($needle)) { throw ('SOURCE_CONTRACT_MISSING_'+$needle) }
           }
           if ($src -match 'if\(\$e\.message\s*-match\s*''update') { throw 'GENERIC_PROVIDER_ERROR_ACCEPTED' }
