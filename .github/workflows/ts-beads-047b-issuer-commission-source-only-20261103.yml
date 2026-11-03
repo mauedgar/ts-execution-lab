@@ -1,0 +1,47 @@
+name: TS047B issuer commission NO-GO native source
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-key-commission-proposal-20261103-001
+    paths:
+      - experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-COMMISSION-PROPOSAL-20261103-001/**
+      - .github/workflows/ts-beads-047b-issuer-commission-source-only-20261103.yml
+permissions:
+  contents: read
+jobs:
+  native_no_effect:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - name: Preserve original LF Git bytes
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 6
+          persist-credentials: false
+      - name: Exact frozen boundary and no V6P1 modification
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_CHECKOUT'}
+          $base='7bee99a540d10a6addc2ed85e8226b8bb35488d6'
+          git cat-file -e ($base + '^{commit}')
+          if($LASTEXITCODE -ne 0){throw 'BASE_COMMIT_UNAVAILABLE'}
+          $changes=@(git diff --name-only $base HEAD)
+          $allowed=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-COMMISSION-PROPOSAL-20261103-001/Invoke-047B-IssuerCommission.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-COMMISSION-PROPOSAL-20261103-001/Test-047B-IssuerCommission-SourceOnly.ps1','experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-COMMISSION-PROPOSAL-20261103-001/README.md','.github/workflows/ts-beads-047b-issuer-commission-source-only-20261103.yml')
+          if($changes.Count -ne $allowed.Count){throw 'UNEXPECTED_CHANGED_FILES_COUNT'}
+          foreach($file in $changes){if($file -cnotin $allowed){throw 'UNAUTHORIZED_CHANGED_FILE'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/MANIFEST.json').Trim() -cne '401e5e11fb88f537ed0b0bd6b25b346afa1e3d96'){throw 'V6P1_MANIFEST_MODIFIED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Security-047B-V6.psm1').Trim() -cne '70f5bee86358cf48ac6cded50c619ce46fed8f42'){throw 'V6P1_TRUST_MODULE_MODIFIED'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-V6P1-20261102-001/candidate/Invoke-047B-V6-Fixture.ps1').Trim() -cne '21b48eb337dfe20a84b36408fe9c9ed98546febb'){throw 'V6P1_RUNNER_MODIFIED'}
+          'ISSUER_COMMISSION_ORIGINAL_SOURCE_BLOBS_PRESERVED'
+      - name: Native PowerShell parse and truly unbound trust negative only
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/ISSUER-COMMISSION-PROPOSAL-20261103-001/Test-047B-IssuerCommission-SourceOnly.ps1'
+          if($LASTEXITCODE -ne 0){throw 'ISSUER_COMMISSION_SOURCE_TEST_FAIL'}
+          'ISSUER_COMMISSION_SOURCE_ONLY_PASS_NO_CERT_NO_SQL_NO_PRODUCT'
