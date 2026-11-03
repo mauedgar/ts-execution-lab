@@ -25,14 +25,14 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 4
+          fetch-depth: 0
           persist-credentials: false
       - name: Freeze source identity, scope and PowerShell parser
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'HEAD_MISMATCH'}
-          if((git rev-parse HEAD^).Trim() -cne '40c8be1f49c2ab0a80bc4c9444ac6b8165914f96'){throw 'PARENT_MISMATCH'}
+          if((git rev-parse HEAD^).Trim() -cne '3b71f898cf54b0ad696b63f0309a475996f08ad4'){throw 'PARENT_MISMATCH'}
           $base='84e40c89e15e721dbf5a09d980eeb05973373297'
           git cat-file -e ($base+'^{commit}')
           if($LASTEXITCODE -ne 0){throw 'BASE_UNAVAILABLE'}
