@@ -1,0 +1,76 @@
+name: TS047B public synthetic keyless smoke (NO AUTHORITY)
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-public-keyless-probe-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-keyless-public-only-20261103.yml'
+permissions: {}
+concurrency:
+  group: ts047b-public-synthetic-keyless-only
+  cancel-in-progress: false
+jobs:
+  public_synthetic_sign_verify:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/experiment/ts-beads-047b-public-keyless-probe-20261103-001' && github.event_name == 'push' }}
+    runs-on: windows-2022
+    timeout-minutes: 9
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Preserve LF and exact repo bytes
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Preflight exact public-only fixture and immutable source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $expectedParent='29413110edb5eddc7b076ccf1c2bdbfd9b7852de'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'GIT_HEAD_MISMATCH'}
+          if((git rev-parse HEAD^).Trim() -cne $expectedParent){throw 'UNEXPECTED_PARENT_STOP'}
+          $changes=@(git diff --name-only HEAD^ HEAD)
+          if($changes.Count -ne 1 -or $changes[0] -cne '.github/workflows/ts-beads-047b-keyless-public-only-20261103.yml'){throw 'UNEXPECTED_WORKTREE_CHANGE'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PUBLIC_SYNTHETIC_PROBE.json').Trim() -cne 'a3b7a3314db183bb54ef905b26691187834a78f1'){throw 'PUBLIC_FIXTURE_BLOB_MISMATCH'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/test_public_synthetic_probe.py').Trim() -cne '5344531bb59d5433dc2a09976825e45d239d2d6f'){throw 'PUBLIC_TEST_BLOB_MISMATCH'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PRIVACY_BOUNDARY.md').Trim() -cne '122da0cddfe65d75aea78dc39adf40f237e8025d'){throw 'PRIVACY_BOUNDARY_BLOB_MISMATCH'}
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001' -p 'test_public_synthetic_probe.py' -v
+          if($LASTEXITCODE -ne 0){throw 'PUBLIC_FIXTURE_ALLOWLIST_FAIL'}
+          'PUBLIC_SYNTHETIC_ONLY_PREFLIGHT=PASS'
+      - name: Install verified Cosign CLI
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+      - name: Public keyless sign and verify only fixed probe
+        shell: pwsh
+        env:
+          COSIGN_YES: "true"
+        run: |
+          $ErrorActionPreference='Stop'
+          $fixture='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PUBLIC_SYNTHETIC_PROBE.json'
+          $bundle='public-synthetic.sigstore.json'
+          cosign sign-blob --yes --bundle $bundle $fixture
+          if($LASTEXITCODE -ne 0){throw 'PUBLIC_KEYLESS_SIGN_FAILED_OR_UNKNOWN_NO_RETRY'}
+          if(-not (Test-Path -LiteralPath $bundle)){throw 'BUNDLE_NOT_CREATED_UNKNOWN_NO_RETRY'}
+          cosign verify-blob $fixture --bundle $bundle --certificate-identity 'https://github.com/mauedgar/ts-execution-lab/.github/workflows/ts-beads-047b-keyless-public-only-20261103.yml@refs/heads/experiment/ts-beads-047b-public-keyless-probe-20261103-001' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+          if($LASTEXITCODE -ne 0){throw 'EXACT_SIGNER_VERIFY_FAIL'}
+          $tampered='tampered-public-synthetic.json'
+          [IO.File]::WriteAllText($tampered,([IO.File]::ReadAllText($fixture)).Replace('"TEST_ONLY"','"TAMPERED_"'),[Text.UTF8Encoding]::new($false))
+          cosign verify-blob $tampered --bundle $bundle --certificate-identity 'https://github.com/mauedgar/ts-execution-lab/.github/workflows/ts-beads-047b-keyless-public-only-20261103.yml@refs/heads/experiment/ts-beads-047b-public-keyless-probe-20261103-001' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' *> $null
+          if($LASTEXITCODE -eq 0){throw 'TAMPER_NEGATIVE_NOT_REJECTED'}
+          'PUBLIC_SYNTHETIC_KEYLESS_EXACT_IDENTITY_PASS'
+          'TAMPERED_PUBLIC_PAYLOAD_REJECTED'
+          'AUTHORITY_NONE_SQL_NONE_PRODUCT_NONE'
+      - name: Preserve public demonstration bundle only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts047b-public-synthetic-keyless-bundle
+          path: |
+            experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/PUBLIC-KEYLESS-PRIVACY-20261103-001/PUBLIC_SYNTHETIC_PROBE.json
+            public-synthetic.sigstore.json
+          if-no-files-found: error
+          retention-days: 7
