@@ -3,8 +3,7 @@
 # Original IR001/IR002 candidate and ExecutionAttempt identities are immutable.
 [CmdletBinding()]
 param(
-    [ValidateSet('Inspect','Execute','ProbePath')][string]$Mode = 'Inspect',
-    [string]$ProbePath = ''
+    [ValidateSet('Inspect','Execute')][string]$Mode = 'Inspect'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -34,18 +33,7 @@ function Assert-NoReparseAncestor {
         $cursor = $parent.FullName
     }
 }
-# ProbePath is a source regression fixture, NOT a native-host qualification.
-# It reads only directory metadata and returns no caller-supplied paths.
-if ($Mode -ceq 'ProbePath') {
-    try {
-        Assert-NoReparseAncestor $ProbePath
-        'PATH_PROBE_OK_NOT_HOST_QUALIFIED'
-        exit 0
-    } catch {
-        'PATH_PROBE_BLOCKED'
-        exit 42
-    }
-}
+# Path-guard regression fixtures are isolated in hosted Windows tests only.
 function Assert-ExactBinary {
     param([string]$Path,[string]$Sha256)
     if (-not [IO.File]::Exists($Path)) { throw 'BLOCKED_BINARY_ABSENT' }

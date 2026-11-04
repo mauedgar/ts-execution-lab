@@ -25,12 +25,46 @@ def invoke(*args, env=None):
         errors="replace", env=env,
     )
 
+
+def isolated_path_guard_fixture(probe_path):
+    """CI-only: isolate the production guard function in a disposable PS1.
+
+    The operator runner never receives ProbePath. This fixture is materialized
+    only on ephemeral hosted Windows CI to exercise reparse/path negatives.
+    """
+    start = TEXT.index("function Assert-NoReparseAncestor {")
+    end = TEXT.index("function Assert-ExactBinary {", start)
+    function_source = TEXT[start:end]
+    with tempfile.TemporaryDirectory() as scratch:
+        fixture = Path(scratch) / "fixture-only-path-guard.ps1"
+        fixture.write_text(
+            "[CmdletBinding()]\n"
+            "param([string]$ProbePath)\n"
+            "Set-StrictMode -Version Latest\n"
+            "$ErrorActionPreference = 'Stop'\n" + function_source +
+            "\ntry { Assert-NoReparseAncestor $ProbePath; "
+            "'CI_FIXTURE_PATH_OK_NOT_HOST_QUALIFIED'; exit 0 } "
+            "catch { 'CI_FIXTURE_PATH_BLOCKED'; exit 42 }\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [PWSH, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+             str(fixture), "-ProbePath", str(probe_path)],
+            capture_output=True, text=True, timeout=20, check=False,
+            errors="replace",
+        )
+
 class SourceOnly(unittest.TestCase):
     def test_execute_denied_before_readonly_functions(self):
         self.assertIn("if ($Mode -ceq 'Execute')", TEXT)
         self.assertLess(TEXT.index("if ($Mode -ceq 'Execute')"),
                         TEXT.index("function Assert-NoReparseAncestor"))
         self.assertIn("BLOCKED_UNADMITTED_EFFECT_NO_TRUSTED_ORIGINAL_RECEIPT", TEXT)
+
+    def test_probepath_fixture_not_exposed_by_production_runner(self):
+        self.assertIn("[ValidateSet('Inspect','Execute')]", TEXT)
+        self.assertNotIn("ProbePath", TEXT)
+        self.assertNotIn("PATH_PROBE_OK_NOT_HOST_QUALIFIED", TEXT)
 
     def test_no_third_party_cli_calls(self):
         for forbidden in ("& $dolt", "& $bd", "& $ts", "& $Tailscale", "Get-Command tailscale",
@@ -97,21 +131,21 @@ class SourceOnly(unittest.TestCase):
     @unittest.skipUnless(IS_WINDOWS, "Windows pwsh only")
     def test_regular_absolute_directory_path_probe(self):
         with tempfile.TemporaryDirectory() as d:
-            r = invoke("-Mode", "ProbePath", "-ProbePath", d)
+            r = isolated_path_guard_fixture(d)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertIn("PATH_PROBE_OK_NOT_HOST_QUALIFIED", r.stdout)
+            self.assertIn("CI_FIXTURE_PATH_OK_NOT_HOST_QUALIFIED", r.stdout)
 
     @unittest.skipUnless(IS_WINDOWS, "Windows pwsh only")
     def test_nonexistent_path_probe_denied(self):
         with tempfile.TemporaryDirectory() as d:
             missing = Path(d) / "does-not-exist"
-            r = invoke("-Mode", "ProbePath", "-ProbePath", missing)
+            r = isolated_path_guard_fixture(missing)
             self.assertEqual(r.returncode, 42)
-            self.assertIn("PATH_PROBE_BLOCKED", r.stdout)
+            self.assertIn("CI_FIXTURE_PATH_BLOCKED", r.stdout)
 
     @unittest.skipUnless(IS_WINDOWS, "Windows pwsh only")
     def test_relative_path_probe_denied(self):
-        r = invoke("-Mode", "ProbePath", "-ProbePath", "relative-path")
+        r = isolated_path_guard_fixture("relative-path")
         self.assertEqual(r.returncode, 42)
 
     @unittest.skipUnless(IS_WINDOWS, "Windows pwsh only")
@@ -126,7 +160,7 @@ class SourceOnly(unittest.TestCase):
                                     capture_output=True, text=True, timeout=15, check=False)
             if mklink.returncode != 0:
                 self.skipTest("NTFS junction capability unavailable on CI fixture")
-            r = invoke("-Mode", "ProbePath", "-ProbePath", link)
+            r = isolated_path_guard_fixture(link)
             self.assertEqual(r.returncode, 42, r.stdout + r.stderr)
 
     @unittest.skipUnless(IS_WINDOWS, "Windows pwsh only")

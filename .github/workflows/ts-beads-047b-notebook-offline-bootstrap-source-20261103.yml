@@ -1,15 +1,15 @@
-name: TS047B IR002 preflight hardening source-only
+name: TS047B IR003 ProbePath fixture isolation source-only
 on:
   push:
     branches:
-      - experiment/ts-beads-047b-ir002-preflight-hardening-20261103-001
+      - experiment/ts-beads-047b-ir003-probepath-isolation-20261103-001
     paths:
       - 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/**'
       - '.github/workflows/ts-beads-047b-notebook-offline-bootstrap-source-20261103.yml'
 permissions:
   contents: read
 concurrency:
-  group: ts047b-ir002-preflight-${{ github.sha }}
+  group: ts047b-ir003-fixture-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   readonly_source_security:
@@ -29,7 +29,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           git config core.autocrlf false
           if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_HEAD'}
-          if((git rev-parse HEAD^).Trim() -cne '8f484644d9e28f5095a9b3c4cb2c99c18761e6a0'){throw 'WRONG_PARENT'}
+          if((git rev-parse HEAD^).Trim() -cne 'bd60495be30fef40577f07da16f49a5cecfb8a16'){throw 'WRONG_PARENT'}
           $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/'
           $allow=@(
             ($root+'Invoke-047B-NotebookOfflineBootstrap.ps1'),
@@ -56,7 +56,7 @@ jobs:
           if($bytes -notmatch '^[0-9A-F]{64}$'){throw 'SOURCE_SHA256_FAILED'}
           'PWSH_AST_PASS'
           'SOURCE_SHA256='+$bytes
-      - name: Behavioral OS-only fixture negatives
+      - name: Behavioral fixture-only path guard and production denial
         shell: pwsh
         run: |
           python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001' -p 'test_source_contract.py' -v
