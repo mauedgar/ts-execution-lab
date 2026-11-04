@@ -21,7 +21,7 @@ function Get-V6Root {
   Assert-V6 ($base -eq [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd('\')) 'LOCALAPPDATA_ENV_MISMATCH'
   $userProfilePath=[Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
   Assert-V6 ($base.StartsWith(([IO.Path]::GetFullPath($userProfilePath).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)) 'LOCALAPPDATA_NOT_UNDER_PROFILE'
-  $parent=[IO.Path]::Combine($base,'TS047B-Offline-V6')
+  $parent=[IO.Path]::Combine($base,'TS047B-Offline-D262')
   [pscustomobject]@{Base=$base;Parent=$parent;Root=[IO.Path]::Combine($parent,$script:V6Attempt);
     Receipt=[IO.Path]::Combine($parent,($script:V6Attempt+'.jsonl'))}
 }
