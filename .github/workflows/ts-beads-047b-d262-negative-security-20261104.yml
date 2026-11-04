@@ -1,0 +1,56 @@
+name: TS047B D262 hosted Windows no-effect negative security
+on:
+  push:
+    branches:
+      - 'experiment/ts-beads-047b-d262-negative-security-20261104-001'
+    paths:
+      - 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/tests/Test-D262-TrustNegative.ps1'
+      - '.github/workflows/ts-beads-047b-d262-negative-security-20261104.yml'
+permissions:
+  contents: read
+jobs:
+  readonly_negatives:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Preserve exactly reviewed frozen base and distinct test-only scope
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:GITHUB_RUN_ATTEMPT -cne '1') { throw 'NO_RERUN' }
+          if($env:GITHUB_REF -cne 'refs/heads/experiment/ts-beads-047b-d262-negative-security-20261104-001') { throw 'WRONG_SOURCE_BRANCH' }
+          if((git rev-parse HEAD).Trim() -cne $env:GITHUB_SHA) { throw 'SOURCE_HEAD_MISMATCH' }
+          $base='cac21480802261edc761c293134fdde883db7ee2'
+          $paths=@(git diff --name-only $base HEAD)
+          if($LASTEXITCODE -ne 0 -or $paths.Count -ne 2) { throw 'SCOPE_CHANGE_COUNT_MISMATCH' }
+          $allowed=@('experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/tests/Test-D262-TrustNegative.ps1','.github/workflows/ts-beads-047b-d262-negative-security-20261104.yml')
+          foreach($p in $paths){if($p -cnotin $allowed){throw 'UNAUTHORIZED_SOURCE_CHANGE'}}
+          'ORIGINAL_D262_CODE_IMMUTABLE_TEST_ONLY_SCOPE_PASS'
+      - name: Materialize exact frozen Git blob bytes (no host file transfer)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/candidate/'
+          foreach($name in @('Security-047B-D262.psm1','Invoke-047B-D262-Fixture.ps1','Start-047B-D262.ps1')) {
+            $p=$root+$name
+            git -c core.autocrlf=false -c core.eol=lf checkout-index --force -- $p
+            if($LASTEXITCODE -ne 0){throw ('BLOB_RESTORE_FAILED_'+$name)}
+            $expected=(git rev-parse ('HEAD:'+$p)).Trim()
+            $actual=(git hash-object --no-filters $p).Trim()
+            if($LASTEXITCODE -ne 0 -or $expected -cne $actual){throw ('BLOB_MISMATCH_'+$name)}
+          }
+          'FROZEN_D262_THREE_SOURCE_BLOBS_PASS'
+      - name: Run only negative precondition checks on ephemeral Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $test='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/tests/Test-D262-TrustNegative.ps1'
+          $t=$null; $err=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $test).Path,[ref]$t,[ref]$err)
+          if(@($err).Count -gt 0){throw 'NEGATIVE_TEST_AST_FAILED'}
+          & (Resolve-Path $test).Path
+          if(-not $?){throw 'NEGATIVE_TEST_FAILED'}
+          'HOSTED_NO_EFFECT_NEGATIVE_RUN_PASS'
