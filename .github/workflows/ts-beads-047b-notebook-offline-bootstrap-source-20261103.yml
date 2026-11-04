@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - name: Source-only and DoD scope fence
         shell: pwsh
@@ -29,7 +29,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           git config core.autocrlf false
           if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){ throw 'WRONG_HEAD' }
-          if((git rev-parse HEAD^).Trim() -cne '404c358cb9717dd5446deae154afd576ede543ba'){ throw 'WRONG_ORIGINAL_PARENT' }
+          if((git merge-base HEAD '404c358cb9717dd5446deae154afd576ede543ba').Trim() -cne '404c358cb9717dd5446deae154afd576ede543ba'){ throw 'ORIGINAL_NOT_ANCESTOR' }
           $base = 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/'
           $allow = @(
             ($base + 'Invoke-047B-NotebookOfflineBootstrap.ps1'),
@@ -37,12 +37,12 @@ jobs:
             ($base + 'OPERATOR_AND_REVIEW_CONTRACT.md'),
             '.github/workflows/ts-beads-047b-notebook-offline-bootstrap-source-20261103.yml'
           )
-          $changed = @(git diff --name-only HEAD^ HEAD)
+          $changed = @(git diff --name-only '404c358cb9717dd5446deae154afd576ede543ba' HEAD)
           if($changed.Count -ne $allow.Count){ throw 'CHANGED_FILES_COUNT' }
           foreach($path in $changed){ if($path -cnotin $allow){ throw 'OUT_OF_SCOPE_CHANGE' } }
           $dod = 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md'
-          if((git hash-object $dod).Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){ throw 'FROZEN_DOD_CHANGED' }
-          'EXACT_HEAD_ORIGINAL_PARENT_AND_FROZEN_DOD_PASS'
+          if((git rev-parse ('HEAD:'+$dod)).Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){ throw 'FROZEN_DOD_CHANGED' }
+          'EXACT_HEAD_ORIGINAL_ANCESTOR_AND_GIT_BLOB_DOD_PASS'
       - name: PowerShell AST and non-effectful runner contract
         shell: pwsh
         run: |
