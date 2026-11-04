@@ -12,9 +12,10 @@ Neon maintains PostgreSQL outside the GitHub Actions machine, eliminating epheme
 ## Strict preconditions before launch
 1. User connects Neon provider in ChatGPT or provisions a separate project `ts-remote-state-lab`; ChatGPT connection alone does **not** create the GitHub Actions secret. User controls the Neon account, region, free plan, retention and any billing action. No credentials in chat, Git, PRs, logs or shared files.
 2. Provision an entirely empty, isolated *synthetic only* PostgreSQL project/database. Confirm DB credentials have no access to any Product/Customer database. Require TLS in the DB URL (`sslmode=require` or stronger).
-3. With appropriate repo rights, user or a qualified secrets-API surface stores the URL exclusively as GitHub Actions secret `TS_NEON_LAB_DATABASE_URL` in `mauedgar/ts-execution-lab`. No secret was created or read in this source-only publication.
-4. The workflow `workflow_dispatch` may not be manually runnable until an independently reviewed copy is present on the lab default branch. That promotion is a separate, narrow lab disposition and is **not** Product adoption.
-5. A later launch must freeze Git commit/tree, one original GitHub run/attempt, expected native jobs and their receipts; only one dispatch. Any `UNKNOWN` provider effect requires exact identity reconciliation before another launch.
+3. With appropriate repo rights, user or a qualified secrets-API surface stores the URL exclusively as a **GitHub Environment secret** (environment `ts-neon-synthetic`) `TS_NEON_LAB_DATABASE_URL` in `mauedgar/ts-execution-lab`, with branch restriction to the independently approved lab workflow branch, necessary approvals, and least-privilege credentials. Do not use a repository-wide secret. No secret was created or read in this source-only publication.
+4. Configure the Environment `ts-neon-synthetic` before using the workflow: limit permitted branches and configure authorization controls. Its connection secret must not be readable by unrelated workflows or branches.
+5. The workflow `workflow_dispatch` may not be manually runnable until an independently reviewed copy is present on the lab default branch. That promotion is a separate, narrow lab disposition and is **not** Product adoption.
+6. A later launch must freeze Git commit/tree, one original GitHub run/attempt, expected native jobs and their receipts; only one dispatch. Any `UNKNOWN` provider effect requires exact identity reconciliation before another launch.
 
 ## Test intent and ceiling
 - Job `seed` and job `recover` are separate GitHub-hosted runner VMs with no shared workspace. Both access the same managed Neon PostgreSQL and use the exact same DBOS workflow ID derived from one GitHub run ID.

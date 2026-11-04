@@ -12,6 +12,7 @@ permissions:
 jobs:
   seed:
     if: ${{ inputs.confirm_synthetic_isolated_neon }}
+    environment: ts-neon-synthetic
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -31,6 +32,7 @@ jobs:
         run: python experiments/TS-REMOTE-STATE-NEON-V5-20261104-001/neon_cross_runner.py seed
   recover:
     needs: [seed]
+    environment: ts-neon-synthetic
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
