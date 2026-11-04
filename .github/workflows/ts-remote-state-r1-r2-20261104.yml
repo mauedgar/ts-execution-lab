@@ -1,0 +1,123 @@
+name: TS Remote State R1 R2 frozen differential and dependency qualification
+on:
+  push:
+    branches: [experiment/ts-remote-state-r1-r2-20261104-001]
+permissions:
+  contents: read
+jobs:
+  r2-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: true}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.15.2'}
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Generate and replay isolated Python 3.15.2 lock
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c "import sys; assert sys.version_info[:3] == (3,15,2),sys.version"
+          uv lock --python 3.15.2
+          uv lock --check
+          uv sync --locked --python 3.15.2
+          uv run --locked python -c "import dbos, psycopg; print('PASS|R2|linux_python_imports|3.15.2')"
+      - name: Generate and replay Node/TypeScript driver pins
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --save-exact --ignore-scripts --no-audit --no-fund pg@8 @types/pg@8 @types/node@22 typescript@5
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run smoke
+      - name: Version only isolated R2 lock artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python/uv.lock \
+                  experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node/package.json \
+                  experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node/package-lock.json
+          git diff --cached --quiet && { echo 'FAIL|R2|no_new_locks'; exit 1; }
+          git commit -m "experiment: record isolated R2 Python and Node locks"
+          git push origin HEAD:experiment/ts-remote-state-r1-r2-20261104-001
+          echo "PASS|R2|locks_published"
+  r2-windows:
+    needs: [r2-lock]
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: experiment/ts-remote-state-r1-r2-20261104-001}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.15.2'}
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Windows reproduce Python lock
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+        shell: pwsh
+        run: |
+          python -c "import sys; assert sys.version_info[:3] == (3,15,2),sys.version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv lock --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv sync --locked --python 3.15.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run --locked python -c "import dbos, psycopg; print('PASS|R2|windows_python_imports')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows reproduce Node/TypeScript lock
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  r1-frozen-differential:
+    needs: [r2-lock]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: postgres, POSTGRES_PASSWORD: synthetic_ci_only, POSTGRES_DB: postgres}
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      R1_DATABASE_URL: postgresql://postgres:synthetic_ci_only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/ts-remote-state-r1-r2-20261104-001
+          path: lab
+      - uses: actions/checkout@v4
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84
+          path: product
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify Product identity and isolated dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C product rev-parse HEAD)" = "35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84"
+          (cd product && npm ci --ignore-scripts --no-audit --no-fund)
+          (cd lab/experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node && npm ci --ignore-scripts --no-audit --no-fund)
+      - name: Product original Kernel V0 tests
+        run: node --test product/tests/state-kernel-v0/kernel.test.js product/tests/state-kernel-v0/late-obligation-extension.test.js
+      - name: PostgreSQL versus frozen Product reducer differential
+        run: node lab/experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r1_differential.cjs
