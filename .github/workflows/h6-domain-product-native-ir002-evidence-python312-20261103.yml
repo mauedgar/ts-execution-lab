@@ -1,0 +1,126 @@
+name: H6 Domain Product IR002 remediation Python312 original-v1
+on:
+  push:
+    branches:
+      - validation/h6-domain-product-native-ir002-evidence-python312-20261103-001
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: edc39ea98eb2c7794e79102a9a0372132803ce83
+          path: historical
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 7f06b61753703a6491bb20e8036f917028049257
+          path: candidate
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: b720cad3881dc9898f7072b0d5705a73f077c4ec
+          path: policy
+          persist-credentials: false
+      - name: Verify immutable sources and authorized compatibility exception
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C historical rev-parse HEAD)" = edc39ea98eb2c7794e79102a9a0372132803ce83
+          test "$(git -C historical rev-parse HEAD:attendance/storage/sqlite_store.py)" = f1c45df93d42c4ec543241d519ab0243acc0001a
+          test "$(git -C candidate rev-parse HEAD)" = 7f06b61753703a6491bb20e8036f917028049257
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = 93eec6cb386b27092b4804c4102943bef28e1611
+          test "$(git -C candidate rev-parse HEAD^)" = ca0d2c5dc4b9623b2260651d9398b4b4b2777265
+          test "$(git -C candidate rev-parse HEAD:docs/tasks/TEC-TC-ULC-OP05-H6-ATTENDANCE-DOMAIN-001/TASK.md)" = 89c8900a2cee3babb0353115dcbbc3677e962f1a
+          test "$(git -C candidate diff --name-only HEAD^ HEAD | sort)" = "$(printf '%s\n' 'attendance/storage/integrity.py' 'attendance/storage/sqlite_store.py' 'attendance/tests/core/test_service.py' | sort)"
+          test "$(git -C candidate rev-parse HEAD:attendance/core/service.py)" = aeb02a05f0bde238e5dcff0a78cc30950f25472a
+          test "$(git -C candidate rev-parse HEAD:attendance/storage/integrity.py)" = bf061d448a24da6539154f70c0a5ea973327fea6
+          test "$(git -C candidate rev-parse HEAD:attendance/storage/sqlite_store.py)" = 01e08b554bc0843b314940f32c91306174e28338
+          test "$(git -C candidate rev-parse HEAD:attendance/tests/core/test_service.py)" = 441d80d85aa9cd575a9d1c3a027e334d8788861a
+          test "$(git -C historical rev-parse HEAD:attendance/contracts/attendance-v0.md)" = 2e939672a8401154289ea94aab83194f689247f0
+          test "$(git -C policy rev-parse HEAD:attendance/contracts/attendance-v0-legacy-idempotency-control-20261102.md)" = 5ccb84f7642eb25fc2b3fb98bb7f93cab0ecd917
+          test "$(git -C policy rev-parse HEAD:attendance/contracts/attendance-v0-resource-trust-control-20261102.md)" = cfb20a2725f24a634cd4b79b211b4e264469ab44
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - name: Validate actual Domain candidate negative, concurrency and migration suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.version_info[:2] == (3,12),sys.version; print(sys.version)'
+          (cd candidate && PYTHONPATH=. python -W error::ResourceWarning -m unittest discover -s attendance/tests/core -p 'test_*.py' -v)
+      - name: Create real schema v1 DB through ORIGINAL v1 source
+        shell: bash
+        env:
+          H6_DB: ${{ runner.temp }}/original-h6-v1.sqlite
+          H6_RECEIPT: ${{ runner.temp }}/original-h6-v1-results.json
+        run: |
+          set -euo pipefail
+          PYTHONPATH=historical python - <<'PY'
+          import json, os, sqlite3
+          from attendance.core.service import AttendanceService
+          s=AttendanceService(os.environ['H6_DB'])
+          one=s.checkIn({'subject_id':'s1','occurred_at':'2026-11-01T10:00:00Z','request_id':'r1'})
+          two=s.checkOut({'subject_id':'s1','occurred_at':'2026-11-01T11:00:00Z','request_id':'r2'})
+          with sqlite3.connect(os.environ['H6_DB']) as db:
+              assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+              assert db.execute('SELECT COUNT(*) FROM requests').fetchone()[0] == 2
+          with open(os.environ['H6_RECEIPT'],'w',encoding='utf-8') as f:
+              json.dump({'checkIn':one,'checkOut':two},f)
+          print('ORIGINAL_V1_PROCESS_PERSISTED_2_KEYS_PASS')
+          PY
+      - name: Migrate and replay ORIGINAL v1 DB under exact new code
+        shell: bash
+        env:
+          H6_DB: ${{ runner.temp }}/original-h6-v1.sqlite
+          H6_RECEIPT: ${{ runner.temp }}/original-h6-v1-results.json
+        run: |
+          set -euo pipefail
+          PYTHONPATH=candidate python - <<'PY'
+          import json,os,sqlite3
+          from attendance.core.service import AttendanceService,AttendanceError
+          with open(os.environ['H6_RECEIPT'],encoding='utf-8') as f: original=json.load(f)
+          s=AttendanceService(os.environ['H6_DB'])
+          assert s.checkIn({'subject_id':'s1','occurred_at':'2026-11-01T10:00:00Z','request_id':'r1'}) == original['checkIn']
+          assert s.checkIn({'subject_id':'s1','occurred_at':'2026-11-01T12:00:00+02:00','request_id':'r1'}) == original['checkIn']
+          assert s.checkOut({'subject_id':'s1','occurred_at':'2026-11-01T11:00:00Z','request_id':'r2'}) == original['checkOut']
+          try:
+              s.checkOut({'subject_id':'s1','occurred_at':'2026-11-01T12:00:00Z','request_id':'r2'})
+          except AttendanceError as exc:
+              assert exc.code=='REQUEST_CONFLICT',exc.code
+          else:
+              raise AssertionError('legacy replay accepted different UTC instant')
+          with sqlite3.connect(os.environ['H6_DB']) as db:
+              assert db.execute('PRAGMA user_version').fetchone()[0] == 2
+              assert db.execute('SELECT COUNT(*) FROM requests WHERE payload LIKE ?',('%signature_version%',)).fetchone()[0] == 2
+          s2=AttendanceService(os.environ['H6_DB'])
+          assert s2.checkIn({'subject_id':'s1','occurred_at':'2026-11-01T10:00:00Z','request_id':'r1'}) == original['checkIn']
+          print('ORIGINAL_V1_TO_V2_MIGRATION_AND_REPLAY_PASS')
+          PY
+      - name: Native validation provenance only
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,sys,pathlib,os
+          x={'class':'VALIDATION_NOT_INDEPENDENT_REVIEW','run_id':os.getenv('GITHUB_RUN_ID'),
+          'job_status':'${{ job.status }}','python':sys.version,
+          'original_v1':'edc39ea98eb2c7794e79102a9a0372132803ce83',
+          'new_candidate':'7f06b61753703a6491bb20e8036f917028049257',
+          'new_tree':'93eec6cb386b27092b4804c4102943bef28e1611',
+          'control_addendum':'68cdba19acf1fd77cd86d4a4e2f86f73e6b32c37',
+          'control_resource_trust_commit':'b720cad3881dc9898f7072b0d5705a73f077c4ec',
+          'control_resource_trust_blob':'cfb20a2725f24a634cd4b79b211b4e264469ab44',
+          'Product_effect':'NONE','acceptance':'NOT_GRANTED','Phase2':'NOT_GRANTED'}
+          pathlib.Path('h6-product-native-native.json').write_text(json.dumps(x,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: h6-product-ir002-evidence-python312
+          path: h6-product-native-native.json
