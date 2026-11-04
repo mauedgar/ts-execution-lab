@@ -1,0 +1,71 @@
+name: TS047B D262 exact source-only export
+on:
+  push:
+    branches:
+      - 'experiment/ts-beads-047b-d262-source-bundle-20261104-001'
+    paths:
+      - '.github/workflows/ts-beads-047b-d262-source-bundle-20261104.yml'
+permissions:
+  contents: read
+jobs:
+  export_source_only:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Verify immutable reviewed source and package bytes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:GITHUB_RUN_ATTEMPT -cne '1') { throw 'NO_RETRY_FOR_SOURCE_EXPORT' }
+          if($env:GITHUB_REF -cne 'refs/heads/experiment/ts-beads-047b-d262-source-bundle-20261104-001') { throw 'UNEXPECTED_BRANCH' }
+          if((git rev-parse HEAD).Trim() -cne $env:GITHUB_SHA){ throw 'HEAD_MISMATCH' }
+          $base='cac21480802261edc761c293134fdde883db7ee2'
+          $changed=@(git diff --name-only $base HEAD)
+          if($changed.Count -ne 1 -or $changed[0] -cne '.github/workflows/ts-beads-047b-d262-source-bundle-20261104.yml') { throw 'EXTRA_SOURCE_CHANGE' }
+          $repoTree=(git rev-parse ($base+'^{tree}')).Trim()
+          if($repoTree -cne '3e5d1899503b6371404239af2090a7acae4c21e9'){ throw 'REVIEWED_TREE_MISMATCH' }
+          $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/candidate/'
+          $expected=@{
+            'Security-047B-D262.psm1'='ffb95bfff24ca75db8c750953f414873f34d71bd'
+            'Invoke-047B-D262-Fixture.ps1'='a3172799ca62885dc02378d359c6f7e52203ac2b'
+            'Start-047B-D262.ps1'='bad08eda0165d18c6227eb35f19f6ea95fef7e17'
+          }
+          $stage=Join-Path $env:RUNNER_TEMP 'TS047B-D262-SOURCE-BUNDLE-20261104-001'
+          if(Test-Path -LiteralPath $stage) { throw 'STAGING_ALREADY_EXISTS' }
+          [void][IO.Directory]::CreateDirectory($stage)
+          $manifest=@(
+            'TS047B_D262_SOURCE_ONLY_BUNDLE_V1'
+            ('exact_source_commit='+$base)
+            ('source_tree='+$repoTree)
+            'script_executed=false'
+            'sql_executed=false'
+            'trust_pin_unprovisioned=true'
+          )
+          foreach($name in @('Security-047B-D262.psm1','Invoke-047B-D262-Fixture.ps1','Start-047B-D262.ps1')){
+            $source=$root+$name
+            git -c core.autocrlf=false -c core.eol=lf checkout-index --force -- $source
+            if($LASTEXITCODE -ne 0){throw ('RESTORE_BLOB_FAILED_'+$name)}
+            $expectedBlob=(git rev-parse ($base+':'+$source)).Trim()
+            $worktreeBlob=(git hash-object --no-filters $source).Trim()
+            if($LASTEXITCODE -ne 0 -or $expectedBlob -cne $expected[$name] -or $worktreeBlob -cne $expected[$name]){throw ('BLOB_INVALID_'+$name)}
+            $raw=[IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $source).Path)
+            if($raw.Length -eq 0 -or ($raw -contains 13)){throw ('SOURCE_EOL_INVALID_'+$name)}
+            $destination=Join-Path $stage $name
+            [IO.File]::WriteAllBytes($destination,$raw)
+            $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($raw)).ToLowerInvariant()
+            $manifest+=($name+'|git_blob='+$expectedBlob+'|bytes='+$raw.Length+'|sha256='+$hash)
+          }
+          [IO.File]::WriteAllText((Join-Path $stage 'SOURCE-MANIFEST.txt'),(($manifest -join "`n")+"`n"),[Text.UTF8Encoding]::new($false))
+          'D262_EXACT_SOURCE_EXPORT_VERIFIED'
+          'NO_SCRIPT_OR_SQL_EXECUTED'
+      - name: Publish immutable source-byte transport ZIP (no script execution)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TS047B-D262-SOURCE-ONLY-20261104-001
+          path: ${{ runner.temp }}/TS047B-D262-SOURCE-BUNDLE-20261104-001/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
