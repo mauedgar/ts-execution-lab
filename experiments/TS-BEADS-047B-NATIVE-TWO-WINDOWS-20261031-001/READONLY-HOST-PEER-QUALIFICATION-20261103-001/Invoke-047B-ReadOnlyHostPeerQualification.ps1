@@ -15,7 +15,7 @@ $expectedPeer=if($Role -ceq 'Notebook'){'DESKTOP-3LJ0E54'}else{'DESKTOP-DJLBEQH'
 function Get-StringDigest {
   param([Parameter(Mandatory)][string]$Value)
   if([string]::IsNullOrWhiteSpace($Value)){throw 'EMPTY_IDENTITY'}
-  $bytes=[Text.Encoding]::UTF8.GetBytes($Value)
+  $bytes=[Text.Encoding]::UTF8.GetBytes('TS047B_PRIVATE_IDENTITY_SCOPE_V1:'+ $Value)
   return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
 }
 function Evaluate-Status {
@@ -47,35 +47,92 @@ function Evaluate-Status {
     peer_node_key_sha256=(Get-StringDigest $peerKey)
   }
 }
-function Run-TailscaleStatus {
-  param([string]$Exe)
-  # Fixed one-shot observational command. Both streams consumed asynchronously.
-  # No untrusted arguments, authentication material or raw status printed.
+function Invoke-BoundedStatusProcess {
+  param([Parameter(Mandatory)][string]$Exe,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [int]$TimeoutMs=12000,
+        [int]$MaxStdoutChars=1048576,
+        [int]$MaxStderrChars=32768)
+  # No file writes, shell, raw-data logging or unlimited ReadToEndAsync.
   $psi=[Diagnostics.ProcessStartInfo]::new()
   $psi.FileName=$Exe
-  $psi.ArgumentList.Add('status')
-  $psi.ArgumentList.Add('--json')
+  foreach($arg in $Arguments){$psi.ArgumentList.Add($arg)}
   $psi.UseShellExecute=$false
   $psi.RedirectStandardOutput=$true
   $psi.RedirectStandardError=$true
   $psi.CreateNoWindow=$true
   $child=[Diagnostics.Process]::new()
   $child.StartInfo=$psi
+  $started=$false
   try {
-    if(-not $child.Start()){throw 'TS_STATUS_START_FAILED'}
-    $stdoutTask=$child.StandardOutput.ReadToEndAsync()
-    $stderrTask=$child.StandardError.ReadToEndAsync()
-    if(-not $child.WaitForExit(12000)){
-      $child.Kill($true)
-      throw 'TS_STATUS_TIMEOUT'
+    if(-not $child.Start()){throw 'STATUS_PROCESS_NOT_STARTED'}
+    $started=$true
+    $sw=[Diagnostics.Stopwatch]::StartNew()
+    $stdout=[Text.StringBuilder]::new()
+    $stderr=[Text.StringBuilder]::new()
+    $outChars=[char[]]::new(4096)
+    $errChars=[char[]]::new(4096)
+    $outTask=$child.StandardOutput.ReadAsync($outChars,0,$outChars.Length)
+    $errTask=$child.StandardError.ReadAsync($errChars,0,$errChars.Length)
+    while($null -ne $outTask -or $null -ne $errTask){
+      $remaining=$TimeoutMs-[int]$sw.ElapsedMilliseconds
+      if($remaining -le 0){throw 'STATUS_PROCESS_TIMEOUT'}
+      $pending=[Collections.Generic.List[Threading.Tasks.Task]]::new()
+      if($null -ne $outTask){$pending.Add($outTask)}
+      if($null -ne $errTask){$pending.Add($errTask)}
+      if([Threading.Tasks.Task]::WaitAny($pending.ToArray(),$remaining) -eq -1){
+        throw 'STATUS_PROCESS_TIMEOUT'
+      }
+      if($null -ne $outTask -and $outTask.IsCompleted){
+        $count=$outTask.GetAwaiter().GetResult()
+        if($count -eq 0){$outTask=$null}
+        else{
+          if($stdout.Length+$count -gt $MaxStdoutChars){throw 'STATUS_STDOUT_LIMIT'}
+          [void]$stdout.Append($outChars,0,$count)
+          $outTask=$child.StandardOutput.ReadAsync($outChars,0,$outChars.Length)
+        }
+      }
+      if($null -ne $errTask -and $errTask.IsCompleted){
+        $count=$errTask.GetAwaiter().GetResult()
+        if($count -eq 0){$errTask=$null}
+        else{
+          if($stderr.Length+$count -gt $MaxStderrChars){throw 'STATUS_STDERR_LIMIT'}
+          [void]$stderr.Append($errChars,0,$count)
+          $errTask=$child.StandardError.ReadAsync($errChars,0,$errChars.Length)
+        }
+      }
     }
-    if($child.ExitCode -ne 0){throw 'TS_STATUS_FAILED'}
-    $out=$stdoutTask.GetAwaiter().GetResult()
-    [void]$stderrTask.GetAwaiter().GetResult()
-    return $out
+    $remaining=$TimeoutMs-[int]$sw.ElapsedMilliseconds
+    if($remaining -le 0 -or -not $child.WaitForExit($remaining)){
+      throw 'STATUS_PROCESS_TIMEOUT'
+    }
+    if($child.ExitCode -ne 0){throw 'STATUS_PROCESS_FAILED'}
+    return $stdout.ToString()
+  } catch {
+    $priorError=$_
+    if($started){
+      $mustAssumeUnknown=($priorError.Exception.Message -match '^STATUS_(PROCESS_TIMEOUT|STDOUT_LIMIT|STDERR_LIMIT)$')
+      try {
+        if(-not $child.HasExited){
+          $mustAssumeUnknown=$true
+          $child.Kill($true)
+          # Wait on the direct child. Descendant status is unproven.
+          [void]$child.WaitForExit(5000)
+        }
+      } catch {
+        $mustAssumeUnknown=$true
+      }
+      if($mustAssumeUnknown){throw 'UNKNOWN_CHILD_TERMINATION'}
+    }
+    throw $priorError
   } finally {
     $child.Dispose()
   }
+}
+function Run-TailscaleStatus {
+  param([string]$Exe)
+  # A single pinned, fixed, local observational CLI invocation.
+  return Invoke-BoundedStatusProcess -Exe $Exe -Arguments @('status','--json')
 }
 try {
   if([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or
@@ -115,6 +172,13 @@ try {
   'NO_SQL_OR_CONFIGURATION_EFFECT'
   exit 0
 } catch {
+  # A forced child termination or unprovable descendant lifetime is UNKNOWN,
+  # never a retryable negative observation. No details or raw metadata printed.
+  if($_.Exception.Message -ceq 'UNKNOWN_CHILD_TERMINATION'){
+    'UNKNOWN_CHILD_TERMINATION'
+    'NO_SQL_OR_CONFIGURATION_EFFECT'
+    exit 23
+  }
   # Intentionally no exception messages, raw CLI JSON, SID, path or IP.
   'BLOCKED_READONLY_HOST_PEER_QUALIFICATION'
   'NO_SQL_OR_CONFIGURATION_EFFECT'
