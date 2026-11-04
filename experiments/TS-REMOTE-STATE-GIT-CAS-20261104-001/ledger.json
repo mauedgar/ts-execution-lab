@@ -1,0 +1,22 @@
+{
+  "schema": "ts-experimental-git-ledger-synthetic-v1",
+  "revision": 1,
+  "parent_ref": "8457060682923e5e8fe6b14017f8d890a97acb3a",
+  "writer": "A",
+  "synthetic_only": true,
+  "aggregates": {
+    "TaskCycle": {
+      "TC-REMOTE-STATE-SYNTH-001": {
+        "state": "READY",
+        "obligations": [
+          {
+            "id": "VERIFY",
+            "status": "PENDING"
+          }
+        ]
+      }
+    }
+  },
+  "effect_state": "NONE",
+  "external_execution": false
+}
