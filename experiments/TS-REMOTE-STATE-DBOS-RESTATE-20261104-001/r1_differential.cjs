@@ -70,13 +70,13 @@ const ev={kind:'EVIDENCE',id:'EV-SYN',location:'synthetic/evidence.json'};
 const imported={mode:'IMPORTED_ESTABLISHED_STATE',cutover_at:'2026-01-01T00:00:00.000Z',historical_events_reconstructed:false,authority_refs:[auth],evidence_refs:[ev]};
 async function conn(fn){const c=new Client({connectionString:url});await c.connect();try{return await fn(c);}finally{await c.end();}}
 async function init(){await conn(async c=>{
-  await c.query('CREATE TABLE r1_data (id int PRIMARY KEY, revision int NOT NULL, state jsonb NOT NULL, events text NOT NULL)');
+  await c.query('CREATE TABLE r1_data (id int PRIMARY KEY, revision int NOT NULL, state text NOT NULL, events text NOT NULL)');
   await c.query('CREATE TABLE r1_receipts (mutation_id text PRIMARY KEY, revision int NOT NULL)');
-  await c.query('INSERT INTO r1_data VALUES (1,0,$1,$2)',[emptyState(),'[]']);
+  await c.query('INSERT INTO r1_data VALUES (1,0,$1,$2)',[JSON.stringify(emptyState()),'[]']);
 });}
 async function read(){return conn(async c=>{
   const r=(await c.query('SELECT * FROM r1_data WHERE id=1')).rows[0];
-  return {state:r.state,events:JSON.parse(r.events),revision:r.revision};
+  return {state:JSON.parse(r.state),events:JSON.parse(r.events),revision:r.revision};
 });}
 async function tx(fn,mutation=null){return conn(async c=>{
   await c.query('BEGIN');
@@ -84,10 +84,10 @@ async function tx(fn,mutation=null){return conn(async c=>{
     if(mutation){const prior=await c.query('SELECT revision FROM r1_receipts WHERE mutation_id=$1',[mutation]);
       if(prior.rowCount){await c.query('ROLLBACK');return {existing:true,revision:prior.rows[0].revision};}}
     const r=(await c.query('SELECT * FROM r1_data WHERE id=1 FOR UPDATE')).rows[0];
-    const s=new RamStore({state:r.state,events:JSON.parse(r.events)});
+    const s=new RamStore({state:JSON.parse(r.state),events:JSON.parse(r.events)});
     assert.equal(s.verify().revision,r.revision);
     const result=fn(s),out=s.read();
-    await c.query('UPDATE r1_data SET revision=$1,state=$2,events=$3 WHERE id=1',[out.state.revision,out.state,JSON.stringify(out.events)]);
+    await c.query('UPDATE r1_data SET revision=$1,state=$2,events=$3 WHERE id=1',[out.state.revision,JSON.stringify(out.state),JSON.stringify(out.events)]);
     if(mutation)await c.query('INSERT INTO r1_receipts VALUES ($1,$2)',[mutation,out.state.revision]);
     await c.query('COMMIT');return result;
   }catch(e){await c.query('ROLLBACK');throw e;}
