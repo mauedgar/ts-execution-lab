@@ -1,0 +1,63 @@
+name: TS Python 3.15.2 active consumers qualification 20261104
+on:
+  push:
+    branches:
+      - experiment/ts-py315-active-consumers-20261104-001
+    paths:
+      - .github/workflows/ts-py315-active-consumers-20261104.yml
+permissions:
+  contents: read
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact experimental execution subject
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Read-only checkout of immutable Tecnotron Product subject
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84
+          path: product
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify exact Product Git subject and active consumer blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "experiment/ts-py315-active-consumers-20261104-001"
+          test "$(git -C product rev-parse HEAD)" = "35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84"
+          test "$(git -C product rev-parse 'HEAD^{tree}')" = "25d1a151d651bb41936c69334fb0b0772ef22519"
+          test "$(git -C product rev-parse HEAD:.opencode/skills/repo-packager/scripts/pack.py)" = "7ea1c3fe46c2cfc07029692bb2e40d8fb9185396"
+          test "$(git -C product rev-parse HEAD:tests/repo-packager/pack.test.py)" = "557b2334aa735601514581eb4c3fa75e2e4399b5"
+          test "$(git -C product rev-parse HEAD:scripts/review_txt_carrier.py)" = "96971cf4a39a6bcb64e8b1982010b6d50a1f7ca4"
+          test "$(git -C product rev-parse HEAD:tests/review-txt-carrier/test_review_txt_carrier.py)" = "3c763c8d49a9f50a77b173651fed8933dcfd31da"
+          test "$(git -C product rev-parse HEAD:python/requirements.txt)" = "b1a9f877be8b54618942e295e95bf43bda264e42"
+          echo "TS_PY315_ACTIVE_CONSUMER_SOURCE_GUARD_PASS"
+      - name: Setup CPython 3.15.2
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.15.2'
+      - name: Empirically test selected actual legacy consumers (not full requirements)
+        shell: bash
+        working-directory: product
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.version_info[:3] == (3,15,2), sys.version; print(sys.version)'
+          python -m pip install --disable-pip-version-check --only-binary=:all: "networkx==3.6.1"
+          python -m pip check
+          python -c 'import networkx as nx; g=nx.DiGraph(); g.add_edge("a","b"); assert nx.is_directed_acyclic_graph(g); assert nx.__version__ == "3.6.1"; print("TS_PY315_NETWORKX_ACTUAL_DEP_PASS")'
+          python -m unittest discover -s tests/repo-packager -p 'pack.test.py' -v
+          python -m unittest discover -s tests/review-txt-carrier -p 'test_review_txt_carrier.py' -v
+          python .opencode/skills/repo-packager/scripts/pack.py --help > /dev/null
+          python scripts/review_txt_carrier.py --help > /dev/null
+          test "$(git rev-parse HEAD)" = "35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84"
+          echo "TS_PY315_ACTIVE_CONSUMERS_PASS_NOT_LEGACY_FULL_MIGRATION"
