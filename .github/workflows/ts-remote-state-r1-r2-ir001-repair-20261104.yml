@@ -1,0 +1,118 @@
+name: TS Remote State R1 R2 IR001 repair conformance and locks
+on:
+  push:
+    branches: [experiment/ts-remote-state-r1-r2-ir001-repair-20261104-001]
+permissions:
+  contents: read
+jobs:
+  r1-differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: postgres, POSTGRES_PASSWORD: synthetic_ci_only, POSTGRES_DB: postgres}
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      R1_DATABASE_URL: postgresql://postgres:synthetic_ci_only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {ref: '${{ github.sha }}', path: lab, persist-credentials: false}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84
+          path: product
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - name: Verify original source and exact experiment Git subject
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C lab rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C product rev-parse HEAD)" = "35bfcc8e4fdd69976ef4bdfea6b9f10d9fda6a84"
+          (cd product && npm ci --ignore-scripts --no-audit --no-fund)
+          (cd lab/experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node && npm ci --ignore-scripts --no-audit --no-fund)
+      - name: Original frozen Product State Kernel regression suite
+        run: node --test product/tests/state-kernel-v0/kernel.test.js product/tests/state-kernel-v0/late-obligation-extension.test.js
+      - name: R1 repaired differential and IR001 negative tests
+        run: node lab/experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r1_differential.cjs
+  r2-linux-db:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: postgres, POSTGRES_PASSWORD: synthetic_ci_only, POSTGRES_DB: postgres}
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DBOS_SYSTEM_DATABASE_URL: postgresql://postgres:synthetic_ci_only@127.0.0.1:5432/postgres
+      R1_DATABASE_URL: postgresql://postgres:synthetic_ci_only@127.0.0.1:5432/postgres
+      TS_REMOTE_WORKFLOW_ID: ts-remote-r2-ir001-repair-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {ref: '${{ github.sha }}', persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.15.2'}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - name: Verify exact experiment source and original locked Python Node dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          cd experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+          python -c "import sys; assert sys.version_info[:3] == (3,15,2), sys.version"
+          uv lock --check
+          uv sync --locked --python 3.15.2
+          uv run --locked python -c "import dbos, psycopg; print('PASS|R2|linux_pinned_python_imports')"
+          cd ../r2-node
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm run smoke
+          node pg-db-smoke.cjs
+      - name: DBOS new candidate first process
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+        run: uv run --locked python ../dbos_recovery_r2.py first
+      - name: DBOS new candidate second process same workflow ID
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+        run: uv run --locked python ../dbos_recovery_r2.py second
+  r2-windows:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {ref: '${{ github.sha }}', persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.15.2'}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - name: Reproduce immutable Python lock Windows native
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-python
+        shell: pwsh
+        run: |
+          python -c "import sys; assert sys.version_info[:3] == (3,15,2), sys.version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv lock --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv sync --locked --python 3.15.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run --locked python -c "import dbos, psycopg; print('PASS|R2|windows_python_imports')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Reproduce immutable Node lock Windows native
+        working-directory: experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
