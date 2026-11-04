@@ -1,0 +1,36 @@
+name: TS Remote State DBOS PostgreSQL synthetic V2 20261104
+on:
+  push:
+    branches: [experiment/ts-remote-state-dbos-postgres-v2-20261104-001]
+    paths:
+      - .github/workflows/ts-remote-state-dbos-v2-20261104.yml
+permissions: {contents: read}
+jobs:
+  dbos-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      pg:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DBOS_SYSTEM_DATABASE_URL: postgresql://postgres:synthetic_ci_only@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.14'}
+      - name: Install DBOS
+        run: python -m pip install --disable-pip-version-check dbos==3.4.0 'psycopg[binary]'
+      - name: First process persists workflow
+        run: python experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/dbos_smoke.py first
+      - name: Fresh process retrieves original without replay
+        run: python experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/dbos_smoke.py second
