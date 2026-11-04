@@ -1,0 +1,50 @@
+name: TS Remote State Neon V5 two independent runners
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_synthetic_isolated_neon:
+        description: "Confirm a dedicated experimental Neon Free project, no Product or customer data"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  seed:
+    if: ${{ inputs.confirm_synthetic_isolated_neon }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DBOS_SYSTEM_DATABASE_URL: ${{ secrets.TS_NEON_LAB_DATABASE_URL }}
+      TS_SYNTHETIC_WORKFLOW_ID: ts-neon-v5-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.15.2'
+      - name: Require isolated managed Postgres credential
+        run: |
+          test -n "$DBOS_SYSTEM_DATABASE_URL" || { echo "BLOCKED_PRECONDITION: Neon GitHub secret not connected"; exit 2; }
+      - name: Install qualified DBOS and psycopg
+        run: python -m pip install --disable-pip-version-check dbos==3.4.0 'psycopg[binary]==3.3.8'
+      - name: Persist synthetic workflow on first hosted runner
+        run: python experiments/TS-REMOTE-STATE-NEON-V5-20261104-001/neon_cross_runner.py seed
+  recover:
+    needs: [seed]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DBOS_SYSTEM_DATABASE_URL: ${{ secrets.TS_NEON_LAB_DATABASE_URL }}
+      TS_SYNTHETIC_WORKFLOW_ID: ts-neon-v5-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.15.2'
+      - name: Require same experiment credential
+        run: |
+          test -n "$DBOS_SYSTEM_DATABASE_URL" || { echo "BLOCKED_PRECONDITION: Neon GitHub secret not connected"; exit 2; }
+      - name: Install qualified DBOS and psycopg
+        run: python -m pip install --disable-pip-version-check dbos==3.4.0 'psycopg[binary]==3.3.8'
+      - name: Recover original workflow from independent hosted runner
+        run: python experiments/TS-REMOTE-STATE-NEON-V5-20261104-001/neon_cross_runner.py recover
