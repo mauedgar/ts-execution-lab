@@ -198,10 +198,23 @@ async function main(){
     const dir=path.join(dest,'state','kernel-v0',head.generation);
     const stateBytes=JSON.stringify(doc.state,null,2)+'\n';
     const eventBytes=doc.events.map(x=>JSON.stringify(x)).join('\n')+'\n';
-    fs.writeFileSync(path.join(dir,'state.json'),stateBytes);
-    fs.writeFileSync(path.join(dir,'events.ndjson'),eventBytes);
-    head.state_sha256=hashBytes(stateBytes);head.events_sha256=hashBytes(eventBytes);
-    fs.writeFileSync(headPath,JSON.stringify(head,null,2)+'\n');
+    // The canonical Product commit writes durable generations mode 0444. Only the
+    // isolated, copied negative-test fixture may be made writable for injection.
+    // Never change source Product or the already committed baseline at 'temp'.
+    const fixtureFiles=[path.join(dir,'state.json'),path.join(dir,'events.ndjson'),headPath];
+    for(const target of fixtureFiles){
+      assert.equal(fs.statSync(target).mode&0o222,0,'fixture source is immutable');
+      fs.chmodSync(target,0o644);
+    }
+    try{
+      fs.writeFileSync(fixtureFiles[0],stateBytes);
+      fs.writeFileSync(fixtureFiles[1],eventBytes);
+      head.state_sha256=hashBytes(stateBytes);head.events_sha256=hashBytes(eventBytes);
+      fs.writeFileSync(fixtureFiles[2],JSON.stringify(head,null,2)+'\n');
+    }finally{
+      for(const target of fixtureFiles)fs.chmodSync(target,0o444);
+    }
+    for(const target of fixtureFiles)assert.equal(fs.statSync(target).mode&0o222,0,'fixture permissions restored');
     assert.throws(()=>new K.FilesystemStateStore(dest).read(),{code:'MALFORMED_STATE'},label+' original Product');
     fs.rmSync(dest,{recursive:true,force:true});
   }
