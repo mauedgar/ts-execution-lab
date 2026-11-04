@@ -25,7 +25,7 @@ foreach($file in @($module,$runner,$launcher)){
   if($LASTEXITCODE -ne 0 -or $actual -cne $expected[$base]) { throw ('EXACT_GIT_BLOB_MISMATCH_'+$base) }
 }
 'PINNED_THREE_SOURCE_BLOBS_PASS'
-Import-Module -Name $module -Force -ErrorAction Stop
+$moduleInfo=Import-Module -Name $module -Force -PassThru -ErrorAction Stop
 function Assert-Rejected([scriptblock]$Action,[string]$Expected){
   $rejected=$false
   try { & $Action | Out-Null } catch {
@@ -39,7 +39,7 @@ $missing=Join-Path $env:RUNNER_TEMP 'ts047b-d262-missing-not-created'
 if(Test-Path -LiteralPath $missing){throw 'NEGATIVE_PLACEHOLDER_EXISTS'}
 Assert-Rejected { Assert-V6Authority $missing $runner $launcher } 'NO_COMPETENT_ISSUER_PIN'
 'UNPROVISIONED_COMPETENT_ISSUER_REJECTED=PASS'
-Assert-Rejected { Assert-V6TrustedDocument $missing $missing $missing } 'ISSUER_TRUST_ANCHOR_UNPROVISIONED'
+Assert-Rejected { & $moduleInfo { param($p) Assert-V6TrustedDocument $p $p $p } $missing } 'ISSUER_TRUST_ANCHOR_UNPROVISIONED'
 'FORGED_SIGNED_DOCUMENT_REJECTED_BEFORE_IO=PASS'
 # Actual direct runner entrypoint with -Effect on an unrelated ephemeral host.
 # The fixed physical owner check must fail BEFORE ANY local directory or SQL effect.
