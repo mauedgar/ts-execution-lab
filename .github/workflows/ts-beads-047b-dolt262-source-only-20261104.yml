@@ -1,0 +1,61 @@
+name: TS047B Dolt262 source-only negative contract
+on:
+  push:
+    branches:
+      - 'experiment/ts-beads-047b-dolt262-offline-source-20261104-001'
+    paths:
+      - 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/**'
+      - '.github/workflows/ts-beads-047b-dolt262-source-only-20261104.yml'
+permissions:
+  contents: read
+jobs:
+  source_only:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Exact original DoD, source scope and one-shot guard
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if($env:GITHUB_RUN_ATTEMPT -cne '1') { throw 'NO_RETRY_OF_ORIGINAL_SOURCE_JOB' }
+          if($env:GITHUB_REF -cne 'refs/heads/experiment/ts-beads-047b-dolt262-offline-source-20261104-001') { throw 'UNEXPECTED_BRANCH' }
+          $head=(git rev-parse HEAD).Trim()
+          if($head -cne $env:GITHUB_SHA) { throw 'HEAD_NOT_EXACT' }
+          $base='7184ea0461f3fd4c25b4e9a4b6f157e40c92a754'
+          $paths=@(git diff --name-only $base $env:GITHUB_SHA)
+          if($LASTEXITCODE -ne 0 -or $paths.Count -ne 6) { throw 'CHANGED_FILE_COUNT_OR_BASE_INVALID' }
+          $prefix='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/'
+          $workflow='.github/workflows/ts-beads-047b-dolt262-source-only-20261104.yml'
+          foreach($p in $paths) {
+            if(-not ($p.StartsWith($prefix,[StringComparison]::Ordinal) -or $p -ceq $workflow)) {
+              throw 'UNAUTHORIZED_SOURCE_SCOPE'
+            }
+          }
+          $dod='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md'
+          if((git hash-object $dod).Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952') {
+            throw 'ORIGINAL_DOD_CHANGED'
+          }
+          'DOD_AND_NEW_ATTEMPT_SCOPE_PASS'
+      - name: Parse all PowerShell candidate sources with native AST
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/candidate'
+          foreach($name in @('Security-047B-D262.psm1','Invoke-047B-D262-Fixture.ps1','Start-047B-D262.ps1')) {
+            $file=(Resolve-Path (Join-Path $dir $name)).Path
+            $tokens=$null; $errors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file,[ref]$tokens,[ref]$errors)
+            if(@($errors).Count -gt 0) { throw ('PWSH_AST_FAIL_'+$name) }
+          }
+          'PWSH_AST_SOURCE_ONLY_PASS'
+      - name: Python static source identity and non-effect tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/tests' -p 'test_source_contract.py' -v
+          if($LASTEXITCODE -ne 0) { throw 'SOURCE_ONLY_NEGATIVES_FAILED' }
+          'DOLT262_SOURCE_ONLY_CI_PASS'
+          'NATIVE_SQL_OR_TAILSCALE_CONFIG_EFFECTS=NONE'
