@@ -39,6 +39,21 @@ jobs:
             throw 'ORIGINAL_DOD_CHANGED'
           }
           'DOD_AND_NEW_ATTEMPT_SCOPE_PASS'
+      - name: Restore exact Git blob bytes after Windows checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/OFFLINE-PRIVILEGE-FIXTURE-DOLT262-SOURCE-20261104-001/candidate/'
+          foreach($name in @('Security-047B-D262.psm1','Invoke-047B-D262-Fixture.ps1','Start-047B-D262.ps1')) {
+            $file=$dir+$name
+            git -c core.autocrlf=false -c core.eol=lf checkout-index --force -- $file
+            if($LASTEXITCODE -ne 0) { throw ('GIT_CHECKOUT_LF_FAILED_'+$name) }
+            $expected=(git rev-parse ('HEAD:'+$file)).Trim()
+            if($LASTEXITCODE -ne 0) { throw ('GIT_BLOB_LOOKUP_FAILED_'+$name) }
+            $actual=(git hash-object --no-filters $file).Trim()
+            if($LASTEXITCODE -ne 0 -or $actual -cne $expected) { throw ('WORKTREE_BLOB_BYTES_MISMATCH_'+$name) }
+          }
+          'CHECKOUT_EXACT_GIT_BLOBS_PASS'
       - name: Parse all PowerShell candidate sources with native AST
         shell: pwsh
         run: |
