@@ -1,0 +1,83 @@
+name: TS047B Notebook offline SQL bootstrap source-only
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-notebook-offline-bootstrap-source-20261103-001
+    paths:
+      - '.github/workflows/ts-beads-047b-notebook-offline-bootstrap-source-20261103.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ts047b-notebook-bootstrap-source-20261103
+  cancel-in-progress: false
+jobs:
+  source_contract_only:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - name: Normalize LF checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze original DoD and exact static subject
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_HEAD'}
+          if((git rev-parse HEAD^).Trim() -cne '5362f75a87c095e26449fc706eee666392a1bc33'){throw 'WRONG_PARENT'}
+          $base='9d43ee8ab079a3793623941f8497280a6a42fe69'
+          git cat-file -e ($base+'^{commit}')
+          if($LASTEXITCODE -ne 0){throw 'BASE_MISSING'}
+          $changed=@(git diff --name-only $base HEAD)
+          $allow=@(
+            'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/Invoke-047B-NotebookOfflineBootstrap.ps1',
+            'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/test_source_contract.py',
+            'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/OPERATOR_AND_REVIEW_CONTRACT.md',
+            '.github/workflows/ts-beads-047b-notebook-offline-bootstrap-source-20261103.yml'
+          )
+          if($changed.Count -ne $allow.Count){throw 'SCOPE_COUNT_WRONG'}
+          foreach($file in $changed){if($file -cnotin $allow){throw 'UNEXPECTED_FILE'}}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/Invoke-047B-NotebookOfflineBootstrap.ps1').Trim() -cne '736d91b89321056d4a67e02aa9b000780dab0e5c'){throw 'WRONG_RUNNER_HASH'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/test_source_contract.py').Trim() -cne '8795e617e2f46b025f508ca2fef7f3e86534e52d'){throw 'WRONG_TEST_HASH'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/OPERATOR_AND_REVIEW_CONTRACT.md').Trim() -cne '432be7f2c27592380a5730297eb67f53068352be'){throw 'WRONG_CONTRACT_HASH'}
+          if((git hash-object 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md').Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'ORIGINAL_DOD_CHANGED'}
+          'SOURCE_SCOPE_AND_DOD_FROZEN_PASS'
+      - name: PowerShell AST parse and exact SHA256 for future pin
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $p=(Resolve-Path 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/Invoke-047B-NotebookOfflineBootstrap.ps1').Path
+          $tokens=$null
+          $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($p,[ref]$tokens,[ref]$errors)
+          if(@($errors).Count -ne 0){throw 'PWSH_SOURCE_PARSE_FAILED'}
+          $hash=(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+          if($hash -notmatch '^[A-F0-9]{64}$'){throw 'RUNNER_SHA256_MISSING'}
+          'POWERSHELL_PARSER_PASS'
+          'SOURCE_SHA256='+$hash
+      - name: Static privacy, ACL, and fail-closed contracts
+        shell: pwsh
+        run: |
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001' -p 'test_source_contract.py' -v
+          if($LASTEXITCODE -ne 0){throw 'STATIC_CONTRACT_TESTS_FAIL'}
+          'SOURCE_ONLY_TESTS_PASS'
+      - name: Negative wrong-host execute fails before any effect
+        shell: pwsh
+        run: |
+          $result=(& pwsh -NoLogo -NoProfile -NonInteractive -File 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/NOTEBOOK-OFFLINE-BOOTSTRAP-20261103-001/Invoke-047B-NotebookOfflineBootstrap.ps1' -Mode Execute 2>&1 | Out-String)
+          $exit=$LASTEXITCODE
+          if($exit -ne 11 -or $result -notmatch 'BLOCKED_PRECONDITION_OR_PARTIAL_LOCAL_PREPARATION_DO_NOT_RETRY'){throw 'WRONG_HOST_MUST_BLOCK'}
+          'WRONG_HOST_BLOCKED_NO_EFFECT=PASS'
+          'OFFLINE_SQL_EXECUTED=FALSE'
+          'WINDOWS_DPAPI_SECRET_CREATED=FALSE'
+          'SQL_SERVER_STARTED=FALSE'
+          'TAILSCALE_MODIFIED=FALSE'
+          'PRODUCT_WRITES=ZERO'
+          exit 0
