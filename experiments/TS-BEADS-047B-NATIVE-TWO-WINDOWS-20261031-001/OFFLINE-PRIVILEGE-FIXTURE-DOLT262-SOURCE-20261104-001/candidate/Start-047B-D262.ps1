@@ -19,8 +19,8 @@ function Get-GitBlobSha1([string]$Path) {
 }
 try {
   if(-not [IO.File]::Exists($runner) -or -not [IO.File]::Exists($module)){throw 'SOURCE_MISSING'}
-  if((Get-GitBlobSha1 $runner) -cne '1163cac3168748f1510483cecdf4df917827579c'){throw 'RUNNER_BLOB_MISMATCH'}
-  if((Get-GitBlobSha1 $module) -cne 'aea8faf96bf7ce588bd105e75f28bda9e2b489d6'){throw 'SECURITY_MODULE_MISMATCH'}
+  if((Get-GitBlobSha1 $runner) -cne 'a3172799ca62885dc02378d359c6f7e52203ac2b'){throw 'RUNNER_BLOB_MISMATCH'}
+  if((Get-GitBlobSha1 $module) -cne 'ffb95bfff24ca75db8c750953f414873f34d71bd'){throw 'SECURITY_MODULE_MISMATCH'}
   if($Preflight){
     & $runner -Preflight
   } else {
