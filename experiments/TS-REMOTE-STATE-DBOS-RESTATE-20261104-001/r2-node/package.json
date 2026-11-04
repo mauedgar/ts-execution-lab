@@ -1,0 +1,10 @@
+{
+  "name": "ts-remote-state-r2-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit --strict --esModuleInterop --skipLibCheck --target ES2022 --module commonjs --types node pg-probe.ts",
+    "smoke": "node -e \"const p=require('pg'); if(typeof p.Client!=='function') process.exit(1); console.log('PASS|R2|node_pg_import')\""
+  }
+}
