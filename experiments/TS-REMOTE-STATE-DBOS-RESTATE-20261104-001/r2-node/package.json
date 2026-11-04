@@ -6,5 +6,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit --strict --esModuleInterop --skipLibCheck --target ES2022 --module commonjs --types node pg-probe.ts",
     "smoke": "node -e \"const p=require('pg'); if(typeof p.Client!=='function') process.exit(1); console.log('PASS|R2|node_pg_import')\""
+  },
+  "dependencies": {
+    "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
+    "typescript": "5.9.3"
   }
 }
