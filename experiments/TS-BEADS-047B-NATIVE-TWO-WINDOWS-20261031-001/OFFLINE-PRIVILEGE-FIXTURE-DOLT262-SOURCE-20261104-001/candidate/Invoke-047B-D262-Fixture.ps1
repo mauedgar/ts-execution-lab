@@ -20,7 +20,7 @@ $script:ConfirmedStages=0
 $script:ChildExitConfirmed=$false
 $script:ChildExitCode=$null
 $script:V6Module=Join-Path $PSScriptRoot 'Security-047B-D262.psm1'
-$script:V6ModuleBlob='aea8faf96bf7ce588bd105e75f28bda9e2b489d6'
+$script:V6ModuleBlob='ffb95bfff24ca75db8c750953f414873f34d71bd'
 function State([string]$Kind,[string]$Reason) {
   [pscustomobject]@{operation='TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001';
     attempt='TS-BEADS-047B-DOLT262-OFFLINE-FIXTURE-20261104-001';
