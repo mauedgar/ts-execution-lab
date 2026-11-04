@@ -1,0 +1,63 @@
+name: TS047B native peer read-only source qualification
+on:
+  push:
+    branches:
+      - experiment/ts-beads-047b-readonly-peer-qualification-20261103-001
+    paths:
+      - 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/READONLY-HOST-PEER-QUALIFICATION-20261103-001/**'
+      - '.github/workflows/ts047b-readonly-peer-qualification-source.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ts047b-native-readonly-peer-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  native_readonly_source:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - name: Exact checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact source, parent and DoD scope
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git config core.autocrlf false
+          if((git rev-parse HEAD).Trim() -cne '${{ github.sha }}'){throw 'WRONG_COMMIT'}
+          if((git rev-parse HEAD^).Trim() -cne '5eb83c7f5dfb0048f5c097037b2f2a20ce135404'){throw 'WRONG_PARENT'}
+          $root='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/READONLY-HOST-PEER-QUALIFICATION-20261103-001/'
+          $allow=@(
+            ($root+'Invoke-047B-ReadOnlyHostPeerQualification.ps1'),
+            ($root+'test_source_contract.py'),
+            ($root+'CONTRACT.md'),
+            '.github/workflows/ts047b-readonly-peer-qualification-source.yml'
+          )
+          $changed=@(git diff --name-only HEAD^ HEAD)
+          if($changed.Count -ne $allow.Count){throw 'BAD_SCOPE_COUNT'}
+          foreach($path in $changed){if($path -cnotin $allow){throw 'OUT_OF_SCOPE'}}
+          $dod='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/DOD.md'
+          if((git rev-parse ('HEAD:'+$dod)).Trim() -cne '26388665fc0782fd10b24adca96a7dfa47c6a952'){throw 'DOD_CHANGED'}
+          'EXACT_SHA_PARENT_SCOPE_DOD_PASS'
+      - name: PowerShell AST and runner content SHA256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $file='experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/READONLY-HOST-PEER-QUALIFICATION-20261103-001/Invoke-047B-ReadOnlyHostPeerQualification.ps1'
+          $tokens=$null
+          $errors=$null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path,[ref]$tokens,[ref]$errors)
+          if(@($errors).Count -gt 0){throw 'AST_FAIL'}
+          'PWSH_AST_PASS'
+          'RUNNER_SHA256='+((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash)
+      - name: Windows negative and isolated status fixture
+        shell: pwsh
+        run: |
+          python -m unittest discover -s 'experiments/TS-BEADS-047B-NATIVE-TWO-WINDOWS-20261031-001/READONLY-HOST-PEER-QUALIFICATION-20261103-001' -p 'test_source_contract.py' -v
+          if($LASTEXITCODE -ne 0){throw 'NEGATIVE_TESTS_FAIL'}
+          'SOURCE_ONLY_CI_PASS'
+          'NO_LIVE_TAILSCALE_OR_SQL_EXECUTED_IN_CI'
