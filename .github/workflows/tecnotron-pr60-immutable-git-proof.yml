@@ -1,0 +1,65 @@
+name: Tecnotron PR60 original immutable Git identity proof
+on:
+  push:
+    branches:
+      - validation/tecnotron-pr60-immutable-git-identity-20261103-001
+permissions:
+  contents: read
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact Product subject and its base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: mauedgar/tecnotron-ai
+          ref: 3e8173c0134edf839c2583f211137452832d827b
+          path: subject
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert actual Git commit tree parent and full allowlist diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C subject rev-parse HEAD)" = "3e8173c0134edf839c2583f211137452832d827b"
+          test "$(git -C subject rev-parse 'HEAD^{tree}')" = "c9441832a1a8cf4422bb1d6c692c3f1d3d8ec2b8"
+          test "$(git -C subject rev-parse 'HEAD^')" = "0806f5b392e0a159b7fb41d354ab335135e85207"
+          test "$(git -C subject rev-list --parents -n1 HEAD | wc -w)" -eq 2
+          test "$(git -C subject merge-base bc9e60b9cad79037b40c298d5c9a84f17a33d909 HEAD)" = "bc9e60b9cad79037b40c298d5c9a84f17a33d909"
+          expected="$(printf '%s\n' \
+            src/deterministic-taskcycle-substrate-v0/taskcycle-close-evidence-qualification.js \
+            src/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.js \
+            src/deterministic-taskcycle-substrate-v0/taskcycle-post-phase1-lifecycle.js \
+            tests/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.test.js \
+            tests/deterministic-taskcycle-substrate-v0/taskcycle-post-phase1-lifecycle.test.js | sort)"
+          observed="$(git -C subject diff --name-only bc9e60b9cad79037b40c298d5c9a84f17a33d909 3e8173c0134edf839c2583f211137452832d827b -- | sort)"
+          test "$observed" = "$expected"
+          test "$(git -C subject rev-parse HEAD:src/deterministic-taskcycle-substrate-v0/taskcycle-close-evidence-qualification.js)" = f784b3b2303bc8dcc1e959770c90928ef9585c49
+          test "$(git -C subject rev-parse HEAD:src/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.js)" = edeeb8205fc3eae1221b00fb15ac752da85931ea
+          test "$(git -C subject rev-parse HEAD:src/deterministic-taskcycle-substrate-v0/taskcycle-post-phase1-lifecycle.js)" = 0030ae0082695996d51625272f20abe19017d12d
+          test "$(git -C subject rev-parse HEAD:tests/deterministic-taskcycle-substrate-v0/taskcycle-effect-reconciliation.test.js)" = 37957843b3bebaec93160aec52b890c4d9be9149
+          test "$(git -C subject rev-parse HEAD:tests/deterministic-taskcycle-substrate-v0/taskcycle-post-phase1-lifecycle.test.js)" = 3aec4f5deb158db87886ab1ca6685e2823cec918
+          test -z "$(git -C subject status --porcelain)"
+          printf 'RAW_GIT_COMMIT=%s\nRAW_GIT_TREE=%s\nRAW_GIT_PARENT=%s\nBASE=%s\nORIGINAL_FIVE_PATH_DIFF=PASS\n' "3e8173c0134edf839c2583f211137452832d827b" "c9441832a1a8cf4422bb1d6c692c3f1d3d8ec2b8" "0806f5b392e0a159b7fb41d354ab335135e85207" "bc9e60b9cad79037b40c298d5c9a84f17a33d909"
+          python3 - <<'PY'
+          import json, os, pathlib
+          result = {
+            "class": "IMMUTABLE_GIT_PROVIDER_PROOF_NOT_IR_OR_PRODUCT_ACCEPTANCE",
+            "candidate": "3e8173c0134edf839c2583f211137452832d827b",
+            "tree": "c9441832a1a8cf4422bb1d6c692c3f1d3d8ec2b8",
+            "parent": "0806f5b392e0a159b7fb41d354ab335135e85207",
+            "base": "bc9e60b9cad79037b40c298d5c9a84f17a33d909",
+            "exact_five_paths": "PASS",
+            "run_id": os.environ.get("GITHUB_RUN_ID"),
+            "product_effect": "NONE",
+            "phase2": "NOT_EXECUTED",
+          }
+          pathlib.Path("pr60-immutable-git-proof.json").write_text(json.dumps(result, sort_keys=True, indent=2)+"\n")
+          PY
+      - name: Upload provider proof
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: pr60-immutable-git-proof
+          path: pr60-immutable-git-proof.json
