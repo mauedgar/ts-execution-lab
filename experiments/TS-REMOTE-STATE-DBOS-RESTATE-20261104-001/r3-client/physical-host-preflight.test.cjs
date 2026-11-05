@@ -101,7 +101,7 @@ test('P04 controlled lost-ACK simulation, B fresh recovery, real handler replay/
   assert.match(await run(d,'read','HOST_B'),/P03/);
   assert.match(await run(d,'replay','HOST_B'),/mode=replay/);
   assert.match(await run(d,'collision','HOST_B'),/changed_authority=REJECTED/);
-  assert.equal(d.commits,3,'only A write plus B replay/collision read-only commits');
+  assert.equal(d.commits,2,'A create and B exact replay commit; collision rolls back safely');
   assert.deepEqual(Object.keys(d.data).sort(),['event','receipt','state']);
 });
 test('UNKNOWN before receipt must fail closed with no host B write or ack reissue',async()=>{
