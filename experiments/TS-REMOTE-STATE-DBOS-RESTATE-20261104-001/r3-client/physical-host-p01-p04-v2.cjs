@@ -95,8 +95,14 @@ async function main() {
      return;
    }
    if(phase==='replay'){
+     const observed=await resolveUnknown(c,plan);
+     if(observed.effect==='UNKNOWN') {
+       process.stdout.write('BLOCKED|R3|UNKNOWN_EFFECT|receipt_not_observed|retry_authorized=false\n');
+       process.exitCode=2;
+       return;
+     }
      const before=await inspect(c,plan);
-     const reply=await applyCreate(c,plan); // ACTUAL mutating handler, not just SELECT.
+     const reply=await applyCreate(c,plan,{allowCreate:false}); // SAME handler, B never inserts or locks for UPDATE.
      safe(reply.disposition==='RECONCILED','DUPLICATE_MUTATION');
      const after=await inspect(c,plan);
      safe(after.hash===before.hash && after.effects===1 && after.receipts===1,'EFFECT_CHANGED');
@@ -104,11 +110,17 @@ async function main() {
      return;
    }
    if(phase==='collision'){
+     const observed=await resolveUnknown(c,plan);
+     if(observed.effect==='UNKNOWN') {
+       process.stdout.write('BLOCKED|R3|UNKNOWN_EFFECT|receipt_not_observed|retry_authorized=false\n');
+       process.exitCode=2;
+       return;
+     }
      const before=await inspect(c,plan);
      const altered={...plan.cmd,authority_refs:['AUTH-DIFFERENT-R3']};
      const collisionPlan=planned(plan.id,altered);
      try {
-       await applyCreate(c,collisionPlan); // ACTUAL command handler.
+       await applyCreate(c,collisionPlan,{allowCreate:false}); // SAME command handler in B read-only mode.
        throw new SafeError('COLLISION_ACCEPTED');
      } catch(e) {
        safe(e instanceof SafeError && e.code==='MUTATION_IDENTITY_COLLISION','COLLISION_NOT_REJECTED');
@@ -124,7 +136,12 @@ async function main() {
 // may reveal passwords supplied by local OS secret injection.
 if(require.main===module) main().catch(e=>{
  const code=e instanceof SafeError?e.code:'UNCLASSIFIED_SAFE_FAILURE';
- process.stderr.write(`FAIL|R3|${code}|secret_output=false\n`);
- process.exitCode=1;
+ if(code==='RECEIPT_NOT_OBSERVED_UNKNOWN') {
+   process.stderr.write('BLOCKED|R3|UNKNOWN_EFFECT|receipt_not_observed|retry_authorized=false\n');
+   process.exitCode=2;
+ } else {
+   process.stderr.write(`FAIL|R3|${code}|secret_output=false\n`);
+   process.exitCode=1;
+ }
 });
 module.exports={input};
