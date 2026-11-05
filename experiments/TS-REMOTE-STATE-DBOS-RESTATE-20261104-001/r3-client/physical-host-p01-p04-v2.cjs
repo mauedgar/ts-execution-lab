@@ -164,4 +164,4 @@ async function main(){
      console.log('PASS|R3|P04|host=HOST_B|dispatcher_replayed=true|effects='+v.effects+'|receipts='+v.receipts);
  }finally{await c.end().catch(()=>{});}
 }
-main().catch(()=>{console.error('FAIL|R3|'+phase+'|safe_error=true|no_credentials_logged');process.exitCode=1;});
+main().catch(e=>{const unknown=e?.message==='UNKNOWN_COMMIT_EFFECT_REQUIRES_RECONCILIATION';console.error((unknown?'UNKNOWN':'FAIL')+'|R3|'+phase+'|safe_error=true|no_credentials_logged|retry_forbidden='+unknown);process.exitCode=unknown?3:1;});
