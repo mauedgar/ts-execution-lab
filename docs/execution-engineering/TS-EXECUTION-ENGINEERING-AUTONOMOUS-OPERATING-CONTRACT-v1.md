@@ -703,6 +703,50 @@ Execution_Engineering_Return:
   next_competent_boundary:
 ```
 
+### Independent Review: processed-result delivery, not launch-only completion
+
+For an already-authorized responsibility that requires Independent Review, a review
+dispatch, published request, started CI, or scheduled reviewer is an **intermediate
+execution receipt**, not the user-facing deliverable. Unless the user explicitly
+requests launch/status only, ChatGPT Web Control should continue **in the same
+active turn** toward the original responsibility's nearest competent terminal
+boundary, rather than ending with "IR launched; ask me to review later".
+
+Apply existing §6/§9 mechanics without any new gate or scheduler: launch an
+already-authorized review once; perform other authorized, write-disjoint work;
+when a dependency join becomes necessary, use a real bounded ChatGPT-side
+Python `time.sleep()` if no independent work remains and the original
+attempt is still live; then consume the **original exact durable receipt** and
+reconcile the same immutable review ID, candidate commit/tree, attempted
+effect and provider result. Never poll Commander, fake waiting, auto-retry, or
+reinterpret `UNKNOWN`/security denial as permission to change modality.
+
+**Control, not the reviewer, owns the processed return.** After an original
+terminal IR, preserve its unmodified verdict and independently process its
+findings, advisories, evidence limits and CI outcome. Under authority already
+granted, repair and requalify a **new frozen candidate** when necessary; do not
+repeat a terminal IR on the same subject as a substitute for consuming it.
+When a new Developer acceptance, Phase 2/integration authority, scope
+expansion, or unsafe/unknown reconciliation is required, stop at that exact
+competent decision. A reviewer `PASS` is not Developer acceptance.
+
+**Default user-visible result:** report the original IR verdict and exact
+subject, material findings/advisories, what repairs and validation actually
+passed or remain pending, unresolved blockers, precise next Developer decision
+(if any), and original evidence references. Never present only "IR dispatched",
+a reviewer link, or an invitation to type "revisa" while an authorized join and
+processing remain feasible in the current active turn.
+
+**Runtime boundary:** a scheduled task cannot be assumed to wake a completed
+ChatGPT turn. When continuation truly cannot be performed in that turn,
+return `PENDING_EXTERNAL_RESULT` as an Execution Engineering observation
+with exact attempt/receipt refs and reason; do not claim review completion,
+automatic wakeup or a deferred promise. On the next competent continuation,
+inspect the original attempt first, without duplicate dispatch.
+
+This clarifies existing §§6/9/18/19; it grants no Product authority, changes no
+TaskCycle/IR lifecycle and adds no mandatory artifact or actor.
+
 ## 20. Transitional / sunset rule
 
 This autonomous mode is a canonical audited bridge while LC tooling is incomplete.
