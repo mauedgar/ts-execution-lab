@@ -89,14 +89,27 @@ async function inspect(client, plan) {
   safe(Number(cnt.state_count)===1 && Number(cnt.event_count)===1 && Number(cnt.receipt_count)===1,'DUPLICATE_EFFECT');
   return {revision:1,effects:1,events:1,receipts:1,hash:plan.eventHash};
 }
-async function applyCreate(client, plan) {
-  // Identical entrypoint for original and replay: not just SELECT of a receipt.
-  // Atomic receipt claim + aggregate + event. Competing same-key INSERT waits
-  // on PostgreSQL uniqueness; a mismatch can never replay as another mutation.
+async function applyCreate(client, plan, {allowCreate=true}={}) {
+  // Same validated command entrypoint for both hosts, but never create from B.
+  // Host B existing-only is a REPEATABLE READ / READ ONLY transaction, not
+  // an INSERT ON CONFLICT disguised as a replay. A uses the original SQL claim.
   validateCommand(plan.cmd,plan.id);
-  await client.query('BEGIN');
+  safe(typeof allowCreate==='boolean','INVALID_DISPATCH_MODE');
+  await client.query(allowCreate?'BEGIN':'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   let committing=false;
   try {
+    if(!allowCreate) {
+      const existing=await client.query(`SELECT command_fingerprint,original_revision,result FROM ${SCHEMA}.receipts
+        WHERE mutation_id=$1`,[plan.mutationId]);
+      safe(existing.rowCount===1,'RECEIPT_NOT_OBSERVED_UNKNOWN');
+      safe(existing.rows[0].command_fingerprint===plan.commandHash,'MUTATION_IDENTITY_COLLISION');
+      safe(Number(existing.rows[0].original_revision)===1 &&
+        isDeepStrictEqual(existing.rows[0].result,plan.result),'RECEIPT_MISMATCH');
+      await inspect(client,plan);
+      committing=true;
+      await client.query('COMMIT');
+      return {disposition:'RECONCILED',revision:1,events:1,receipts:1};
+    }
     const claim=await client.query(`INSERT INTO ${SCHEMA}.receipts
       (mutation_id,command_fingerprint,original_revision,result) VALUES ($1,$2,1,$3::jsonb)
       ON CONFLICT (mutation_id) DO NOTHING RETURNING mutation_id`,
@@ -134,15 +147,22 @@ async function applyCreate(client, plan) {
   }
 }
 async function resolveUnknown(client, plan) {
-  // A new connection at host B. No mutation and no automatic dispatch. A
-  // missing receipt is inconclusive at this observation, not retry authority.
+  // A new connection at host B. No mutation and no automatic dispatch.
+  // Consistent snapshot: receipts, aggregate/event, and counts all agree.
   validateCommand(plan.cmd,plan.id);
-  const q=await client.query(`SELECT command_fingerprint,original_revision,result FROM ${SCHEMA}.receipts
-    WHERE mutation_id=$1`,[plan.mutationId]);
-  if(q.rowCount===0)return {disposition:'NOT_OBSERVED',effect:'UNKNOWN',retry_authorized:false};
-  safe(q.rowCount===1,'DUPLICATE_RECEIPT');
-  safe(q.rows[0].command_fingerprint===plan.commandHash,'MUTATION_IDENTITY_COLLISION');
-  await inspect(client,plan);
-  return {disposition:'CONFIRMED',effect:'CONFIRMED',retry_authorized:false,revision:1,receipts:1};
+  await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  try {
+    const q=await client.query(`SELECT command_fingerprint,original_revision,result FROM ${SCHEMA}.receipts
+      WHERE mutation_id=$1`,[plan.mutationId]);
+    if(q.rowCount===0) {
+      await client.query('COMMIT');
+      return {disposition:'NOT_OBSERVED',effect:'UNKNOWN',retry_authorized:false};
+    }
+    safe(q.rowCount===1,'DUPLICATE_RECEIPT');
+    safe(q.rows[0].command_fingerprint===plan.commandHash,'MUTATION_IDENTITY_COLLISION');
+    await inspect(client,plan);
+    await client.query('COMMIT');
+    return {disposition:'CONFIRMED',effect:'CONFIRMED',retry_authorized:false,revision:1,receipts:1};
+  } catch(e) {try{await client.query('ROLLBACK');}catch{} throw e;}
 }
 module.exports={SCHEMA,SafeError,CommitUnknown,HASH,exactJSON,commandFor,validateCommand,planned,inspect,applyCreate,resolveUnknown};
