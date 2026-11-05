@@ -4,28 +4,30 @@ const assert=require('node:assert/strict');
 const core=require('./r3-command-core.cjs');
 const clone=v=>JSON.parse(JSON.stringify(v));
 class FakeDB {
-  constructor(){this.data={states:new Map(),events:new Map(),receipts:new Map()};this.commitFault=false;}
+  constructor(){this.data={states:new Map(),events:new Map(),receipts:new Map()};this.commitFault=false;this.insertAttempts=0;}
   client(){return new FakeConnection(this);}
 }
 class FakeConnection {
-  constructor(db){this.db=db;this.staging=null;}
+  constructor(db){this.db=db;this.staging=null;this.readOnly=false;}
   table(name){return (this.staging || this.db.data)[name];}
   async query(sql,p=[]){
     const norm=sql.trim().replace(/\s+/g,' ').toLowerCase();
     const rows=rows=>({rowCount:rows.length,rows});
-    if(norm==='begin'){
+    if(norm==='begin' || norm==='begin isolation level repeatable read read only'){
       assert.equal(this.staging,null,'no nested transaction');
+      this.readOnly=norm.includes('read only');
       this.staging={states:new Map(this.db.data.states),events:new Map(this.db.data.events),receipts:new Map(this.db.data.receipts)};
       return rows([]);
     }
-    if(norm==='rollback'){this.staging=null;return rows([]);}
+    if(norm==='rollback'){this.staging=null;this.readOnly=false;return rows([]);}
     if(norm==='commit'){
       assert(this.staging);
-      this.db.data=this.staging;
-      this.staging=null;
+      if(!this.readOnly)this.db.data=this.staging;
+      this.staging=null;this.readOnly=false;
       if(this.db.commitFault){this.db.commitFault=false;throw new Error('synthetic lost server ACK after COMMIT');}
       return rows([]);
     }
+    if(norm.includes('insert into')){this.db.insertAttempts++;assert.equal(this.readOnly,false,'B must never attempt INSERT');}
     if(norm.includes('insert into')&&norm.includes('.receipts')){
       const [mid,fp,raw]=p;
       if(this.table('receipts').has(mid))return rows([]);
@@ -71,7 +73,8 @@ const id='R3-HOST-SYNTHETIC_20261105_011';
 test('IR001 F001 real mutating handler commits once then reconciles exact replay',async()=>{
  const db=new FakeDB(),p=core.planned(id),a=db.client(),b=db.client();
  assert.deepEqual(await core.applyCreate(a,p),{disposition:'COMMITTED',revision:1,events:1,receipts:1});
- assert.deepEqual(await core.applyCreate(b,p),{disposition:'RECONCILED',revision:1,events:1,receipts:1});
+ assert.deepEqual(await core.applyCreate(b,p,{allowCreate:false}),{disposition:'RECONCILED',revision:1,events:1,receipts:1});
+ assert.equal(db.insertAttempts,3,'Host B existing-only must not emit INSERT');
  const info=await core.inspect(b,p);
  assert.equal(info.effects,1);assert.equal(info.receipts,1);assert.equal(info.events,1);
  assert.deepEqual([db.data.states.size,db.data.events.size,db.data.receipts.size],[1,1,1]);
@@ -79,7 +82,8 @@ test('IR001 F001 real mutating handler commits once then reconciles exact replay
 test('IR001 F001 changed authority goes to handler and cannot mutate',async()=>{
  const db=new FakeDB(),p=core.planned(id);await core.applyCreate(db.client(),p);
  const mismatch=core.planned(id,{...p.cmd,authority_refs:['AUTH-OTHER']});
- await assert.rejects(core.applyCreate(db.client(),mismatch),e=>e.code==='MUTATION_IDENTITY_COLLISION');
+ await assert.rejects(core.applyCreate(db.client(),mismatch,{allowCreate:false}),e=>e.code==='MUTATION_IDENTITY_COLLISION');
+ assert.equal(db.insertAttempts,3,'Host B collision must not emit INSERT');
  assert.deepEqual([db.data.states.size,db.data.events.size,db.data.receipts.size],[1,1,1]);
  assert.equal((await core.inspect(db.client(),p)).receipts,1);
 });
@@ -106,4 +110,22 @@ test('IR001 F001 serialization rejects lossy fingerprint aliases',()=>{
 test('F003: physical enrollment and distinct principal remain required externally; no PASS inferred from mocks',()=>{
  assert.notEqual('tsr3_host_a_rw','tsr3_host_b_rw');
  assert.equal(typeof core.planned,'function');
+});
+
+test('IR002 new blocking repair: B replay on missing receipt cannot create any effect',async()=>{
+ const db=new FakeDB(),p=core.planned(id);
+ await assert.rejects(core.applyCreate(db.client(),p,{allowCreate:false}),e=>e.code==='RECEIPT_NOT_OBSERVED_UNKNOWN');
+ assert.equal(db.insertAttempts,0,'no B SQL INSERT even with unexpected broad grants');
+ assert.deepEqual([db.data.states.size,db.data.events.size,db.data.receipts.size],[0,0,0]);
+ const mismatch=core.planned(id,{...p.cmd,authority_refs:['AUTH-OTHER']});
+ await assert.rejects(core.applyCreate(db.client(),mismatch,{allowCreate:false}),e=>e.code==='RECEIPT_NOT_OBSERVED_UNKNOWN');
+ assert.equal(db.insertAttempts,0);
+ assert.deepEqual([db.data.states.size,db.data.events.size,db.data.receipts.size],[0,0,0]);
+});
+test('B cannot create an unrelated key even if another A receipt exists',async()=>{
+ const db=new FakeDB(),base=core.planned(id),unrelated=core.planned('R3-HOST-OTHERKEY_20261105_012');
+ await core.applyCreate(db.client(),base);
+ await assert.rejects(core.applyCreate(db.client(),unrelated,{allowCreate:false}),e=>e.code==='RECEIPT_NOT_OBSERVED_UNKNOWN');
+ assert.equal(db.insertAttempts,3,'only original A inserts');
+ assert.deepEqual([db.data.states.size,db.data.events.size,db.data.receipts.size],[1,1,1]);
 });
