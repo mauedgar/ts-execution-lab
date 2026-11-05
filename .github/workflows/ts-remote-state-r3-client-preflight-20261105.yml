@@ -1,0 +1,36 @@
+name: R3 synthetic client preflight (no Neon secrets)
+on:
+  push:
+    branches:
+      - ee/ts-remote-r3-client-ir001-repair-20261105-001
+    paths:
+      - 'experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r3-client/**'
+      - '.github/workflows/ts-remote-state-r3-client-preflight-20261105.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node22-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source syntax and offline negative/replay tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r3-client
+          node --version
+          node --check physical-host-p01-p04.cjs
+          node --check physical-host-preflight.test.cjs
+          node --test physical-host-preflight.test.cjs
+      - name: Verify pinned pg dependency lock is installable (no live DB)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd experiments/TS-REMOTE-STATE-DBOS-RESTATE-20261104-001/r2-node
+          npm ci --ignore-scripts --no-audit --no-fund
+          node -e "const p=require('./node_modules/pg/package.json');console.log('pg='+p.version)"
