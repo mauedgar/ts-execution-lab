@@ -1,0 +1,48 @@
+'use strict';
+const t=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
+const {run,checkInstalled,safeEnv,Blocked}=require('./r3-codespaces-locked-npm-v1.cjs');
+const {gitBlob}=require('./r3-offline-attempt-v1.cjs');
+const H='a'.repeat(40),T='b'.repeat(40),ATT='TS-R3-CS-NATIVE-20261106-001-A01';
+function fixture(ctx){
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'ts-r3-cs-'));ctx.after(()=>fs.rmSync(temp,{recursive:true,force:true}));
+ const root=path.join(temp,'experiment'),home=path.join(temp,'home');fs.mkdirSync(root);fs.mkdirSync(home);for(const n of ['r2-node','r3-client'])fs.mkdirSync(path.join(root,n));
+ const write=(rel,value)=>{const file=path.join(root,rel);fs.writeFileSync(file,value);return gitBlob(fs.readFileSync(file));};
+ const entries=Object.fromEntries(Array.from({length:18},(_,i)=>{const name='lib'+String(i).padStart(2,'0');return ['node_modules/'+name,{version:'1.0.0',resolved:'https://registry.npmjs.org/'+name+'/-/'+name+'-1.0.0.tgz',integrity:'sha512-'+Buffer.alloc(64,i+1).toString('base64')}]}));
+ const lock={lockfileVersion:3,packages:{'':{dependencies:{pg:'8.23.1'}},...entries}};
+ const pins={lock:write('r2-node/package-lock.json',JSON.stringify(lock)),pkg:write('r2-node/package.json',JSON.stringify({name:'test',dependencies:{pg:'8.23.1'}})),portable:write('r3-client/r3-portable-host-preflight.cjs','/** preflight fixture */\n'),receipt:write('r3-client/r3-offline-attempt-v1.cjs','/** wrapper fixture */\n'),pg:'8.23.1'};
+ let actions=[],fail=null;
+ function spawn(binary,args,options){actions.push({binary,args});if(fail===binary||fail===args[0])return {status:1,stdout:'',stderr:'mock-failed'};
+  if(binary==='git'){return {status:0,stdout:args[1]==='HEAD'?H+'\n':args[1]==='HEAD^{tree}'?T+'\n':'',stderr:''};}
+  if(binary==='npm'&&args[0]==='ci'){
+   for(const [key,val] of Object.entries(entries)){const folder=path.join(root,'r2-node',key);fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,'package.json'),JSON.stringify({name:key.split('/').at(-1),version:val.version}));}
+   return {status:0,stdout:'added 18 packages',stderr:''};
+  }
+  if(binary==='npm')return {status:0,stdout:'ok',stderr:''};
+  if(binary===process.execPath)return {status:0,stdout:'PASS|TS-R3|PORTABLE_HOST_PREFLIGHT|node=v22.16.0|pg=8.23.1|sources=4|lock=GIT_BLOB_VERIFIED|installed=PACKAGE_METADATA_ONLY|tls=NOT_TESTED|physical=NOT_TESTED\n',stderr:''};
+  return {status:1,stdout:'',stderr:''};}
+ const opts={root,home,attemptId:ATT,expectedCommit:H,expectedTree:T,pins,spawn,env:{PATH:'/usr/bin',HOME:home,LANG:'C'},nodeVersion:'v22.16.0'};
+ return {opts,actions,setFail:(x)=>{fail=x},root,home,lock};
+}
+function shouldBlock(fn,code){assert.throws(fn,e=>e instanceof Blocked&&e.code===code)}
+t('1 positive unique locked npm installation with original receipt',ctx=>{const f=fixture(ctx);const r=run(f.opts);assert.equal(r.status,0);assert.equal(r.installed,18);assert.equal(r.preflight,'PASS_METADATA_ONLY');assert.deepEqual(f.actions.filter(a=>a.binary==='npm').map(a=>a.args[0]),['ci','ls']);const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATT);assert.equal(fs.existsSync(path.join(p,'claim.json')),true);assert.equal(JSON.parse(fs.readFileSync(path.join(p,'receipt.json'))).product_effect,'NONE');});
+t('2 duplicate existing attempt blocks without child spawn',ctx=>{const f=fixture(ctx);run(f.opts);const before=f.actions.length;shouldBlock(()=>run(f.opts),'ATTEMPT_ALREADY_EXISTS');assert.equal(f.actions.length,before+3);});
+t('3 child failure preserves claim and creates blocked receipt',ctx=>{const f=fixture(ctx);f.setFail('npm');const r=run(f.opts);assert.equal(r.status,2);assert.equal(r.failure,'NPM_CI_FAILED_OR_UNKNOWN');const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATT);assert.equal(fs.existsSync(path.join(p,'claim.json')),true);assert.equal(fs.existsSync(path.join(p,'receipt.json')),true);});
+t('4 interruption after claim preserves nonreplayable attempt',ctx=>{const f=fixture(ctx);const fn=()=>run({...f.opts,onClaim:()=>{throw new Error('crash')}});assert.throws(fn);const before=f.actions.length;shouldBlock(()=>run(f.opts),'ATTEMPT_ALREADY_EXISTS');assert.equal(f.actions.length,before+3);});
+t('5 wrong source git hash blocks before attempting install',ctx=>{const f=fixture(ctx);f.opts.pins.lock='f'.repeat(40);shouldBlock(()=>run(f.opts),'PINNED_BLOB_MISMATCH');assert.equal(f.actions.length,0);});
+t('6 wrong Node blocks before filesystem changes',ctx=>{const f=fixture(ctx);f.opts.nodeVersion='v24.1.0';shouldBlock(()=>run(f.opts),'NODE22_REQUIRED');assert.equal(f.actions.length,0);});
+t('7 direct database secret env blocked before filesystem changes',ctx=>{const f=fixture(ctx);f.opts.env.TS_R3_DATABASE_URL='***';shouldBlock(()=>run(f.opts),'SECRET_ENV_PRESENT');assert.equal(f.actions.length,0);});
+t('8 extra bogus attempt ID blocked',ctx=>{const f=fixture(ctx);f.opts.attemptId='../bad';shouldBlock(()=>run(f.opts),'INVALID_REQUEST');assert.equal(f.actions.length,0);});
+t('9 git commit mismatch blocks before claim',ctx=>{const f=fixture(ctx);f.opts.expectedCommit='f'.repeat(40);shouldBlock(()=>run(f.opts),'GIT_IDENTITY_MISMATCH');assert.equal(f.actions.length,1);});
+t('10 git tree mismatch blocks before claim',ctx=>{const f=fixture(ctx);f.opts.expectedTree='f'.repeat(40);shouldBlock(()=>run(f.opts),'GIT_IDENTITY_MISMATCH');assert.equal(f.actions.length,2);});
+t('11 missing package blocks dependency graph check',ctx=>{const f=fixture(ctx);run(f.opts);fs.rmSync(path.join(f.root,'r2-node','node_modules','lib00'),{recursive:true});shouldBlock(()=>checkInstalled(f.lock,path.join(f.root,'r2-node')),'INSTALLED_PACKAGE_UNREADABLE');});
+t('12 no PATH or credential inheritance beyond sanitized keys',()=>{const x=safeEnv({PATH:'/bin',HOME:'/safe',SECRET:'should-not-leak',NPM_TOKEN:'dont-leak'});assert.equal(x.SECRET,undefined);assert.equal(x.NPM_TOKEN,undefined);assert.equal(x.npm_config_userconfig,'/dev/null');});
+t('13 no install on malformed lock packages',ctx=>{const f=fixture(ctx);const lockPath=path.join(f.root,'r2-node','package-lock.json');fs.writeFileSync(lockPath,'bad');shouldBlock(()=>run(f.opts),'PINNED_BLOB_MISMATCH');assert.equal(f.actions.length,0);});
+t('14 no install on existing attempt dir without claim',ctx=>{const f=fixture(ctx);const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATT);fs.mkdirSync(p,{recursive:true});shouldBlock(()=>run(f.opts),'ATTEMPT_ALREADY_EXISTS');assert.equal(f.actions.length,3);});
+t('15 npm ls failure records blocked terminal receipt and no replay',ctx=>{const f=fixture(ctx);f.setFail('ls');const r=run(f.opts);assert.equal(r.status,2);assert.equal(r.failure,'NPM_LS_FAILED_OR_UNKNOWN');const before=f.actions.length;shouldBlock(()=>run(f.opts),'ATTEMPT_ALREADY_EXISTS');assert.equal(f.actions.length,before+3);});
+t('16 pg metadata fails closed on installed version tamper',ctx=>{const f=fixture(ctx);const orig=f.opts.spawn;f.opts.spawn=(binary,args,opts)=>{const ret=orig(binary,args,opts);if(binary==='npm'&&args[0]==='ci')fs.writeFileSync(path.join(f.root,'r2-node','node_modules','lib00','package.json'),'{"version":"2.0.0"}');return ret;};const r=run(f.opts);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_VERSION_MISMATCH');});
+t('17 project npmrc blocked before install',ctx=>{const f=fixture(ctx);fs.writeFileSync(path.join(f.root,'r2-node','.npmrc'),'registry=https://other.invalid');shouldBlock(()=>run(f.opts),'PROJECT_NPMRC_FORBIDDEN');assert.equal(f.actions.length,0);});
+t('18 source preflight output mismatch blocks after install',ctx=>{const f=fixture(ctx);const orig=f.opts.spawn;f.opts.spawn=(b,args,opts)=>{if(b===process.execPath)return {status:0,stdout:'MISMATCH',stderr:''};return orig(b,args,opts);};const r=run(f.opts);assert.equal(r.status,2);assert.equal(r.failure,'PREFLIGHT_OUTPUT_MISMATCH');});
+t('19 no replay if only attempt directory exists before first claimed write',ctx=>{const f=fixture(ctx);const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATT);fs.mkdirSync(p,{recursive:true});fs.writeFileSync(path.join(p,'claim.json'),'{');shouldBlock(()=>run(f.opts),'ATTEMPT_ALREADY_EXISTS');});
+t('20 cannot inject optional arbitrary source revisions via CLI request',ctx=>{const f=fixture(ctx);f.opts.expectedCommit=H+'extra';shouldBlock(()=>run(f.opts),'INVALID_REQUEST');assert.equal(f.actions.length,0);});
+t('21 zero-length database URL secret guard rejects presence',ctx=>{const f=fixture(ctx);f.opts.env.TS_R3_DATABASE_URL='';shouldBlock(()=>run(f.opts),'SECRET_ENV_PRESENT');});
+t('22 duplicate receipt contains exact SHA-bound subject and is not provider attestation',ctx=>{const f=fixture(ctx);run(f.opts);const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATT);const c=JSON.parse(fs.readFileSync(path.join(p,'claim.json'))),r=JSON.parse(fs.readFileSync(path.join(p,'receipt.json')));assert.equal(c.source_commit,H);assert.equal(r.source_tree,T);assert.equal(r.device_attestation,'NONE');assert.equal(r.product_effect,'NONE');assert.equal(r.npm_tarball_integrity,'NPM_CI_LOCKFILE_ENFORCED');});
