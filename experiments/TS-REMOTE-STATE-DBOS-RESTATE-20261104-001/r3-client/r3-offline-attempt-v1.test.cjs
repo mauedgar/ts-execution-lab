@@ -37,10 +37,12 @@ test('positive native mocked child yields correlated but untrusted receipt',t=>{
   assert.equal(captured.opts.timeout,30000);assert.equal(captured.opts.maxBuffer,16384);
   assert.equal(captured.opts.env.TS_R3_DATABASE_URL,undefined);
   assert.equal(o.receipt_sha256,digest(fs.readFileSync(path.join(f.work,'receipt.json'))));
+  assert.equal(o.claim_sha256,digest(fs.readFileSync(path.join(f.work,'claim.json'))));
+  assert.equal(o.result.claim_sha256,o.claim_sha256);
 });
 test('pre-existing receipt means no replay or overwrite',t=>{
   const f=prepare(t);invoke(f);const before=fs.readFileSync(path.join(f.work,'receipt.json'));
-  let executed=false;denied(()=>invoke(f,()=>{executed=true;return {}; }),'RECEIPT_ALREADY_EXISTS');
+  let executed=false;denied(()=>invoke(f,()=>{executed=true;return {}; }),'CLAIM_ALREADY_EXISTS');
   assert.equal(executed,false);assert.deepEqual(fs.readFileSync(path.join(f.work,'receipt.json')),before);
 });
 test('receipt symlink is preserved, never overwritten',t=>{
@@ -109,4 +111,75 @@ test('CLI isolated negative produces receipt; no network credentials',t=>{
   assert.equal(res.status,2);assert.match(res.stdout,/BLOCKED\|TS-R3\|OFFLINE_ATTEMPT/);assert.doesNotMatch(res.stdout,/PASS_METADATA_ONLY/);
   const receipt=JSON.parse(fs.readFileSync(path.join(f.work,'receipt.json'),'utf8'));
   assert.equal(receipt.result,'BLOCKED');assert.equal(receipt.device_attestation,'NONE');
+});
+
+test('claim is durable and present before child starts',t=>{
+  const f=prepare(t);const x=invoke(f,()=>{
+    const claim=JSON.parse(fs.readFileSync(path.join(f.work,'claim.json'),'utf8'));
+    assert.equal(claim.class,'NONREPLAYABLE_ATTEMPT_RESERVATION');
+    assert.equal(claim.execution_attempt_id,f.request.execution_attempt_id);
+    assert.equal(fs.existsSync(path.join(f.work,'receipt.json')),false);
+    return{status:0,stdout:successLine,stderr:''};
+  });
+  assert.equal(x.status,0);
+});
+test('simulated host crash after durable claim cannot re-dispatch same attempt',t=>{
+  const f=prepare(t);let count=0;
+  assert.throws(()=>run({attemptDir:f.work,sourceDir:f.src,spawn:()=>{count++;return{status:0,stdout:successLine,stderr:''}},
+    onClaimDurable:()=>{throw Error('SIMULATED_POWER_LOSS')}}),/SIMULATED_POWER_LOSS/);
+  assert.equal(count,0);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+  assert.equal(fs.existsSync(path.join(f.work,'receipt.json')),false);
+  denied(()=>invoke(f,()=>{count++;return{};}),'CLAIM_ALREADY_EXISTS');assert.equal(count,0);
+});
+test('actual subprocess exit after claim leaves no replayable attempt',t=>{
+  const f=prepare(t);const src=path.join(__dirname,'r3-offline-attempt-v1.cjs');
+  const command='require(process.argv[1]).run({attemptDir:process.argv[2],sourceDir:process.argv[3],onClaimDurable:()=>process.exit(77)})';
+  const x=cp.spawnSync(process.execPath,['-e',command,src,f.work,f.src],{encoding:'utf8'});
+  assert.equal(x.status,77);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+  assert.equal(fs.existsSync(path.join(f.work,'receipt.json')),false);
+  denied(()=>invoke(f),'CLAIM_ALREADY_EXISTS');
+});
+test('pre-existing partial claim blocks child before dispatch',t=>{
+  const f=prepare(t);fs.writeFileSync(path.join(f.work,'claim.json'),'PARTIAL');
+  let ran=false;denied(()=>invoke(f,()=>{ran=true;return{};}),'CLAIM_ALREADY_EXISTS');assert.equal(ran,false);
+});
+test('unsupported durable directory fsync refuses dispatch without claiming READY',t=>{
+  const f=prepare(t);let ran=false;const io={...fs,constants:{...fs.constants,O_DIRECTORY:0}};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>{ran=true;return{};}}),'DURABLE_DIRECTORY_UNSUPPORTED');
+  assert.equal(ran,false);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),false);
+});
+test('short claim write yields UNKNOWN with reserved artifact and no child',t=>{
+  const f=prepare(t);let ran=false;const io={...fs,writeSync:()=>0};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>{ran=true;return{};}}),'DURABLE_EFFECT_UNKNOWN');
+  assert.equal(ran,false);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+  denied(()=>invoke(f),'CLAIM_ALREADY_EXISTS');
+});
+test('write-all loop handles partial progress correctly',t=>{
+  const f=prepare(t);const io={...fs,writeSync:(fd,buf,offset,length,pos)=>fs.writeSync(fd,buf,offset,Math.min(7,length),pos)};
+  const x=run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>({status:0,stdout:successLine,stderr:''})});
+  assert.equal(x.status,0);assert.equal(x.result.claim_sha256,x.claim_sha256);
+});
+test('claim file fsync failure stops before execution and preserves UNKNOWN claim',t=>{
+  const f=prepare(t);let ran=false;const io={...fs,fsyncSync(fd){if(fs.fstatSync(fd).isFile())throw Error('FAULT_FILE_FSYNC');return fs.fsyncSync(fd)}};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>{ran=true;return{};}}),'DURABLE_EFFECT_UNKNOWN');
+  assert.equal(ran,false);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+});
+test('directory fsync failure after claim creation stops and preserves claim',t=>{
+  const f=prepare(t);let ran=false,dirSyncs=0;const io={...fs,fsyncSync(fd){
+    if(fs.fstatSync(fd).isDirectory()&&++dirSyncs>=2)throw Error('FAULT_DIR_FSYNC');return fs.fsyncSync(fd)}};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>{ran=true;return{};}}),'DURABLE_DIRECTORY_UNSUPPORTED');
+  assert.equal(dirSyncs,2);assert.equal(ran,false);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+});
+test('receipt fsync failure preserves claim and receipt as UNKNOWN',t=>{
+  const f=prepare(t);let fileSyncs=0;const io={...fs,fsyncSync(fd){
+    if(fs.fstatSync(fd).isFile()&&++fileSyncs===2)throw Error('FAULT_RECEIPT_FSYNC');return fs.fsyncSync(fd)}};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>({status:0,stdout:successLine,stderr:''})}),'DURABLE_EFFECT_UNKNOWN');
+  assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
+  assert.equal(fs.existsSync(path.join(f.work,'receipt.json')),true);
+  denied(()=>invoke(f),'CLAIM_ALREADY_EXISTS');
+});
+test('close failure after claim write preserves uncertain effect and blocks dispatch',t=>{
+  const f=prepare(t);let ran=false;const io={...fs,closeSync(fd){const st=fs.fstatSync(fd);fs.closeSync(fd);if(st.isFile())throw Error('FAULT_CLOSE')}};
+  denied(()=>run({attemptDir:f.work,sourceDir:f.src,io,spawn:()=>{ran=true;return{};}}),'DURABLE_EFFECT_UNKNOWN');
+  assert.equal(ran,false);assert.equal(fs.existsSync(path.join(f.work,'claim.json')),true);
 });
