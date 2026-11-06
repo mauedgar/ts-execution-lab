@@ -258,6 +258,53 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(Rejected, "CURSOR_LIFECYCLE_UNAVAILABLE"):
             reconcile_readonly(ExitConnection(self.db), self.a)
 
+    def test_db_aggregate_bool_revision_fails_closed(self):
+        apply_once(self.conn, self.a)
+        self.db["aggregate"][self.a.state_id]["revision"] = True
+        with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
+    def test_db_receipt_bool_revision_fails_closed(self):
+        apply_once(self.conn, self.a)
+        self.db["receipts"][self.a.mutation_id]["original_revision"] = True
+        with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
+    def test_db_receipt_missing_result_field_fails_closed(self):
+        apply_once(self.conn, self.a)
+        del self.db["receipts"][self.a.mutation_id]["result"]["synthetic"]
+        with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
+    def test_db_event_bool_sequence_and_payload_revision_fails_closed(self):
+        for field in ("sequence", "payload_revision"):
+            db = {"aggregate": {}, "events": {}, "receipts": {}}
+            conn = FakeConn(db)
+            a = Command.from_dict(wire())
+            apply_once(conn, a)
+            event = db["events"][a.event_id()]
+            if field == "sequence":
+                event["sequence"] = True
+            else:
+                event["payload"]["revision"] = True
+            with self.subTest(field=field), self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+                reconcile_readonly(FakeConn(db), a)
+
+    def test_db_event_noncanonical_state_rejected_even_with_rehash(self):
+        apply_once(self.conn, self.a)
+        ev = self.db["events"][self.a.event_id()]
+        ev["payload"]["state"]["value"] = 1.5
+        ev["event_hash"] = "a" * 64
+        self.db["aggregate"][self.a.state_id]["last_event_sha256"] = ev["event_hash"]
+        with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
+    def test_db_receipt_non_dict_fails_closed(self):
+        apply_once(self.conn, self.a)
+        self.db["receipts"][self.a.mutation_id]["result"] = ["not", "a", "receipt"]
+        with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
     def test_genesis_one_receipt_one_event(self):
         out = apply_once(self.conn, self.a)
         self.assertEqual((out['disposition'], out['effect'], out['revision']), ('COMMITTED', 'CONFIRMED', 1))
