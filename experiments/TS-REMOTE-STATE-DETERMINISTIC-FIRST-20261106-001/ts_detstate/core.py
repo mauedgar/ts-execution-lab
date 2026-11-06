@@ -60,7 +60,11 @@ def _validate_json(v: Any, depth: int = 0) -> None:
         if len(v) > 256:
             raise Rejected("JSON_MAP_LIMIT")
         for k, item in v.items():
-            if type(k) is not str or k in ("__proto__", "constructor", "prototype"):
+            # ASCII keys have identical lexical ordering in Python Unicode
+            # code point sort and JavaScript UTF-16 code unit sort. Non-ASCII
+            # values remain supported; unqualified cross-language keys do not.
+            if (type(k) is not str or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,63}", k)
+                or k in ("__proto__", "constructor", "prototype")):
                 raise Rejected("JSON_UNSAFE_KEY")
             _validate_json(k, depth + 1)
             _validate_json(item, depth + 1)
