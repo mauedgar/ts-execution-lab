@@ -14,7 +14,7 @@ import unittest
 from transactional_authority import (
     IdentityConflict, OutcomeUnknown, ProjectionConflict, commit_effect, connect,
     create_grant, effect_count, initialize, inspect_attempt, prepare_attempt,
-    project_committed_effect, revoke_grant, committed_count_for_attempt,
+    project_committed_effect, revoke_grant, committed_count_for_attempt, digest,
 )
 
 
@@ -155,6 +155,49 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(project_committed_effect(self.conn,'attempt-1',Path(self.temp.name)/'view'),'CREATED')
         self.assertEqual(committed_count_for_attempt(self.conn,'attempt-1'),1)
 
+
+    def test_process_death_after_commit_reconciles_without_second_effect(self):
+        self.prep()
+        result = subprocess.run([sys.executable,str(Path(__file__).with_name('transactional_authority.py')),
+                                 'crash-after-commit',str(self.db),'attempt-1'],
+                                capture_output=True, timeout=10, check=False)
+        self.assertEqual(result.returncode,73, result.stderr.decode(errors='replace'))
+        self.assertEqual(inspect_attempt(self.conn,'attempt-1').effect_state,'CONFIRMED')
+        self.assertEqual(effect_count(self.conn),1)
+        self.assertEqual(committed_count_for_attempt(self.conn,'attempt-1'),1)
+
+    def test_reentrant_read_and_transaction_are_rejected_without_effect(self):
+        self.prep()
+        self.conn.execute('BEGIN')
+        try:
+            with self.assertRaisesRegex(RuntimeError,'REENTRANT_READ_UNSUPPORTED'):
+                inspect_attempt(self.conn,'attempt-1')
+        finally:
+            self.conn.execute('ROLLBACK')
+        with self.assertRaisesRegex(RuntimeError,'REENTRANT_TRANSACTION_UNSUPPORTED'):
+            commit_effect(self.conn,'attempt-1',after_authority_read=lambda:
+                prepare_attempt(self.conn,'attempt-2','grant-1','source/immutable-subject','different'))
+        self.assertEqual(inspect_attempt(self.conn,'attempt-1').effect_state,'NONE')
+        self.assertEqual(effect_count(self.conn),0)
+
+    def test_descriptor_projection_rejects_symlink_root_target_and_public_directory(self):
+        self.prep()
+        self.assertEqual(commit_effect(self.conn,'attempt-1').effect_state,'CONFIRMED')
+        parent=Path(self.temp.name)
+        trusted=parent/'trusted';trusted.mkdir(mode=0o700)
+        alias=parent/'alias';alias.symlink_to(trusted,target_is_directory=True)
+        with self.assertRaises(ProjectionConflict):
+            project_committed_effect(self.conn,'attempt-1',alias)
+        outside=parent/'outside'; outside.write_text('DO NOT CHANGE',encoding='utf-8')
+        target=trusted/(digest('attempt-1')+'.json');target.symlink_to(outside)
+        with self.assertRaises(ProjectionConflict):
+            project_committed_effect(self.conn,'attempt-1',trusted)
+        self.assertEqual(outside.read_text(encoding='utf-8'),'DO NOT CHANGE')
+        target.unlink()
+        untrusted=parent/'public';untrusted.mkdir(mode=0o755);untrusted.chmod(0o755)
+        with self.assertRaises(ProjectionConflict):
+            project_committed_effect(self.conn,'attempt-1',untrusted)
+        self.assertEqual(effect_count(self.conn),1)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
