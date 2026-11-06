@@ -252,3 +252,4 @@ function main(){try{
 }catch(e){process.stderr.write(`BLOCKED|TS-R3|CODESPACES_LOCKED_NPM_V3|${e instanceof Blocked?e.code:'UNEXPECTED'}\n`);process.exitCode=2;}}
 if(require.main===module)main();
 module.exports={validateLock,verifyTools,forbidNpmrc,graphCheck,isolatedEnv,run,Blocked,sha256};
+
