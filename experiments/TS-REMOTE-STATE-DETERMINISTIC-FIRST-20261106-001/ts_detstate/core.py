@@ -5,6 +5,7 @@ Connection MUST be a verified, autocommit=True, psycopg dict_row connection.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 import json
@@ -81,7 +82,13 @@ def digest(value: Any) -> str:
 
 
 def strict_loads(data: str) -> Any:
-    if type(data) is not str or len(data.encode("utf-8")) > MAX_JSON_BYTES:
+    if type(data) is not str:
+        raise Rejected("JSON_INPUT_TYPE")
+    try:
+        byte_size = len(data.encode("utf-8", errors="strict"))
+    except UnicodeError:
+        raise Rejected("JSON_UNSAFE_TEXT") from None
+    if byte_size > MAX_JSON_BYTES:
         raise Rejected("JSON_BYTES_LIMIT")
 
     def pairs(kvs):
@@ -114,6 +121,7 @@ class Command:
     state_id: str
     expected_revision: int
     _state_json: str
+    _validated_fingerprint: str
 
     @property
     def state(self) -> dict:
@@ -139,6 +147,7 @@ class Command:
         for key in ("operation_id", "attempt_id", "mutation_id", "state_id", "expected_revision"):
             object.__setattr__(cmd, key, raw[key])
         object.__setattr__(cmd, "_state_json", canonical(raw["state"]))
+        object.__setattr__(cmd, "_validated_fingerprint", digest(raw))
         return cmd
 
     def wire(self) -> dict:
@@ -154,14 +163,45 @@ class Command:
         return self.mutation_id + "-event"
 
 
-def _guard_command(cmd: Command) -> None:
-    if type(cmd) is not Command or not isinstance(getattr(cmd, "_state_json", None), str):
+def _guard_command(cmd: Command) -> Command:
+    """Revalidate and bind an independent snapshot before starting a transaction.
+
+    The seal detects accidental post-factory mutation, not malicious local code
+    with unrestricted Python execution. Real authority belongs to the runner.
+    """
+    if (type(cmd) is not Command
+        or type(getattr(cmd, "_state_json", None)) is not str
+        or type(getattr(cmd, "_validated_fingerprint", None)) is not str):
         raise Rejected("COMMAND_NOT_VALIDATED")
+    try:
+        snapshot = Command.from_dict(cmd.wire())
+        if (snapshot._state_json != cmd._state_json
+            or snapshot._validated_fingerprint != cmd._validated_fingerprint):
+            raise Rejected("COMMAND_SEAL_MISMATCH")
+    except (AttributeError, KeyError, TypeError, ValueError, UnicodeError, RecursionError):
+        raise Rejected("COMMAND_NOT_VALIDATED") from None
+    return snapshot
 
 
 def _guard_connection(conn) -> None:
     if getattr(conn, "autocommit", None) is not True:
         raise Rejected("AUTOCOMMIT_REQUIRED")
+
+
+@contextmanager
+def _guarded_cursor(conn, after_commit):
+    """Sanitize cursor factory, enter and exit failures without leaking driver errors."""
+    try:
+        with conn.cursor() as cursor:
+            yield cursor
+    except CommitUnknown:
+        raise
+    except Rejected:
+        raise
+    except Exception:
+        if after_commit():
+            raise CommitUnknown() from None
+        raise Rejected("CURSOR_LIFECYCLE_UNAVAILABLE") from None
 
 
 # Every SQL identifier is static; every value is a bound parameter.
@@ -245,11 +285,11 @@ def apply_once(conn, cmd: Command) -> dict:
     COMMIT transmission failure => UNKNOWN (no automatic replay, ever).
     Other driver failures => fail closed; reconcile before any future write.
     """
-    _guard_command(cmd)
+    cmd = _guard_command(cmd)
     _guard_connection(conn)
-    with conn.cursor() as cur:
+    commit_sent = False
+    with _guarded_cursor(conn, lambda: commit_sent) as cur:
         started = False
-        commit_sent = False
         try:
             cur.execute("BEGIN")
             started = True
@@ -308,9 +348,9 @@ def apply_once(conn, cmd: Command) -> dict:
 
 def reconcile_readonly(conn, cmd: Command) -> dict:
     """A brand-new read-only transaction, including receipt/chain in one snapshot."""
-    _guard_command(cmd)
+    cmd = _guard_command(cmd)
     _guard_connection(conn)
-    with conn.cursor() as cur:
+    with _guarded_cursor(conn, lambda: False) as cur:
         try:
             cur.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
             cur.execute(_RECEIPT_READ, (cmd.mutation_id,))
