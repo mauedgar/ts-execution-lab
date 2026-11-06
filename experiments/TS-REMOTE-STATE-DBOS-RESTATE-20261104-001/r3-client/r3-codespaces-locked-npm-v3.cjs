@@ -7,6 +7,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
+const {isDeepStrictEqual} = require('node:util');
 const {durableCreate, assertTree, readFile, gitBlob, syncDirectory, Blocked} = require('./r3-offline-attempt-v1.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const PIN = Object.freeze({
@@ -111,7 +112,10 @@ function validateLock(lock,pkg,expectedVersion='8.23.1'){
     }
     expected.set(key,{name:n,version:value.version,integrity:value.integrity,resolved:value.resolved,
       bin:value.bin||null,dependencies:value.dependencies||{},optionalDependencies:value.optionalDependencies||{},
-      peerDependencies:value.peerDependencies||{},peerDependenciesMeta:value.peerDependenciesMeta||{}});
+      peerDependencies:value.peerDependencies||{},peerDependenciesMeta:value.peerDependenciesMeta||{},
+      // A detached snapshot of the fully validated pinned metadata is mandatory.
+      // npm fixture code may mutate lock objects after npm ci; do not share refs.
+      pinnedMetadata:structuredClone(value)});
   }
   if(expected.get('node_modules/pg')?.version!==expectedVersion)blocked('LOCK_SHAPE');
   // The v3 fixed lock has a flat 18-entry graph; every required/optional edge
@@ -232,6 +236,12 @@ function checkHiddenLock(file,expected){
     exactFields(value,ALLOWED_ENTRY_FIELDS,'HIDDEN_LOCK_FIELDS');
     const pin=expected.get(key);
     if(value.version!==pin.version||value.integrity!==pin.integrity||value.resolved!==pin.resolved||value.link===true||value.hasInstallScript===true)blocked('HIDDEN_LOCK_INTEGRITY');
+    // Metadata-only gate: every supported hidden-lock field (including all
+    // dependency/optional/peer edges, peer metadata, bins, engines and flags)
+    // must be semantically identical to the reviewed pinned lock entry.
+    // Object key order may differ; missing, injected or changed fields fail.
+    // This is NOT an independent verification of installed executable bytes.
+    if(!isDeepStrictEqual(value,pin.pinnedMetadata))blocked('HIDDEN_LOCK_METADATA_MISMATCH');
   }
 }
 function graphCheck(expected,prefix){
