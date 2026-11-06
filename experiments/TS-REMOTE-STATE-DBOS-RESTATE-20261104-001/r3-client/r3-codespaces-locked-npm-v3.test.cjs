@@ -72,6 +72,30 @@ function fixture(t){
           hidden.packages['node_modules/ghost']=entries['node_modules/pg'];
           fs.writeFileSync(path.join(pfx,'node_modules','.package-lock.json'),JSON.stringify(hidden));
         }
+        // F003 regression: preserve same 18 keys/version/resolved/integrity
+        // while forging a graph-bearing metadata field AFTER lock validation.
+        if(mutation?.startsWith('hidden-meta-')){
+          const pg=hidden.packages['node_modules/pg'];
+          const typescript=hidden.packages['node_modules/typescript'];
+          switch(mutation){
+            case 'hidden-meta-deps': pg.dependencies={malicious:'^999.0.0'};break;
+            case 'hidden-meta-optional': pg.optionalDependencies={'pg-cloudflare':'^999.0.0'};break;
+            case 'hidden-meta-peer': pg.peerDependencies={'pg-native':'>=999.0.0'};break;
+            case 'hidden-meta-peermeta': pg.peerDependenciesMeta={'pg-native':{optional:true}};break;
+            case 'hidden-meta-bin': typescript.bin={tsc:'bin/unsafe',tsserver:'bin/tsserver'};break;
+            case 'hidden-meta-engines': pg.engines={node:'>= 999.0.0'};break;
+            case 'hidden-meta-optionalflag': pg.optional=true;break;
+            case 'hidden-meta-license': pg.license='MIT';break;
+            case 'hidden-meta-omitbin': delete typescript.bin;break;
+            case 'hidden-meta-order':{
+              const original=typescript;
+              hidden.packages['node_modules/typescript']={integrity:original.integrity,bin:{tsserver:original.bin.tsserver,tsc:original.bin.tsc},resolved:original.resolved,version:original.version};
+              break;
+            }
+            default:throw Error('unrecognized synthetic mutation');
+          }
+          fs.writeFileSync(path.join(pfx,'node_modules','.package-lock.json'),JSON.stringify(hidden));
+        }
         if(mutation==='bin-missing')fs.unlinkSync(path.join(bindir,'tsserver'));
         if(mutation==='bin-target-missing')fs.unlinkSync(path.join(tsbin,'tsc'));
         if(mutation==='bin-not-executable')fs.chmodSync(path.join(tsbin,'tsc'),0o644);
@@ -155,3 +179,26 @@ test('49 installed hidden lock remains metadata-only',t=>{const f=fixture(t);con
 test('50 non-executable permitted TypeScript bin target blocks metadata PASS',t=>{const f=fixture(t);f.setMutation('bin-not-executable');const r=run(f.opt);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_BIN_NOT_EXECUTABLE');});
 test('51 optional scoped dependency compatible with locked graph passes pre-network',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].dependencies={'@types/node':'*'};});const r=run(f.opt);assert.equal(r.status,0);});
 test('52 invalid engine metadata blocked before any download',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].engines={node:'>= 16.0.0',os:'evil'};});blocked(()=>run(f.opt),'LOCK_ENGINE_INVALID');assert.equal(npmCalls(f).length,0);});
+
+// IR004 F003: extra hidden lock metadata cannot silently overrule pinned lock.
+for(const [number,change] of [
+  [53,'hidden-meta-deps'],[54,'hidden-meta-optional'],[55,'hidden-meta-peer'],
+  [56,'hidden-meta-peermeta'],[57,'hidden-meta-bin'],[58,'hidden-meta-engines'],
+  [59,'hidden-meta-optionalflag'],[60,'hidden-meta-license'],[61,'hidden-meta-omitbin']]){
+  test(`${number} IR004 F003 hidden-lock ${change} fails closed with same package identities`,t=>{
+    const f=fixture(t);f.setMutation(change);const result=run(f.opt);
+    assert.equal(result.status,2);
+    assert.equal(result.failure,'HIDDEN_LOCK_METADATA_MISMATCH');
+    assert.equal(npmCalls(f).filter(x=>x.args[1]==='ci').length,1);
+    const artifact=JSON.parse(fs.readFileSync(path.join(f.home,'.ts-r3-codespaces-attempts',ATTEMPT,'receipt.json')));
+    assert.equal(artifact.installed_byte_integrity,'NOT_PROVED');
+    assert.equal(artifact.product_effect,'NONE');
+    blocked(()=>run(f.opt),'ATTEMPT_ALREADY_EXISTS');
+    assert.equal(npmCalls(f).filter(x=>x.args[1]==='ci').length,1);
+  });
+}
+test('62 semantically identical hidden lock with reordered object keys still passes metadata gate',t=>{
+  const f=fixture(t);f.setMutation('hidden-meta-order');
+  const result=run(f.opt);assert.equal(result.status,0);
+  assert.equal(result.result,'PASS_METADATA_ONLY');
+});
