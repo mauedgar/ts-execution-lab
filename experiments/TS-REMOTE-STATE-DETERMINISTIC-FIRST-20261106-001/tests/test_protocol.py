@@ -130,6 +130,35 @@ class ProtocolTests(unittest.TestCase):
         self.conn = FakeConn(self.db)
         self.a = Command.from_dict(wire())
 
+    def test_direct_unvalidated_constructor_forbidden(self):
+        with self.assertRaises(TypeError):
+            Command(**{k: wire()[k] for k in ('operation_id', 'attempt_id',
+                            'mutation_id', 'state_id', 'expected_revision', 'state')})
+
+    def test_cannot_mutate_validated_snapshot(self):
+        raw = wire()
+        cmd = Command.from_dict(raw)
+        fingerprint = cmd.fingerprint()
+        raw['state']['value'] = 999
+        cmd.state['value'] = 999
+        self.assertEqual(cmd.fingerprint(), fingerprint)
+        self.assertEqual(cmd.state['value'], 1)
+
+    def test_unvalidated_object_rejected_before_begin(self):
+        bad = object.__new__(Command)
+        with self.assertRaisesRegex(Rejected, 'COMMAND_NOT_VALIDATED'):
+            apply_once(self.conn, bad)
+        self.assertEqual(self.conn.statements, [])
+
+    def test_tampered_authority_even_with_rehashed_chain_rejected(self):
+        apply_once(self.conn, self.a)
+        event = self.db['events'][self.a.event_id()]
+        event['payload']['authority_ref'] = 'UNTRUSTED-SYNTHETIC'
+        event['event_hash'] = digest(event['payload'])
+        self.db['aggregate'][self.a.state_id]['last_event_sha256'] = event['event_hash']
+        with self.assertRaisesRegex(Rejected, 'CHAIN_HASH_MISMATCH'):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
     def test_genesis_one_receipt_one_event(self):
         out = apply_once(self.conn, self.a)
         self.assertEqual((out['disposition'], out['effect'], out['revision']), ('COMMITTED', 'CONFIRMED', 1))
