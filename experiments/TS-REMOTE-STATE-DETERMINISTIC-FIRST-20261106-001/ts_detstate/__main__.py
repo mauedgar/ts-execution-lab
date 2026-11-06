@@ -3,10 +3,40 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import stat
 import sys
 
-from .core import Command, Rejected, canonical, strict_loads
+from .core import Command, Rejected, MAX_JSON_BYTES, canonical, strict_loads
+
+
+def _read_bounded_regular_file(path: pathlib.Path) -> str:
+    """Read one stable opened descriptor; never stat path and reopen by name.
+
+    O_NOFOLLOW rejects symlink at the final component. Full parent-directory
+    custody remains the responsibility of the trusted runner; no Product I/O.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, flags)
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise Rejected("INPUT_NOT_REGULAR")
+        if metadata.st_size > MAX_JSON_BYTES:
+            raise Rejected("INPUT_LIMIT")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            data = stream.read(MAX_JSON_BYTES + 1)
+        if len(data) > MAX_JSON_BYTES:
+            raise Rejected("INPUT_LIMIT")
+        try:
+            return data.decode("utf-8", errors="strict")
+        except UnicodeError:
+            raise Rejected("INPUT_UTF8_INVALID") from None
+    finally:
+        os.close(fd)
 
 
 def main(argv=None) -> int:
@@ -15,10 +45,7 @@ def main(argv=None) -> int:
     parser.add_argument("--command-file", required=True, type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
-        # Bounded local input; must not embed credentials.
-        if args.command_file.stat().st_size > 16_384:
-            raise Rejected("INPUT_LIMIT")
-        raw = args.command_file.read_text(encoding="utf-8")
+        raw = _read_bounded_regular_file(args.command_file)
         cmd = Command.from_dict(strict_loads(raw))
         print(canonical({"disposition": "PLANNED_ONLY", "effect": "NONE", "retry_authorized": False,
                          "command_fingerprint": cmd.fingerprint(), "event_id": cmd.event_id(),
