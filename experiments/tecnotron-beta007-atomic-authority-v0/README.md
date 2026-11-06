@@ -14,8 +14,8 @@ IR011/IR012 found an actual A01 cross-service race: GitHub current Developer-gra
 - PREPARED attempt before any effect; SQLite BEGIN IMMEDIATE + COMMIT serializes authority check, effect insertion, attempt CONFIRMED and audit event. Revocation acquires the SAME write lock.
 - Revocation first => BLOCKED / NONE. Commit first => CONFIRMED once even when subsequently revoked. Read reconciliation uses a consistent SQLite snapshot and rejects nested/reentrant access.
 - Real process death before COMMIT rolls back to PREPARED/NONE; real process death after COMMIT leaves CONFIRMED durable and reconciles by SAME attempt ID without repeating effect.
-- Projection is derived create-only output of a committed row, using Linux/POSIX directory-descriptor anchored open/link/unlink, symlink/inode safeguards and a required trusted parent. Interrupted staging can be recovered idempotently; a tampered external file is rejected, not overwritten.
-- GitHub Product grants, H6 Phase2, original denied Domain effects, PR67, tools and Kernel remain untouched.
+- Projection is derived create-only output of a committed row, using Linux/POSIX directory-descriptor anchored open/link/unlink, symlink/inode safeguards, **a single SQLite read snapshot**, and a required trusted parent. Both link creation and staged-file removal fsync their directory. Interrupted staging can be recovered idempotently; a tampered external file is rejected, not overwritten.
+- No caller-supplied callback is executed inside `commit_effect`. Concurrency tests instrument their test-owned SQLite connection only. GitHub Product grants, H6 Phase2, original denied Domain effects, PR67, tools and Kernel remain untouched.
 
 ## Empirical original tests
 
@@ -23,7 +23,7 @@ Run from this directory using the Python standard library only:
 
     python3 -m unittest -v test_transactional_authority.py
 
-Local Python 3.13.5: 14 tests PASS / 0 FAIL. GitHub Actions Ubuntu 24.04 Python 3.12.3: original corrective run #42158711528, 14 PASS / 0 FAIL. The GitHub Linux pull_request workflow records the host Python version. This does NOT claim Python 3.15.2 compatibility or cross-platform qualification.
+Current exact candidate: GitHub Actions Ubuntu 24.04 Python 3.12.3 original run [#42161967536](https://github.com/mauedgar/ts-execution-lab/actions/runs/42161967536), attempt 1: **16 PASS / 0 FAIL**. Previous local Python 3.13.5 execution passed 14/14 tests on the earlier candidate, but does not qualify this new 16-test candidate locally. The GitHub Linux pull_request workflow records the host Python version. This does NOT claim Python 3.15.2 compatibility or cross-platform qualification.
 
 ## Limits that CANNOT be suppressed by the experiment
 
