@@ -1,7 +1,7 @@
 'use strict';
 // TS R3 experimental: bounded execution mechanics only; no Product/Neon authority.
 // Invoke: node r3-offline-attempt-v1.cjs <existing-isolated-attempt-directory>
-// The attempt directory must contain request.json and no receipt.json.
+// The attempt directory must contain request.json; claim.json and receipt.json must be absent.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -67,15 +67,67 @@ function parseRequest(bytes) {
       Object.keys(SUBJECT).some(k => x.subject[k] !== SUBJECT[k])) blocked('REQUEST_SUBJECT');
   return x;
 }
-function run({attemptDir, sourceDir = __dirname, spawn = cp.spawnSync} = {}) {
+// This filesystem mechanism requires a provider-enforced immutable checkout and
+// isolated attempt directory. On systems without durable directory fsync, it
+// refuses dispatch rather than assuming a create-only receipt is crash durable.
+function syncDirectory(directory, io = fs) {
+  if (!io.constants.O_DIRECTORY) blocked('DURABLE_DIRECTORY_UNSUPPORTED');
+  let dirFd;
+  try { dirFd = io.openSync(directory, io.constants.O_RDONLY | io.constants.O_DIRECTORY); }
+  catch { blocked('DURABLE_DIRECTORY_UNSUPPORTED'); }
+  let success = true;
+  try { io.fsyncSync(dirFd); } catch { success = false; }
+  try { io.closeSync(dirFd); } catch { success = false; }
+  if (!success) blocked('DURABLE_DIRECTORY_UNSUPPORTED');
+}
+function ensureAbsent(target, code) {
+  try { fs.lstatSync(target); blocked(code); }
+  catch (error) {
+    if (error instanceof Blocked) throw error;
+    if (error?.code !== 'ENOENT') blocked('EFFECT_UNCERTAIN');
+  }
+}
+function durableCreate(directory, name, bytes, io = fs) {
+  if (!['claim.json', 'receipt.json'].includes(name)) blocked('INVALID_OUTPUT_NAME');
+  if (!Buffer.isBuffer(bytes) || bytes.length < 1 || bytes.length > 32768) blocked('OUTPUT_SIZE_INVALID');
+  const output = path.join(directory, name);
+  let fd;
+  try {
+    fd = io.openSync(output, io.constants.O_WRONLY | io.constants.O_CREAT | io.constants.O_EXCL |
+      (io.constants.O_NOFOLLOW || 0), 0o600);
+  } catch (e) { blocked(e?.code === 'EEXIST' ? 'OUTPUT_ALREADY_EXISTS' : 'OUTPUT_OPEN_UNCERTAIN'); }
+  let healthy = true;
+  try {
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = io.writeSync(fd, bytes, offset, bytes.length - offset, offset);
+      if (!Number.isInteger(count) || count < 1 || count > bytes.length - offset) {
+        healthy = false; break;
+      }
+      offset += count;
+    }
+    if (healthy) io.fsyncSync(fd);
+  } catch { healthy = false; }
+  try { io.closeSync(fd); } catch { healthy = false; }
+  // Never unlink or truncate any possibly partial claim/receipt.
+  if (!healthy) blocked('DURABLE_EFFECT_UNKNOWN');
+  syncDirectory(directory, io); // must succeed BEFORE any possible child dispatch
+  let readBack;
+  try { readBack = readFile(output); } catch { blocked('DURABLE_EFFECT_UNKNOWN'); }
+  if (digest(readBack) !== digest(bytes)) blocked('DURABLE_EFFECT_UNKNOWN');
+  return digest(bytes);
+}
+function run({attemptDir, sourceDir = __dirname, spawn = cp.spawnSync, onClaimDurable = null, io = fs} = {}) {
   const directory = assertTree(attemptDir, false);
   const requestPath = path.join(directory, 'request.json');
   const resultPath = path.join(directory, 'receipt.json');
+  const claimPath = path.join(directory, 'claim.json');
   const raw = readFile(requestPath);
   const request = parseRequest(raw);
-  // MUST reject an existing or partial receipt, including links. No replay or overwrites.
-  try { fs.lstatSync(resultPath); blocked('RECEIPT_ALREADY_EXISTS'); }
-  catch (e) { if (e instanceof Blocked) throw e; if (e?.code !== 'ENOENT') blocked('RECEIPT_UNCERTAIN'); }
+  // Any prior claim, even with no terminal receipt, denotes an uncertain or
+  // already-executed attempt. Never replay or overwrite.
+  ensureAbsent(claimPath, 'CLAIM_ALREADY_EXISTS');
+  ensureAbsent(resultPath, 'RECEIPT_ALREADY_EXISTS');
   const source = readFile(path.join(sourceDir, SOURCE_NAME));
   if (gitBlob(source) !== SUBJECT.preflight_blob) blocked('RUNNER_SOURCE_MISMATCH');
   if (!/^v22\./.test(process.version)) blocked('NODE22_REQUIRED');
@@ -85,6 +137,20 @@ function run({attemptDir, sourceDir = __dirname, spawn = cp.spawnSync} = {}) {
   }
   // Any credentials in parent process are NOT inherited by child.
   safeEnv.NODE_OPTIONS = '';
+  // Durable write-ahead claim BEFORE spawn: a crash now leaves a marker that
+  // blocks another invocation of the same attempt. The hash is NOT a signature.
+  syncDirectory(directory, io);
+  const claim = Buffer.from(JSON.stringify({
+    schema: 'TS_R3_OFFLINE_CLAIM_V1',
+    operation_id: request.operation_id,
+    execution_attempt_id: request.execution_attempt_id,
+    request_sha256: digest(raw),
+    subject: SUBJECT,
+    class: 'NONREPLAYABLE_ATTEMPT_RESERVATION',
+    device_attestation: 'NONE', product_effect: 'NONE'
+  }) + '\n', 'utf8');
+  const claimSha = durableCreate(directory, 'claim.json', claim, io);
+  if (onClaimDurable) onClaimDurable(); // test-only hook, NOT CLI input
   let p;
   try {
     p = spawn(process.execPath, [path.join(sourceDir, SOURCE_NAME)], {
@@ -101,6 +167,7 @@ function run({attemptDir, sourceDir = __dirname, spawn = cp.spawnSync} = {}) {
     operation_id: request.operation_id,
     execution_attempt_id: request.execution_attempt_id,
     request_sha256: digest(raw),
+    claim_sha256: claimSha,
     subject: SUBJECT,
     local_node: process.version,
     result: pass ? 'PASS_METADATA_ONLY' : 'BLOCKED',
@@ -112,16 +179,8 @@ function run({attemptDir, sourceDir = __dirname, spawn = cp.spawnSync} = {}) {
     product_effect: 'NONE'
   };
   const encoded = Buffer.from(JSON.stringify(result) + '\n', 'utf8');
-  let fd;
-  try { fd = fs.openSync(resultPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600); }
-  catch { blocked('RECEIPT_COLLISION_OR_WRITE_ERROR'); }
-  try { fs.writeSync(fd, encoded); fs.fsyncSync(fd); }
-  catch { blocked('RECEIPT_EFFECT_UNKNOWN'); }
-  finally { try { fs.closeSync(fd); } catch { /* receipt may be partial; preserve for reconciliation */ } }
-  let actual;
-  try { actual = readFile(resultPath); } catch { blocked('RECEIPT_EFFECT_UNKNOWN'); }
-  if (digest(actual) !== digest(encoded)) blocked('RECEIPT_EFFECT_UNKNOWN');
-  return { result, receipt_sha256: digest(encoded), status: pass ? 0 : 2 };
+  const receiptSha = durableCreate(directory, 'receipt.json', encoded, io);
+  return { result, claim_sha256: claimSha, receipt_sha256: receiptSha, status: pass ? 0 : 2 };
 }
 function main() {
   try {
@@ -136,4 +195,4 @@ function main() {
   }
 }
 if (require.main === module) main();
-module.exports = { SUBJECT, Blocked, digest, gitBlob, assertTree, readFile, parseRequest, run };
+module.exports = { SUBJECT, Blocked, digest, gitBlob, assertTree, readFile, parseRequest, run, syncDirectory, durableCreate };
