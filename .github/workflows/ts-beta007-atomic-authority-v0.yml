@@ -1,0 +1,28 @@
+name: TS Beta007 isolated atomic authority experiment (NONPRODUCT)
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/tecnotron-beta007-atomic-authority-v0/**'
+      - '.github/workflows/ts-beta007-atomic-authority-v0.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  transactional-equivalence:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout isolated experimental candidate
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # pinned
+        with:
+          persist-credentials: false
+      - name: Run isolated stdlib crash/revocation/idempotence tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          python3 -m unittest -v test_transactional_authority.py
+        working-directory: experiments/tecnotron-beta007-atomic-authority-v0
