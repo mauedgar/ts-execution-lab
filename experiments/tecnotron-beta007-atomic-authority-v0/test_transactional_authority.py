@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import sqlite3
+import stat
+from unittest import mock
 import subprocess
 import sys
 import tempfile
@@ -93,9 +95,18 @@ class LedgerTests(unittest.TestCase):
         def effect_writer():
             conn = connect(self.db)
             try:
-                results['effect'] = commit_effect(conn,'attempt-1',after_authority_read=lambda:
-                    (entered.set(),release.wait(2)))
+                # Instrument the test-owned SQLite connection, not the effect
+                # API: no caller-supplied callback executes within Product
+                # authority transactions.
+                def observe_authority_read(sql):
+                    if sql.lstrip().startswith('SELECT subject,active,version FROM grants'):
+                        entered.set()
+                        if not release.wait(4):
+                            results['instrumentation_timeout'] = True
+                conn.set_trace_callback(observe_authority_read)
+                results['effect'] = commit_effect(conn,'attempt-1')
             finally:
+                conn.set_trace_callback(None)
                 conn.close()
         def revoker():
             entered.wait(2)
@@ -115,6 +126,7 @@ class LedgerTests(unittest.TestCase):
         release.set()
         a.join(4);b.join(4)
         self.assertFalse(a.is_alive() or b.is_alive())
+        self.assertNotIn('instrumentation_timeout',results)
         self.assertEqual(results['effect'].effect_state,'CONFIRMED')
         self.assertEqual(results['revoke'],'REVOKED')
         self.assertEqual(committed_count_for_attempt(self.conn,'attempt-1'),1)
@@ -174,9 +186,12 @@ class LedgerTests(unittest.TestCase):
                 inspect_attempt(self.conn,'attempt-1')
         finally:
             self.conn.execute('ROLLBACK')
-        with self.assertRaisesRegex(RuntimeError,'REENTRANT_TRANSACTION_UNSUPPORTED'):
-            commit_effect(self.conn,'attempt-1',after_authority_read=lambda:
-                prepare_attempt(self.conn,'attempt-2','grant-1','source/immutable-subject','different'))
+        self.conn.execute('BEGIN IMMEDIATE')
+        try:
+            with self.assertRaisesRegex(RuntimeError,'REENTRANT_TRANSACTION_UNSUPPORTED'):
+                commit_effect(self.conn,'attempt-1')
+        finally:
+            self.conn.execute('ROLLBACK')
         self.assertEqual(inspect_attempt(self.conn,'attempt-1').effect_state,'NONE')
         self.assertEqual(effect_count(self.conn),0)
 
@@ -198,6 +213,37 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaises(ProjectionConflict):
             project_committed_effect(self.conn,'attempt-1',untrusted)
         self.assertEqual(effect_count(self.conn),1)
+
+    def test_projection_final_directory_unlink_is_fsynced(self):
+        self.prep()
+        commit_effect(self.conn,'attempt-1')
+        root=Path(self.temp.name)/'sync-view'
+        original=os.fsync
+        directory_syncs=[]
+        def observing_fsync(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                directory_syncs.append(fd)
+            return original(fd)
+        with mock.patch('transactional_authority.os.fsync',side_effect=observing_fsync):
+            self.assertEqual(project_committed_effect(self.conn,'attempt-1',root),'CREATED')
+        self.assertGreaterEqual(len(directory_syncs),2,
+            'link and staged-temp unlink must each fsync the directory')
+        self.assertEqual(len(list(root.iterdir())),1)
+        self.assertEqual(effect_count(self.conn),1)
+
+    def test_projection_snapshot_rejects_reentrant_reads_before_any_file_effect(self):
+        self.prep()
+        commit_effect(self.conn,'attempt-1')
+        root=Path(self.temp.name)/'no-reentrant-view'
+        self.conn.execute('BEGIN')
+        try:
+            with self.assertRaisesRegex(RuntimeError,'REENTRANT_READ_UNSUPPORTED'):
+                project_committed_effect(self.conn,'attempt-1',root)
+        finally:
+            self.conn.execute('ROLLBACK')
+        self.assertFalse(root.exists())
+        self.assertEqual(effect_count(self.conn),1)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
