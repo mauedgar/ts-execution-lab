@@ -15,7 +15,7 @@ import sqlite3
 import stat
 import sys
 import tempfile
-from typing import Callable, Iterator
+from typing import Iterator
 
 
 class IdentityConflict(Exception):
@@ -171,8 +171,7 @@ def inspect_attempt(conn: sqlite3.Connection, attempt_id: str) -> Result:
         raise
 
 def commit_effect(conn: sqlite3.Connection, attempt_id: str, *,
-                  fault: str | None = None,
-                  after_authority_read: Callable[[], None] | None = None) -> Result:
+                  fault: str | None = None) -> Result:
     """Only the DB row is the effect; projection is a separate replayable read model.
 
     Do not retry on OutcomeUnknown. Reconcile the original attempt ID instead.
@@ -189,8 +188,6 @@ def commit_effect(conn: sqlite3.Connection, attempt_id: str, *,
             return Result(attempt_id, 'BLOCKED', 'NONE', reason)
         grant = conn.execute('SELECT subject,active,version FROM grants WHERE grant_id=?',
                              (grant_id,)).fetchone()
-        if after_authority_read is not None:
-            after_authority_read()
         if grant is None or grant[0] != subject or grant[1] != 1:
             conn.execute("UPDATE attempts SET state='BLOCKED',reason='NO_CURRENT_AUTHORITY' WHERE attempt_id=?", (attempt_id,))
             conn.execute('INSERT INTO audit_events(kind,grant_id,attempt_id,detail) VALUES (?,?,?,?)',
@@ -233,13 +230,25 @@ def project_committed_effect(conn: sqlite3.Connection, attempt_id: str,
     """
     if not all(hasattr(os, flag) for flag in ['O_DIRECTORY','O_NOFOLLOW']):
         raise ProjectionConflict('POSIX_DIRECTORY_DESCRIPTORS_REQUIRED')
-    result = inspect_attempt(conn, attempt_id)
-    if result.effect_state != 'CONFIRMED':
-        raise IdentityConflict('no confirmed effect to project')
-    row = conn.execute('SELECT grant_id,subject,payload_digest FROM effects WHERE attempt_id=?',
-                       (attempt_id,)).fetchone()
-    if row is None:
-        raise OutcomeUnknown('missing confirmed source')
+    if conn.in_transaction:
+        raise RuntimeError('REENTRANT_READ_UNSUPPORTED')
+    # Status and immutable committed payload are observed under ONE consistent
+    # SQLite snapshot, not two independent read transactions. Nothing here
+    # creates or refreshes a Developer grant or Product authority.
+    conn.execute('BEGIN')
+    try:
+        result = _inspect_in_transaction(conn, attempt_id)
+        if result.effect_state != 'CONFIRMED':
+            raise IdentityConflict('no confirmed effect to project')
+        row = conn.execute('SELECT grant_id,subject,payload_digest FROM effects WHERE attempt_id=?',
+                           (attempt_id,)).fetchone()
+        if row is None:
+            raise OutcomeUnknown('missing confirmed source')
+        conn.execute('COMMIT')
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute('ROLLBACK')
+        raise
     grant_id, subject, payload_hash = row
     data = (json.dumps({'schema':'ts-authority-projection/v0','attempt_id':attempt_id,
                         'grant_id':grant_id,'subject':subject,'payload_sha256':payload_hash},
@@ -299,6 +308,9 @@ def project_committed_effect(conn: sqlite3.Connection, attempt_id: str,
             return 'CREATED'
         finally:
             os.unlink(name, dir_fd=dir_fd)
+            # Final directory state is durable only after the stage unlink has
+            # also been fsynced. Never mistake this for host power-loss proof.
+            os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
 
