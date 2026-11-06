@@ -24,8 +24,9 @@ function fixture(t){
     const basename=name.split('/').at(-1);
     entries['node_modules/'+name]={version:ver,resolved:'https://registry.npmjs.org/'+name+'/-/'+basename+'-'+ver+'.tgz',integrity:'sha512-'+Buffer.alloc(64,i+1).toString('base64')};
   }
-  const pkg={name:'synthetic-r2',dependencies:{pg:'8.23.1'}};
-  const lock={name:'synthetic-r2',lockfileVersion:3,packages:{'':{name:'synthetic-r2',dependencies:{pg:'8.23.1'}},...entries}};
+  entries['node_modules/typescript'].bin={tsc:'bin/tsc',tsserver:'bin/tsserver'};
+  const pkg={name:'synthetic-r2',version:'0.1.0',dependencies:{pg:'8.23.1'}};
+  const lock={name:'synthetic-r2',version:'0.1.0',lockfileVersion:3,requires:true,packages:{'':{name:'synthetic-r2',version:'0.1.0',dependencies:{pg:'8.23.1'}},...entries}};
   const pfx=path.join(root,'r2-node'),client=path.join(root,'r3-client');
   const sourceBlob=write(path.join(client,'r3-codespaces-locked-npm-v3.cjs'),'// local synthetic runner for fixture\n');
   const pins={anchor:'1c7e819428595558dab146239978349449f482f7',
@@ -54,6 +55,26 @@ function fixture(t){
           const loc=path.join(pfx,key);fs.mkdirSync(loc,{recursive:true});
           fs.writeFileSync(path.join(loc,'package.json'),JSON.stringify({name:key.slice('node_modules/'.length),version:val.version}));
         }
+        const hidden={name:lock.name,version:lock.version,lockfileVersion:3,packages:entries};
+        fs.writeFileSync(path.join(pfx,'node_modules','.package-lock.json'),JSON.stringify(hidden));
+        const bindir=path.join(pfx,'node_modules','.bin');fs.mkdirSync(bindir);
+        const tsbin=path.join(pfx,'node_modules','typescript','bin');fs.mkdirSync(tsbin);
+        for(const bin of ['tsc','tsserver']){
+          fs.writeFileSync(path.join(tsbin,bin),'// synthetic npm executable',{mode:0o755});
+          fs.symlinkSync('../typescript/bin/'+bin,path.join(bindir,bin));
+        }
+        if(mutation==='hidden-missing')fs.unlinkSync(path.join(pfx,'node_modules','.package-lock.json'));
+        if(mutation==='hidden-version'){
+          hidden.packages['node_modules/pg'].version='999.0.0';
+          fs.writeFileSync(path.join(pfx,'node_modules','.package-lock.json'),JSON.stringify(hidden));
+        }
+        if(mutation==='hidden-extra'){
+          hidden.packages['node_modules/ghost']=entries['node_modules/pg'];
+          fs.writeFileSync(path.join(pfx,'node_modules','.package-lock.json'),JSON.stringify(hidden));
+        }
+        if(mutation==='bin-missing')fs.unlinkSync(path.join(bindir,'tsserver'));
+        if(mutation==='bin-target-missing')fs.unlinkSync(path.join(tsbin,'tsc'));
+        if(mutation==='bin-not-executable')fs.chmodSync(path.join(tsbin,'tsc'),0o644);
         if(mutation==='extra')fs.mkdirSync(path.join(pfx,'node_modules','ghost'));
         if(mutation==='symlink'){
           fs.rmSync(path.join(pfx,'node_modules','pg'),{recursive:true});
@@ -62,7 +83,7 @@ function fixture(t){
         }
         if(mutation==='internal-link'){const folder=path.join(pfx,'node_modules','pg','lib');fs.mkdirSync(folder);fs.symlinkSync(path.join(temp,'outside'),path.join(folder,'unsafe'),'file');}
         if(mutation==='bad-bin'){
-          fs.mkdirSync(path.join(pfx,'node_modules','.bin'));
+          fs.unlinkSync(path.join(pfx,'node_modules','.bin','tsc'));
           fs.writeFileSync(path.join(temp,'alien'),'x');fs.symlinkSync(path.join(temp,'alien'),path.join(pfx,'node_modules','.bin','tsc'),'file');
         }
       }
@@ -114,3 +135,23 @@ test('32 symlinked absolute npm CLI rejected before Git or network',t=>{const f=
 test('33 malformed extra toolchain key blocks before any dispatch',t=>{const f=fixture(t);f.tools.github_token='secret';blocked(()=>run(f.opt),'TOOLCHAIN_NOT_QUALIFIED');assert.equal(f.calls.length,0);});
 
 test('34 symlink inside installed package tree is rejected without claiming byte integrity',t=>{const f=fixture(t);f.setMutation('internal-link');const r=run(f.opt);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_TREE_LINK');});
+
+test('35 lock dependency edge with incompatible version blocks before network',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].dependencies={'typescript':'^99.0.0'};});blocked(()=>run(f.opt),'LOCK_EDGE_INCOMPATIBLE');assert.equal(npmCalls(f).length,0);});
+test('36 unresolvable mandatory dependency blocks before network',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].dependencies={'absent-package':'^1.0.0'};});blocked(()=>run(f.opt),'LOCK_EDGE_UNRESOLVED');assert.equal(npmCalls(f).length,0);});
+test('37 unresolvable mandatory peer dependency blocks before network',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].peerDependencies={'not-present':'>=1.0.0'};});blocked(()=>run(f.opt),'LOCK_EDGE_UNRESOLVED');assert.equal(npmCalls(f).length,0);});
+test('38 unresolvable optional peer dependency is permitted with explicit metadata',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].peerDependencies={'pg-native':'>=3.0.1'};l.packages['node_modules/pg'].peerDependenciesMeta={'pg-native':{optional:true}};});const r=run(f.opt);assert.equal(r.status,0);});
+test('39 unexpected lock link metadata is rejected before npm',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].link=true;});blocked(()=>run(f.opt),'LOCK_ENTRY_FIELDS');assert.equal(npmCalls(f).length,0);});
+test('40 unexpected hasInstallScript lock metadata is rejected before npm',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].hasInstallScript=true;});blocked(()=>run(f.opt),'LOCK_ENTRY_FIELDS');assert.equal(npmCalls(f).length,0);});
+test('41 unexpected root metadata is rejected before npm',t=>{const f=fixture(t);f.modifyLock(l=>{l.myCustomField=true;});blocked(()=>run(f.opt),'LOCK_FIELDS_INVALID');assert.equal(npmCalls(f).length,0);});
+test('42 unexpected bin mapping is rejected before npm',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].bin={malware:'index.js'};});blocked(()=>run(f.opt),'LOCK_BIN_INVALID');assert.equal(npmCalls(f).length,0);});
+test('43 missing TypeScript bin mapping is rejected before npm',t=>{const f=fixture(t);f.modifyLock(l=>{delete l.packages['node_modules/typescript'].bin;});blocked(()=>run(f.opt),'LOCK_BIN_INVALID');assert.equal(npmCalls(f).length,0);});
+test('44 hidden installed lock with changed package version blocks',t=>{const f=fixture(t);f.setMutation('hidden-version');const r=run(f.opt);assert.equal(r.failure,'HIDDEN_LOCK_INTEGRITY');});
+test('45 hidden installed lock with extra package blocks',t=>{const f=fixture(t);f.setMutation('hidden-extra');const r=run(f.opt);assert.equal(r.failure,'HIDDEN_LOCK_GRAPH');});
+test('46 missing hidden installed lock blocks',t=>{const f=fixture(t);f.setMutation('hidden-missing');const r=run(f.opt);assert.equal(r.failure,'PHYSICAL_PATH_MISSING');});
+test('47 missing TypeScript bin symlink blocks',t=>{const f=fixture(t);f.setMutation('bin-missing');const r=run(f.opt);assert.equal(r.failure,'INSTALLED_UNEXPECTED_BIN');});
+test('48 missing TypeScript bin executable target blocks',t=>{const f=fixture(t);f.setMutation('bin-target-missing');const r=run(f.opt);assert.equal(r.failure,'INSTALLED_BIN_REDIRECT');});
+test('49 installed hidden lock remains metadata-only',t=>{const f=fixture(t);const r=run(f.opt);assert.equal(r.status,0);const p=path.join(f.home,'.ts-r3-codespaces-attempts',ATTEMPT);const receipt=JSON.parse(fs.readFileSync(path.join(p,'receipt.json')));assert.equal(receipt.installed_byte_integrity,'NOT_PROVED');assert.equal(receipt.provider_attestation,'NONE');});
+
+test('50 non-executable permitted TypeScript bin target blocks metadata PASS',t=>{const f=fixture(t);f.setMutation('bin-not-executable');const r=run(f.opt);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_BIN_NOT_EXECUTABLE');});
+test('51 optional scoped dependency compatible with locked graph passes pre-network',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].dependencies={'@types/node':'*'};});const r=run(f.opt);assert.equal(r.status,0);});
+test('52 invalid engine metadata blocked before any download',t=>{const f=fixture(t);f.modifyLock(l=>{l.packages['node_modules/pg'].engines={node:'>= 16.0.0',os:'evil'};});blocked(()=>run(f.opt),'LOCK_ENGINE_INVALID');assert.equal(npmCalls(f).length,0);});
