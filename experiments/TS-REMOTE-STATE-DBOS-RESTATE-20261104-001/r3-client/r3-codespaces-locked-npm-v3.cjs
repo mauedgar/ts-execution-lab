@@ -134,11 +134,28 @@ function matchGit(spawn,binary,args,common,expected){
   const r=call(spawn,binary,args,common,'GIT');
   if(r.stdout.trim()!==expected)blocked('GIT_IDENTITY_MISMATCH');
 }
+function scanInstalledTree(start,limit={count:0}){
+  const pending=[start];
+  while(pending.length){
+    const item=pending.pop();let st;
+    try{st=fs.lstatSync(item);}catch{blocked('INSTALLED_TREE_UNREADABLE');}
+    if(st.isSymbolicLink())blocked('INSTALLED_TREE_LINK');
+    limit.count++;if(limit.count>60000)blocked('INSTALLED_TREE_TOO_LARGE');
+    if(st.isDirectory()){
+      let list;try{list=fs.readdirSync(item);}catch{blocked('INSTALLED_TREE_UNREADABLE');}
+      for(const part of list){
+        if(part==='.'||part==='..'||part.includes('/')||part.includes('\\'))blocked('INSTALLED_TREE_NAME');
+        pending.push(path.join(item,part));
+      }
+    }else if(!st.isFile())blocked('INSTALLED_TREE_SPECIAL');
+  }
+}
 function graphCheck(expected,prefix){
   const nm=path.join(prefix,'node_modules');assertPhysical(nm,true);
-  const expectedTop=new Set(),scopes=new Map();
+  const expectedTop=new Set(),scopes=new Map(),scanBudget={count:0};
   for(const [key,{name,version}] of expected){
     const loc=path.join(prefix,key);assertPhysical(loc,true);
+    scanInstalledTree(loc,scanBudget);
     const meta=parse(readExact(path.join(loc,'package.json'),1024*1024));
     if(meta.name!==name||meta.version!==version)blocked('INSTALLED_IDENTITY_MISMATCH');
     const parts=name.split('/');
