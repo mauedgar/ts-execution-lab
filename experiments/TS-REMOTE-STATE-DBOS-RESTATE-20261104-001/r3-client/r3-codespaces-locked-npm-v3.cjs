@@ -36,34 +36,106 @@ function cleanRel(name){
   return name;
 }
 function packageName(key){return key.slice(FILE_ROOT.length);}
+const ALLOWED_LOCK_FIELDS=new Set(['name','version','lockfileVersion','requires','packages']);
+const ALLOWED_ROOT_FIELDS=new Set(['name','version','dependencies']);
+const ALLOWED_ENTRY_FIELDS=new Set(['version','resolved','integrity','license','dependencies',
+  'optionalDependencies','peerDependencies','peerDependenciesMeta','engines','optional','bin']);
+function exactFields(obj,allowed,code){
+  if(!obj||Array.isArray(obj)||typeof obj!=='object'||Object.keys(obj).some(x=>!allowed.has(x)))blocked(code);
+}
+function triple(value){
+  if(typeof value!=='string'||!/^\d+\.\d+\.\d+$/.test(value))blocked('LOCK_SEMVER_INVALID');
+  return value.split('.').map(Number);
+}
+function compatible(version,range){
+  const actual=triple(version);
+  if(range==='*')return true;
+  if(typeof range!=='string')blocked('LOCK_EDGE_UNSUPPORTED');
+  const m=/^(\^|~|>=)?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(range);
+  if(!m)blocked('LOCK_EDGE_UNSUPPORTED');
+  const op=m[1]||'=',ref=[Number(m[2]),Number(m[3]||0),Number(m[4]||0)];
+  const cmp=(a,b)=>a[0]!==b[0]?a[0]-b[0]:a[1]!==b[1]?a[1]-b[1]:a[2]-b[2];
+  if(op==='>=')return cmp(actual,ref)>=0;
+  if(op==='=')return cmp(actual,ref)===0;
+  if(op==='~')return cmp(actual,ref)>=0&&actual[0]===ref[0]&&actual[1]===ref[1];
+  const upper=ref[0]>0?[ref[0]+1,0,0]:ref[1]>0?[0,ref[1]+1,0]:[0,0,ref[2]+1];
+  return cmp(actual,ref)>=0&&cmp(actual,upper)<0;
+}
 function validateLock(lock,pkg,expectedVersion='8.23.1'){
-  if(lock?.lockfileVersion!==3||!lock.packages||!pkg||keys(lock.packages['']).length===0)blocked('LOCK_SHAPE');
+  exactFields(lock,ALLOWED_LOCK_FIELDS,'LOCK_FIELDS_INVALID');
+  if(lock.lockfileVersion!==3||lock.requires!==true||!lock.packages||typeof lock.name!=='string'||typeof lock.version!=='string')blocked('LOCK_SHAPE');
+  const root=lock.packages[''];
+  exactFields(root,ALLOWED_ROOT_FIELDS,'LOCK_ROOT_FIELDS');
+  if(root.name!==lock.name||root.version!==lock.version||root.name!==pkg?.name||root.version!==pkg?.version)blocked('LOCK_ROOT_IDENTITY');
+  if(!pkg||!pkg.dependencies||Array.isArray(pkg.dependencies)||typeof pkg.dependencies!=='object'||!root.dependencies)blocked('LOCK_ROOT_DEPS');
   const entries=Object.entries(lock.packages).filter(([k])=>k);
-  if(entries.length!==18||pkg.dependencies?.pg!==expectedVersion||lock.packages['']?.dependencies?.pg!==expectedVersion)blocked('LOCK_SHAPE');
-  const roots={...lock.packages[''].dependencies,...(lock.packages[''].devDependencies||{}),...(lock.packages[''].optionalDependencies||{})};
-  if(keys(roots).length!==keys(pkg.dependencies).length||keys(roots).some(k=>roots[k]!==pkg.dependencies[k]))blocked('LOCK_ROOT_DEPS');
+  if(entries.length!==18||pkg.dependencies.pg!==expectedVersion||root.dependencies.pg!==expectedVersion)blocked('LOCK_SHAPE');
+  const required=Object.entries(pkg.dependencies);
+  if(Object.keys(root.dependencies).length!==required.length||required.some(([k,v])=>root.dependencies[k]!==v))blocked('LOCK_ROOT_DEPS');
   const expected=new Map();
   for(const [key,value] of entries){
-    cleanRel(key);if(!value||typeof value!=='object'||Array.isArray(value)||expected.has(key))blocked('LOCK_ENTRY_INVALID');
+    cleanRel(key);exactFields(value,ALLOWED_ENTRY_FIELDS,'LOCK_ENTRY_FIELDS');
     const n=packageName(key);
-    if(typeof value.version!=='string'||!/^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/.test(value.version))blocked('LOCK_ENTRY_INVALID');
+    if(typeof value.version!=='string'||!/^\d+\.\d+\.\d+$/.test(value.version))blocked('LOCK_ENTRY_INVALID');
     if(typeof value.integrity!=='string'||!value.integrity.startsWith('sha512-'))blocked('LOCK_INTEGRITY_INVALID');
     const coded=value.integrity.slice(7);let bytes;
     try{bytes=Buffer.from(coded,'base64');}catch{blocked('LOCK_INTEGRITY_INVALID');}
     if(bytes.length!==64||bytes.toString('base64')!==coded)blocked('LOCK_INTEGRITY_INVALID');
-    let uri;
-    try{uri=new URL(value.resolved);}catch{blocked('LOCK_REGISTRY_INVALID');}
-    const encoded=n.replace(/^@/,'@').split('/');
+    let uri;try{uri=new URL(value.resolved);}catch{blocked('LOCK_REGISTRY_INVALID');}
     const tarName=n.split('/').at(-1)+'-'+value.version+'.tgz';
-    const expectedPath='/'+encoded.join('/')+'/-/'+tarName;
-    if(uri.protocol!=='https:'||uri.host!=='registry.npmjs.org'||uri.username||uri.password||uri.search||uri.hash||uri.pathname!==expectedPath)blocked('LOCK_REGISTRY_INVALID');
-    for(const field of ['dependencies','optionalDependencies','peerDependencies']){
-      if(value[field]!==undefined&&(!value[field]||Array.isArray(value[field])||typeof value[field]!=='object'||
-        keys(value[field]).some(p=>typeof value[field][p]!=='string')))blocked('LOCK_ENTRY_INVALID');
+    const canonical='https://registry.npmjs.org/'+n+'/-/'+tarName;
+    if(uri.href!==canonical||value.resolved!==canonical)blocked('LOCK_REGISTRY_INVALID');
+    if(value.optional!==undefined&&(n!=='pg-cloudflare'||value.optional!==true))blocked('LOCK_OPTIONAL_INVALID');
+    if(value.license!==undefined&&!['MIT','ISC','Apache-2.0'].includes(value.license))blocked('LOCK_LICENSE_INVALID');
+    if(value.engines!==undefined){
+      exactFields(value.engines,new Set(['node']),'LOCK_ENGINE_INVALID');
+      if(typeof value.engines.node!=='string'||!/^>=\s*\d+(?:\.(?:\d+|x)){0,2}$/.test(value.engines.node))blocked('LOCK_ENGINE_INVALID');
     }
-    expected.set(key,{name:n,version:value.version,integrity:value.integrity});
+    if(n==='typescript'){
+      if(!value.bin||Object.keys(value.bin).sort().join(',')!=='tsc,tsserver'||
+        value.bin.tsc!=='bin/tsc'||value.bin.tsserver!=='bin/tsserver')blocked('LOCK_BIN_INVALID');
+    }else if(value.bin!==undefined)blocked('LOCK_BIN_INVALID');
+    for(const field of ['dependencies','optionalDependencies','peerDependencies']){
+      if(value[field]!==undefined){
+        const o=value[field];if(!o||typeof o!=='object'||Array.isArray(o)||Object.keys(o).some(k=>typeof o[k]!=='string'))blocked('LOCK_ENTRY_INVALID');
+      }
+    }
+    if(value.peerDependenciesMeta!==undefined){
+      const meta=value.peerDependenciesMeta;
+      if(!meta||Array.isArray(meta)||typeof meta!=='object')blocked('LOCK_PEER_META_INVALID');
+      for(const [name,obj] of Object.entries(meta)){
+        if(!value.peerDependencies||!Object.hasOwn(value.peerDependencies,name))blocked('LOCK_PEER_META_INVALID');
+        exactFields(obj,new Set(['optional']),'LOCK_PEER_META_INVALID');
+        if(obj.optional!==true)blocked('LOCK_PEER_META_INVALID');
+      }
+    }
+    expected.set(key,{name:n,version:value.version,integrity:value.integrity,resolved:value.resolved,
+      bin:value.bin||null,dependencies:value.dependencies||{},optionalDependencies:value.optionalDependencies||{},
+      peerDependencies:value.peerDependencies||{},peerDependenciesMeta:value.peerDependenciesMeta||{}});
   }
   if(expected.get('node_modules/pg')?.version!==expectedVersion)blocked('LOCK_SHAPE');
+  // The v3 fixed lock has a flat 18-entry graph; every required/optional edge
+  // must resolve to the matching locked package. Missing peer is permitted ONLY
+  // when explicitly declared optional in peerDependenciesMeta (pg-native).
+  for(const [name,range] of required){
+    const target=expected.get('node_modules/'+name);
+    if(!target||!compatible(target.version,range))blocked('LOCK_ROOT_UNRESOLVED');
+  }
+  for(const [,entry] of expected){
+    for(const field of ['dependencies','optionalDependencies','peerDependencies']){
+      for(const [name,range] of Object.entries(entry[field])){
+        const target=expected.get('node_modules/'+name);
+        if(!target){
+          if(field==='peerDependencies'&&entry.peerDependenciesMeta[name]?.optional===true){
+            compatible('1.0.0',range); // validate supported range syntax even if optional/absent
+            continue;
+          }
+          blocked('LOCK_EDGE_UNRESOLVED');
+        }
+        if(!compatible(target.version,range))blocked('LOCK_EDGE_INCOMPATIBLE');
+      }
+    }
+  }
   return expected;
 }
 function assertPhysical(file,isDirectory=false){
@@ -150,6 +222,18 @@ function scanInstalledTree(start,limit={count:0}){
     }else if(!st.isFile())blocked('INSTALLED_TREE_SPECIAL');
   }
 }
+function checkHiddenLock(file,expected){
+  const hidden=parse(readExact(file,1024*1024));
+  exactFields(hidden,ALLOWED_LOCK_FIELDS,'HIDDEN_LOCK_FIELDS');
+  if(hidden.lockfileVersion!==3||!hidden.packages||Array.isArray(hidden.packages)||typeof hidden.packages!=='object')blocked('HIDDEN_LOCK_SHAPE');
+  const entries=Object.entries(hidden.packages);
+  if(entries.length!==expected.size||entries.some(([k])=>!expected.has(k)))blocked('HIDDEN_LOCK_GRAPH');
+  for(const [key,value] of entries){
+    exactFields(value,ALLOWED_ENTRY_FIELDS,'HIDDEN_LOCK_FIELDS');
+    const pin=expected.get(key);
+    if(value.version!==pin.version||value.integrity!==pin.integrity||value.resolved!==pin.resolved||value.link===true||value.hasInstallScript===true)blocked('HIDDEN_LOCK_INTEGRITY');
+  }
+}
 function graphCheck(expected,prefix){
   const nm=path.join(prefix,'node_modules');assertPhysical(nm,true);
   const expectedTop=new Set(),scopes=new Map(),scanBudget={count:0};
@@ -162,27 +246,36 @@ function graphCheck(expected,prefix){
     if(parts.length===2){expectedTop.add(parts[0]);if(!scopes.has(parts[0]))scopes.set(parts[0],new Set());scopes.get(parts[0]).add(parts[1]);}
     else expectedTop.add(name);
   }
+  // npm's installed hidden lock is metadata; matching the reviewed lock
+  // does NOT independently establish installed tarball/executable byte integrity.
+  checkHiddenLock(path.join(nm,'.package-lock.json'),expected);
+  const expectedTopPlus=new Set([...expectedTop,'.package-lock.json','.bin']);
   for(const item of fs.readdirSync(nm)){
-    const loc=path.join(nm,item);if(item==='.package-lock.json'){assertPhysical(loc);continue;}
+    const loc=path.join(nm,item);
+    if(!expectedTopPlus.has(item))blocked('INSTALLED_UNEXPECTED_ENTRY');
+    if(item==='.package-lock.json'){assertPhysical(loc);continue;}
     if(item==='.bin'){assertPhysical(loc,true);continue;}
-    if(!expectedTop.has(item))blocked('INSTALLED_UNEXPECTED_ENTRY');
     assertPhysical(loc,true);
     if(scopes.has(item)){
-      const actual=fs.readdirSync(loc);if(actual.length!==scopes.get(item).size||actual.some(v=>!scopes.get(item).has(v)))blocked('INSTALLED_UNEXPECTED_ENTRY');
+      const actual=fs.readdirSync(loc);
+      if(actual.length!==scopes.get(item).size||actual.some(v=>!scopes.get(item).has(v)))blocked('INSTALLED_UNEXPECTED_ENTRY');
     }
   }
-  for(const top of expectedTop)if(!fs.existsSync(path.join(nm,top)))blocked('INSTALLED_MISSING_ENTRY');
-  // npm bin shims are executable conveniences, not a proof of package bytes.
-  // Do not accept a status stronger than metadata even if this check passes.
-  const bindir=path.join(nm,'.bin');
-  if(fs.existsSync(bindir)){
-    const permitted=new Set(['tsc','tsserver']);
-    for(const entry of fs.readdirSync(bindir)){
-      if(!permitted.has(entry))blocked('INSTALLED_UNEXPECTED_BIN');
-      const loc=path.join(bindir,entry);
-      const target=fs.realpathSync.native(loc),allow=path.join(nm,'typescript','bin',entry);
-      if(target!==allow||!fs.lstatSync(loc).isSymbolicLink())blocked('INSTALLED_BIN_REDIRECT');
-    }
+  for(const top of expectedTopPlus)if(!fs.existsSync(path.join(nm,top)))blocked('INSTALLED_MISSING_ENTRY');
+  // The only permitted npm-created binary shims come from the fixed TypeScript
+  // package bin mapping. Require both exact links and physical regular targets.
+  const bindir=path.join(nm,'.bin'),allowed=new Set(['tsc','tsserver']);
+  const actual=fs.readdirSync(bindir);
+  if(actual.length!==allowed.size||actual.some(x=>!allowed.has(x)))blocked('INSTALLED_UNEXPECTED_BIN');
+  for(const entry of allowed){
+    const loc=path.join(bindir,entry),target=path.join(nm,'typescript','bin',entry);
+    let actualTarget;
+    try{actualTarget=fs.realpathSync.native(loc);}catch{blocked('INSTALLED_BIN_REDIRECT');}
+    if(actualTarget!==target||!fs.lstatSync(loc).isSymbolicLink())blocked('INSTALLED_BIN_REDIRECT');
+    assertPhysical(target);
+    const targetInfo=fs.statSync(target);
+    if(!targetInfo.isFile())blocked('INSTALLED_BIN_TARGET_INVALID');
+    if(process.platform!=='win32'&&(targetInfo.mode&0o111)===0)blocked('INSTALLED_BIN_NOT_EXECUTABLE');
   }
   return expected.size;
 }
