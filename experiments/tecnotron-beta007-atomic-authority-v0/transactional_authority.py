@@ -225,11 +225,14 @@ def committed_count_for_attempt(conn: sqlite3.Connection, attempt_id: str) -> in
 
 def project_committed_effect(conn: sqlite3.Connection, attempt_id: str,
                              output_dir: str | Path, *, fault: str | None = None) -> str:
-    """Idempotent *derived* projection; never confers or changes DB authority.
+    """Idempotent read-model, with POSIX directory-descriptor anchored writes.
 
-    POSIX create-only hardlink avoids replacing an existing projection. A crash
-    can leave staging, but DB COMMIT remains authoritative; repair by original ID.
+    A previously committed DB row is the only authority. The caller must supply
+    an output root under a *trusted parent*; untrusted ancestors, same-UID/root
+    attackers, NFS and hostile mounts remain explicitly outside this V0 model.
     """
+    if not all(hasattr(os, flag) for flag in ['O_DIRECTORY','O_NOFOLLOW']):
+        raise ProjectionConflict('POSIX_DIRECTORY_DESCRIPTORS_REQUIRED')
     result = inspect_attempt(conn, attempt_id)
     if result.effect_state != 'CONFIRMED':
         raise IdentityConflict('no confirmed effect to project')
@@ -242,40 +245,62 @@ def project_committed_effect(conn: sqlite3.Connection, attempt_id: str,
                         'grant_id':grant_id,'subject':subject,'payload_sha256':payload_hash},
                        sort_keys=True,separators=(',',':')) + '\n').encode()
     folder = Path(output_dir)
+    # Only the final directory is pinned; trust of its ancestors is a required
+    # external precondition, not something path.is_symlink() can prove.
     if folder.is_symlink():
-        raise ProjectionConflict('projection root symlink')
-    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if folder.is_symlink():
-        raise ProjectionConflict('projection root changed')
-    target = folder / (digest(attempt_id) + '.json')
-    if target.exists() or target.is_symlink():
-        if target.is_symlink() or not target.is_file() or target.read_bytes() != data:
-            raise ProjectionConflict('existing projection conflicts with committed ledger')
-        return 'EXACT'
-    fd, staged = tempfile.mkstemp(prefix='.stage-', dir=folder)
+        raise ProjectionConflict('projection root is a symlink')
+    folder.mkdir(mode=0o700, exist_ok=True)  # no implicit parent creation
+    dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        with os.fdopen(fd, 'wb') as handle:
-            os.fchmod(handle.fileno(), 0o600)
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        if fault == 'before_link':
-            raise OutcomeUnknown('projection interrupted; DB remains CONFIRMED')
-        try:
-            os.link(staged, target, follow_symlinks=False)
-        except FileExistsError:
-            if not target.is_file() or target.is_symlink() or target.read_bytes() != data:
-                raise ProjectionConflict('concurrent projection content mismatch')
-            return 'EXACT'
-        directory_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-        return 'CREATED'
-    finally:
-        Path(staged).unlink(missing_ok=True)
+        st = os.fstat(dir_fd)
+        if (not os.path.samestat(st, os.stat(folder, follow_symlinks=False))
+                or st.st_uid != os.getuid() or (st.st_mode & 0o777) != 0o700):
+            raise ProjectionConflict('unqualified or changed output directory')
+        target_name = digest(attempt_id) + '.json'
 
+        def existing_target() -> bool:
+            try:
+                read_fd = os.open(target_name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+            except FileNotFoundError:
+                return False
+            except OSError as exc:
+                raise ProjectionConflict('unsafe existing projection') from exc
+            with os.fdopen(read_fd, 'rb') as handle:
+                entry_stat = os.fstat(handle.fileno())
+                if (not stat.S_ISREG(entry_stat.st_mode) or entry_stat.st_nlink != 1
+                        or entry_stat.st_size != len(data) or entry_stat.st_uid != os.getuid()):
+                    raise ProjectionConflict('unqualified projection inode')
+                if handle.read(len(data) + 1) != data:
+                    raise ProjectionConflict('existing projection differs from committed ledger')
+            return True
+
+        if existing_target():
+            return 'EXACT'
+        # Staging, link and cleanup all resolve RELATIVE TO ONE DIR FD, never
+        # reopening the path between stage and publication.
+        name = '.stage-' + os.urandom(16).hex()
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600, dir_fd=dir_fd)
+        try:
+            with os.fdopen(fd, 'wb') as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if fault == 'before_link':
+                raise OutcomeUnknown('projection interrupted; DB remains CONFIRMED')
+            try:
+                os.link(name, target_name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd,
+                        follow_symlinks=False)
+            except FileExistsError:
+                if not existing_target():
+                    raise ProjectionConflict('concurrent projection vanished')
+                return 'EXACT'
+            os.fsync(dir_fd)
+            return 'CREATED'
+        finally:
+            os.unlink(name, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
 
 def _main() -> int:
     if len(sys.argv) == 4 and sys.argv[1] in ('crash-before-commit','crash-after-commit'):
