@@ -159,6 +159,90 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(Rejected, 'CHAIN_HASH_MISMATCH'):
             reconcile_readonly(FakeConn(self.db), self.a)
 
+    def test_full_forged_command_missing_factory_seal_fails_before_sql(self):
+        forged = object.__new__(Command)
+        raw = wire()
+        for name in ("operation_id", "attempt_id", "mutation_id",
+                     "state_id", "expected_revision"):
+            object.__setattr__(forged, name, raw[name])
+        object.__setattr__(forged, "_state_json", canonical(raw["state"]))
+        with self.assertRaisesRegex(Rejected, "COMMAND_NOT_VALIDATED"):
+            apply_once(self.conn, forged)
+        self.assertEqual(self.conn.statements, [])
+
+    def test_tampered_valid_command_rejected_before_sql(self):
+        cmd = Command.from_dict(wire())
+        object.__setattr__(cmd, "operation_id", "R3-DET-CHANGED-OP-20261106")
+        with self.assertRaisesRegex(Rejected, "COMMAND_SEAL_MISMATCH"):
+            apply_once(self.conn, cmd)
+        self.assertEqual(self.conn.statements, [])
+        with self.assertRaisesRegex(Rejected, "COMMAND_SEAL_MISMATCH"):
+            reconcile_readonly(self.conn, cmd)
+        self.assertEqual(self.conn.statements, [])
+
+    def test_forged_invalid_rev_with_spoofed_seal_rejected_before_sql(self):
+        forged = object.__new__(Command)
+        raw = wire()
+        for name in ("operation_id", "attempt_id", "mutation_id",
+                     "state_id", "expected_revision"):
+            object.__setattr__(forged, name, raw[name])
+        object.__setattr__(forged, "expected_revision", -1)
+        object.__setattr__(forged, "_state_json", canonical(raw["state"]))
+        object.__setattr__(forged, "_validated_fingerprint", "0" * 64)
+        with self.assertRaisesRegex(Rejected, "EXPECTED_REVISION"):
+            apply_once(self.conn, forged)
+        self.assertEqual(self.conn.statements, [])
+
+    def test_cursor_factory_error_sanitized(self):
+        class BrokenFactory(FakeConn):
+            def cursor(self):
+                raise RuntimeError("SECRET_DSN_FAILURE")
+        with self.assertRaises(Rejected) as err:
+            apply_once(BrokenFactory(self.db), self.a)
+        self.assertEqual(err.exception.code, "CURSOR_LIFECYCLE_UNAVAILABLE")
+        self.assertNotIn("SECRET_DSN", str(err.exception))
+        self.assertEqual(len(self.db["receipts"]), 0)
+
+    def test_cursor_enter_error_sanitized(self):
+        class BrokenEnter:
+            def __enter__(self):
+                raise RuntimeError("SECRET_ENTER_FAILURE")
+            def __exit__(self, *_):
+                return False
+        class EnterConnection(FakeConn):
+            def cursor(self):
+                return BrokenEnter()
+        with self.assertRaises(Rejected) as err:
+            apply_once(EnterConnection(self.db), self.a)
+        self.assertEqual(err.exception.code, "CURSOR_LIFECYCLE_UNAVAILABLE")
+        self.assertNotIn("SECRET_ENTER", str(err.exception))
+
+    def test_cursor_exit_after_commit_fenced_unknown(self):
+        class BadExit(FakeCursor):
+            def __exit__(self, *_):
+                if self.c.pending is None and len(self.c.db["receipts"]) > 0:
+                    raise RuntimeError("SECRET_POSTCOMMIT_FAILURE")
+                return False
+        class ExitConnection(FakeConn):
+            def cursor(self):
+                return BadExit(self)
+        with self.assertRaises(CommitUnknown) as err:
+            apply_once(ExitConnection(self.db), self.a)
+        self.assertFalse(err.exception.retry_authorized)
+        self.assertNotIn("SECRET_POSTCOMMIT", str(err.exception))
+        self.assertEqual(reconcile_readonly(FakeConn(self.db), self.a)["effect"], "CONFIRMED")
+
+    def test_readonly_cursor_exit_sanitized(self):
+        apply_once(self.conn, self.a)
+        class BadExit(FakeCursor):
+            def __exit__(self, *_):
+                raise RuntimeError("SECRET_READONLY_EXIT")
+        class ExitConnection(FakeConn):
+            def cursor(self):
+                return BadExit(self)
+        with self.assertRaisesRegex(Rejected, "CURSOR_LIFECYCLE_UNAVAILABLE"):
+            reconcile_readonly(ExitConnection(self.db), self.a)
+
     def test_genesis_one_receipt_one_event(self):
         out = apply_once(self.conn, self.a)
         self.assertEqual((out['disposition'], out['effect'], out['revision']), ('COMMITTED', 'CONFIRMED', 1))
@@ -274,6 +358,11 @@ class ValidationTests(unittest.TestCase):
         a, b = {'b': 2, 'a': [True, None]}, {'a': [True, None], 'b': 2}
         self.assertEqual(canonical(a), canonical(b))
         self.assertEqual(digest(a), digest(b))
+
+    def test_strict_loads_surrogate_is_rejected_safely(self):
+        malformed = '{"x":"\ud800"}'  # Python produces an actual isolated surrogate.
+        with self.assertRaisesRegex(Rejected, "JSON_UNSAFE_TEXT"):
+            strict_loads(malformed)
 
     def test_reject_float(self):
         with self.assertRaisesRegex(Rejected, 'JSON_FLOAT_FORBIDDEN'):
