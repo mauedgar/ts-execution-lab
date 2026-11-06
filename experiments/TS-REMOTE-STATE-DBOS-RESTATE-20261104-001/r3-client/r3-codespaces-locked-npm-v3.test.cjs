@@ -60,6 +60,7 @@ function fixture(t){
           const elsewhere=path.join(temp,'alien');fs.mkdirSync(elsewhere);fs.writeFileSync(path.join(elsewhere,'package.json'),JSON.stringify({name:'pg',version:'8.23.1'}));
           fs.symlinkSync(elsewhere,path.join(pfx,'node_modules','pg'),'dir');
         }
+        if(mutation==='internal-link'){const folder=path.join(pfx,'node_modules','pg','lib');fs.mkdirSync(folder);fs.symlinkSync(path.join(temp,'outside'),path.join(folder,'unsafe'),'file');}
         if(mutation==='bad-bin'){
           fs.mkdirSync(path.join(pfx,'node_modules','.bin'));
           fs.writeFileSync(path.join(temp,'alien'),'x');fs.symlinkSync(path.join(temp,'alien'),path.join(pfx,'node_modules','.bin','tsc'),'file');
@@ -111,3 +112,5 @@ test('30 fail closed with unsupported dynamic toolchain keys',t=>{const f=fixtur
 test('31 unexpected npm bin alias blocked',t=>{const f=fixture(t);f.setMutation('bad-bin');const r=run(f.opt);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_BIN_REDIRECT');});
 test('32 symlinked absolute npm CLI rejected before Git or network',t=>{const f=fixture(t);const alt=path.join(f.toolroot,'actual-npm.js');fs.renameSync(f.tools.npmCli.path,alt);fs.symlinkSync(alt,f.tools.npmCli.path);blocked(()=>run(f.opt),'PHYSICAL_PATH_REDIRECT');assert.equal(f.calls.length,0);});
 test('33 malformed extra toolchain key blocks before any dispatch',t=>{const f=fixture(t);f.tools.github_token='secret';blocked(()=>run(f.opt),'TOOLCHAIN_NOT_QUALIFIED');assert.equal(f.calls.length,0);});
+
+test('34 symlink inside installed package tree is rejected without claiming byte integrity',t=>{const f=fixture(t);f.setMutation('internal-link');const r=run(f.opt);assert.equal(r.status,2);assert.equal(r.failure,'INSTALLED_TREE_LINK');});
