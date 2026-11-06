@@ -305,6 +305,24 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(Rejected, "DB_ROW_INVALID"):
             reconcile_readonly(FakeConn(self.db), self.a)
 
+    def test_revision_ceiling_rejects_overflow_without_sql(self):
+        from ts_detstate.core import MAX_REVISION
+        raw = wire(2, expected=MAX_REVISION)
+        with self.assertRaisesRegex(Rejected, "EXPECTED_REVISION"):
+            Command.from_dict(raw)
+        self.assertEqual(self.conn.statements, [])
+
+    def test_overlimit_chain_fails_closed_with_capped_query(self):
+        from ts_detstate.core import MAX_REVISION
+        apply_once(self.conn, self.a)
+        old = copy.deepcopy(self.db["events"][self.a.event_id()])
+        for index in range(1, MAX_REVISION + 1):
+            row = copy.deepcopy(old)
+            row["sequence"] = index + 1
+            self.db["events"][f"extra-{index}"] = row
+        with self.assertRaisesRegex(Rejected, "CHAIN_LIMIT"):
+            reconcile_readonly(FakeConn(self.db), self.a)
+
     def test_genesis_one_receipt_one_event(self):
         out = apply_once(self.conn, self.a)
         self.assertEqual((out['disposition'], out['effect'], out['revision']), ('COMMITTED', 'CONFIRMED', 1))
