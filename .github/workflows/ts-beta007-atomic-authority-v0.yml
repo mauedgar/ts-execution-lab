@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   transactional-equivalence:
-    if: ${{ github.repository == 'mauedgar/ts-execution-lab' }
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
