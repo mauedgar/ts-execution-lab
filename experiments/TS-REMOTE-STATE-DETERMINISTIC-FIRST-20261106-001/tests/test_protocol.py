@@ -193,6 +193,21 @@ class ProtocolTests(unittest.TestCase):
             apply_once(self.conn, forged)
         self.assertEqual(self.conn.statements, [])
 
+    def test_autocommit_property_exception_sanitized_before_sql(self):
+        class PropertyFails(FakeConn):
+            @property
+            def autocommit(self):
+                raise RuntimeError("SECRET_DSN_FROM_DRIVER")
+        for entry in (apply_once, reconcile_readonly):
+            conn = PropertyFails(self.db)
+            with self.subTest(entry=entry.__name__):
+                with self.assertRaises(Rejected) as error:
+                    entry(conn, self.a)
+                self.assertEqual(error.exception.code, "CONNECTION_PREFLIGHT_UNAVAILABLE")
+                self.assertNotIn("SECRET_DSN_FROM_DRIVER", str(error.exception))
+                self.assertEqual(conn.statements, [])
+        self.assertEqual(len(self.db["receipts"]), 0)
+
     def test_cursor_factory_error_sanitized(self):
         class BrokenFactory(FakeConn):
             def cursor(self):
