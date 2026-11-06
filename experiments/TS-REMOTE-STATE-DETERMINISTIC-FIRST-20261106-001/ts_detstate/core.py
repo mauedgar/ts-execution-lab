@@ -184,7 +184,12 @@ def _guard_command(cmd: Command) -> Command:
 
 
 def _guard_connection(conn) -> None:
-    if getattr(conn, "autocommit", None) is not True:
+    try:
+        autocommit = getattr(conn, "autocommit", None)
+    except Exception:
+        # A driver/wrapper property can raise an error containing a secret DSN.
+        raise Rejected("CONNECTION_PREFLIGHT_UNAVAILABLE") from None
+    if autocommit is not True:
         raise Rejected("AUTOCOMMIT_REQUIRED")
 
 
