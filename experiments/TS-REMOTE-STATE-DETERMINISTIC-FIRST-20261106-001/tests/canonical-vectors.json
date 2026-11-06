@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {
+      "name": "ordered",
+      "value": {
+        "z": 3,
+        "a": [
+          null,
+          true,
+          {
+            "foo_bar": "hi"
+          }
+        ]
+      },
+      "canonical": "{\"a\":[null,true,{\"foo_bar\":\"hi\"}],\"z\":3}",
+      "sha256": "b7526149878c4f5e7c51c161bc49ab80ddf044cd6148d37d5a6f0ddd0ec92576"
+    },
+    {
+      "name": "unicode_value",
+      "value": {
+        "hello": "café ☕😀",
+        "synthetic": true
+      },
+      "canonical": "{\"hello\":\"café ☕😀\",\"synthetic\":true}",
+      "sha256": "73c266b6b22e7438f4aaf547ec0c708aebe3a3d75f3da663474c23d0a0db74a4"
+    },
+    {
+      "name": "escapes",
+      "value": {
+        "message": "line\n\t\" \\",
+        "flag": false
+      },
+      "canonical": "{\"flag\":false,\"message\":\"line\\n\\t\\\" \\\\\"}",
+      "sha256": "e423e224ff46bfb685483a8cd73b07bc1e5af2fe4cd284bb1f9ec65d965bc00b"
+    },
+    {
+      "name": "safe_ints",
+      "value": {
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "canonical": "{\"maximum\":9007199254740991,\"minimum\":-9007199254740991}",
+      "sha256": "fbfd7545b6e2e70fe97a1b1de6bb85a3cea527c9e49f787bb6392cd36964b62c"
+    },
+    {
+      "name": "nested",
+      "value": {
+        "payload": {
+          "state": {
+            "value": 17,
+            "synthetic": true
+          },
+          "previous_hash": null
+        },
+        "revision": 12
+      },
+      "canonical": "{\"payload\":{\"previous_hash\":null,\"state\":{\"synthetic\":true,\"value\":17}},\"revision\":12}",
+      "sha256": "0152c19289dfdb856a6437e9e9eebe1e35cd73c945d3433bead7fd14365e1748"
+    }
+  ],
+  "schema": "ts-detfirst-canonical-v0-vectors"
+}
