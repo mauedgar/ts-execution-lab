@@ -222,7 +222,7 @@ _RECEIPT_LOCK = f"SELECT mutation_id,command_fingerprint,original_revision,resul
 _RECEIPT_READ = f"SELECT mutation_id,command_fingerprint,original_revision,result FROM {SCHEMA}.receipts WHERE mutation_id=%s"
 _STATE_LOCK = f"SELECT revision,state,last_event_sha256 FROM {SCHEMA}.aggregate_state WHERE id=%s FOR UPDATE"
 _STATE_READ = f"SELECT revision,state,last_event_sha256 FROM {SCHEMA}.aggregate_state WHERE id=%s"
-_CHAIN = f"SELECT event_id,sequence,previous_hash,event_hash,payload FROM {SCHEMA}.events WHERE id=%s ORDER BY sequence LIMIT 1001"
+_CHAIN = f"SELECT event_id,sequence,previous_hash,event_hash,payload FROM {SCHEMA}.events WHERE id=%s ORDER BY sequence LIMIT {MAX_REVISION + 1}"
 _STATE_INSERT = f"INSERT INTO {SCHEMA}.aggregate_state(id,revision,state,last_event_sha256) VALUES (%s,%s,%s::jsonb,%s)"
 _STATE_UPDATE = f"UPDATE {SCHEMA}.aggregate_state SET revision=%s,state=%s::jsonb,last_event_sha256=%s WHERE id=%s AND revision=%s RETURNING revision"
 _EVENT_INSERT = f"INSERT INTO {SCHEMA}.events(event_id,id,sequence,previous_hash,event_hash,payload) VALUES (%s,%s,%s,%s,%s,%s::jsonb)"
