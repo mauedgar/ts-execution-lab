@@ -12,6 +12,7 @@ from pathlib import Path
 import json
 import os
 import sqlite3
+import stat
 import sys
 import tempfile
 from typing import Callable, Iterator
@@ -52,6 +53,8 @@ def connect(db_file: str | Path) -> sqlite3.Connection:
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    if conn.in_transaction:
+        raise RuntimeError('REENTRANT_TRANSACTION_UNSUPPORTED')
     conn.execute('BEGIN IMMEDIATE')
     try:
         yield
@@ -139,19 +142,33 @@ def prepare_attempt(conn: sqlite3.Connection, attempt_id: str, grant_id: str,
     return Result(attempt_id, 'PREPARED', 'NONE', 'PREPARED_NO_EFFECT')
 
 
-def inspect_attempt(conn: sqlite3.Connection, attempt_id: str) -> Result:
+def _inspect_in_transaction(conn: sqlite3.Connection, attempt_id: str) -> Result:
     row = conn.execute('SELECT state,reason FROM attempts WHERE attempt_id=?', (attempt_id,)).fetchone()
     if row is None:
         return Result(attempt_id, 'NOT_FOUND', 'NONE', 'NO_ATTEMPT_RECORD')
     state, reason = row
-    if state == 'CONFIRMED':
-        effect = conn.execute('SELECT 1 FROM effects WHERE attempt_id=?', (attempt_id,)).fetchone()
-        if effect is None:
-            raise OutcomeUnknown('invariant violation: confirmed with missing effect')
-    if state != 'CONFIRMED' and conn.execute('SELECT 1 FROM effects WHERE attempt_id=?', (attempt_id,)).fetchone():
+    effect = conn.execute('SELECT 1 FROM effects WHERE attempt_id=?', (attempt_id,)).fetchone()
+    if state == 'CONFIRMED' and effect is None:
+        raise OutcomeUnknown('invariant violation: confirmed with missing effect')
+    if state != 'CONFIRMED' and effect is not None:
         raise OutcomeUnknown('invariant violation: orphan effect')
     return Result(attempt_id, state, 'CONFIRMED' if state == 'CONFIRMED' else 'NONE', reason)
 
+
+def inspect_attempt(conn: sqlite3.Connection, attempt_id: str) -> Result:
+    # One SQLite read transaction = one consistent snapshot of attempt/effect.
+    # Never silently reuse an unknown caller transaction.
+    if conn.in_transaction:
+        raise RuntimeError('REENTRANT_READ_UNSUPPORTED')
+    conn.execute('BEGIN')
+    try:
+        result = _inspect_in_transaction(conn, attempt_id)
+        conn.execute('COMMIT')
+        return result
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute('ROLLBACK')
+        raise
 
 def commit_effect(conn: sqlite3.Connection, attempt_id: str, *,
                   fault: str | None = None,
@@ -167,7 +184,7 @@ def commit_effect(conn: sqlite3.Connection, attempt_id: str, *,
             raise IdentityConflict('missing original attempt')
         grant_id, subject, h, state, reason = row
         if state == 'CONFIRMED':
-            return inspect_attempt(conn, attempt_id)  # exact, no effect/re-sign
+            return _inspect_in_transaction(conn, attempt_id)  # exact, no effect/re-sign
         if state == 'BLOCKED':
             return Result(attempt_id, 'BLOCKED', 'NONE', reason)
         grant = conn.execute('SELECT subject,active,version FROM grants WHERE grant_id=?',
@@ -261,14 +278,14 @@ def project_committed_effect(conn: sqlite3.Connection, attempt_id: str,
 
 
 def _main() -> int:
-    if len(sys.argv) == 4 and sys.argv[1] == 'crash-before-commit':
+    if len(sys.argv) == 4 and sys.argv[1] in ('crash-before-commit','crash-after-commit'):
         db, attempt_id = sys.argv[2:]
         conn = connect(db)
-        try:
+        if sys.argv[1] == 'crash-before-commit':
             commit_effect(conn, attempt_id, fault='exit_before_commit')
-        finally:
-            conn.close()
-        raise AssertionError('unreachable exit hook')
+            raise AssertionError('unreachable exit hook')
+        commit_effect(conn, attempt_id)
+        os._exit(73)  # real process death AFTER COMMIT, BEFORE returning receipt
     print('This is an experimental library, not a Product executable.', file=sys.stderr)
     return 2
 
