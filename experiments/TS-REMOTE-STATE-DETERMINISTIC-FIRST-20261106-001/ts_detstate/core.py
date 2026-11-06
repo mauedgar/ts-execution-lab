@@ -225,11 +225,92 @@ _EVENT_INSERT = f"INSERT INTO {SCHEMA}.events(event_id,id,sequence,previous_hash
 _RECEIPT_UPDATE = f"UPDATE {SCHEMA}.receipts SET result=%s::jsonb WHERE mutation_id=%s AND command_fingerprint=%s RETURNING mutation_id"
 
 
+# psycopg dict_row is required: never rely on bool == int, absent fields,
+# mutable/dynamic row objects, permissive JSONB equality or raw DB exceptions.
+_DB_HASH = re.compile(r"[0-9a-f]{64}\Z")
+_STATE_FIELDS = frozenset(("revision", "state", "last_event_sha256"))
+_EVENT_FIELDS = frozenset(("event_id", "sequence", "previous_hash", "event_hash", "payload"))
+_PAYLOAD_FIELDS = frozenset(("mutation_id", "state_id", "operation_id", "attempt_id",
+                             "authority_ref", "revision", "previous_hash", "state"))
+_RECEIPT_FIELDS = frozenset(("mutation_id", "command_fingerprint", "original_revision", "result"))
+_RESULT_FIELDS = frozenset(("revision", "event_id", "event_hash", "synthetic"))
+
+
+def _db_row(row: Any, fields: frozenset[str]) -> None:
+    if type(row) is not dict or set(row) != fields:
+        raise Rejected("DB_ROW_INVALID")
+
+
+def _db_hash(value: Any, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    if type(value) is not str or _DB_HASH.fullmatch(value) is None:
+        raise Rejected("DB_ROW_INVALID")
+
+
+def _db_state(row: Any) -> None:
+    _db_row(row, _STATE_FIELDS)
+    if type(row["revision"]) is not int or not (1 <= row["revision"] <= MAX_REVISION):
+        raise Rejected("DB_ROW_INVALID")
+    if type(row["state"]) is not dict or row["state"].get("synthetic") is not True:
+        raise Rejected("DB_ROW_INVALID")
+    _db_hash(row["last_event_sha256"])
+    try:
+        canonical(row["state"])
+    except (Rejected, TypeError, ValueError, UnicodeError, RecursionError):
+        raise Rejected("DB_ROW_INVALID") from None
+
+
+def _db_event(row: Any) -> None:
+    _db_row(row, _EVENT_FIELDS)
+    if type(row["event_id"]) is not str or not row["event_id"].endswith("-event"):
+        raise Rejected("DB_ROW_INVALID")
+    if _ID.fullmatch(row["event_id"][:-6]) is None:
+        raise Rejected("DB_ROW_INVALID")
+    if type(row["sequence"]) is not int or not (1 <= row["sequence"] <= MAX_REVISION):
+        raise Rejected("DB_ROW_INVALID")
+    _db_hash(row["previous_hash"], nullable=True)
+    _db_hash(row["event_hash"])
+    payload = row["payload"]
+    _db_row(payload, _PAYLOAD_FIELDS)
+    if (type(payload["revision"]) is not int or payload["revision"] != row["sequence"]
+        or type(payload["state_id"]) is not str or _ID.fullmatch(payload["state_id"]) is None
+        or payload["authority_ref"] != AUTHORITY
+        or type(payload["state"]) is not dict or payload["state"].get("synthetic") is not True):
+        raise Rejected("DB_ROW_INVALID")
+    _db_hash(payload["previous_hash"], nullable=True)
+    for field in ("mutation_id", "attempt_id", "operation_id"):
+        if type(payload[field]) is not str or _ID.fullmatch(payload[field]) is None:
+            raise Rejected("DB_ROW_INVALID")
+    try:
+        canonical(payload)
+    except (Rejected, TypeError, ValueError, UnicodeError, RecursionError):
+        raise Rejected("DB_ROW_INVALID") from None
+
+
+def _db_receipt(row: Any) -> None:
+    _db_row(row, _RECEIPT_FIELDS)
+    if type(row["mutation_id"]) is not str or _ID.fullmatch(row["mutation_id"]) is None:
+        raise Rejected("DB_ROW_INVALID")
+    _db_hash(row["command_fingerprint"])
+    if type(row["original_revision"]) is not int or not (1 <= row["original_revision"] <= MAX_REVISION):
+        raise Rejected("DB_ROW_INVALID")
+    result = row["result"]
+    _db_row(result, _RESULT_FIELDS)
+    if (type(result["revision"]) is not int or result["revision"] != row["original_revision"]
+        or result["synthetic"] is not True
+        or type(result["event_id"]) is not str or result["event_id"] != row["mutation_id"] + "-event"):
+        raise Rejected("DB_ROW_INVALID")
+    _db_hash(result["event_hash"])
+
+
 def _rows_chain(cur, state_id: str, state_row: dict | None) -> list[dict]:
     cur.execute(_CHAIN, (state_id,))
     rows = cur.fetchall()
     if len(rows) > MAX_REVISION:
         raise Rejected("CHAIN_LIMIT")
+    if state_row is not None:
+        _db_state(state_row)
     if state_row is None:
         if rows:
             raise Rejected("ORPHAN_EVENTS")
@@ -238,6 +319,7 @@ def _rows_chain(cur, state_id: str, state_row: dict | None) -> list[dict]:
         raise Rejected("CHAIN_REVISION_MISMATCH")
     previous = None
     for i, row in enumerate(rows, start=1):
+        _db_event(row)
         p = row["payload"]
         if (row["sequence"] != i or row["previous_hash"] != previous
             or type(p) is not dict or p.get("state_id") != state_id
@@ -256,6 +338,7 @@ def _rows_chain(cur, state_id: str, state_row: dict | None) -> list[dict]:
 
 
 def _verify_receipt(cur, cmd: Command, receipt: dict) -> dict:
+    _db_receipt(receipt)
     if receipt["mutation_id"] != cmd.mutation_id or receipt["command_fingerprint"] != cmd.fingerprint():
         raise Rejected("MUTATION_IDENTITY_COLLISION")
     expected_new = cmd.expected_revision + 1
