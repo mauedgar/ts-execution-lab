@@ -106,14 +106,19 @@ def strict_loads(data: str) -> Any:
     return obj
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class Command:
     operation_id: str
     attempt_id: str
     mutation_id: str
     state_id: str
     expected_revision: int
-    state: dict
+    _state_json: str
+
+    @property
+    def state(self) -> dict:
+        # A new JSON object for each access: no mutable state escapes the validated snapshot.
+        return json.loads(self._state_json)
 
     @staticmethod
     def from_dict(raw: Any) -> "Command":
@@ -130,7 +135,11 @@ class Command:
         if type(raw["state"]) is not dict or raw["state"].get("synthetic") is not True:
             raise Rejected("NON_SYNTHETIC_STATE")
         canonical(raw)  # Forbid floats, malformed Unicode, overlarge JSON.
-        return Command(raw["operation_id"], raw["attempt_id"], raw["mutation_id"], raw["state_id"], rev, raw["state"])
+        cmd = object.__new__(Command)
+        for key in ("operation_id", "attempt_id", "mutation_id", "state_id", "expected_revision"):
+            object.__setattr__(cmd, key, raw[key])
+        object.__setattr__(cmd, "_state_json", canonical(raw["state"]))
+        return cmd
 
     def wire(self) -> dict:
         return {"kind": "SyntheticState", "authority_ref": AUTHORITY,
@@ -143,6 +152,11 @@ class Command:
 
     def event_id(self) -> str:
         return self.mutation_id + "-event"
+
+
+def _guard_command(cmd: Command) -> None:
+    if type(cmd) is not Command or not isinstance(getattr(cmd, "_state_json", None), str):
+        raise Rejected("COMMAND_NOT_VALIDATED")
 
 
 def _guard_connection(conn) -> None:
@@ -183,8 +197,12 @@ def _rows_chain(cur, state_id: str, state_row: dict | None) -> list[dict]:
         if (row["sequence"] != i or row["previous_hash"] != previous
             or type(p) is not dict or p.get("state_id") != state_id
             or p.get("revision") != i or p.get("previous_hash") != previous
-            or row["event_id"] != p.get("mutation_id", "") + "-event"
-            or row["event_hash"] != digest(p)):
+            or p.get("authority_ref") != AUTHORITY
+            or type(p.get("state")) is not dict or p["state"].get("synthetic") is not True
+            or any(type(p.get(k)) is not str or not _ID.fullmatch(p[k]) for k in
+                   ("mutation_id", "attempt_id", "operation_id"))
+            or row["event_id"] != p["mutation_id"] + "-event"
+            or row["event_hash"] != digest(p)) :
             raise Rejected("CHAIN_HASH_MISMATCH")
         previous = row["event_hash"]
     if state_row["last_event_sha256"] != previous or state_row["state"] != rows[-1]["payload"]["state"]:
@@ -227,6 +245,7 @@ def apply_once(conn, cmd: Command) -> dict:
     COMMIT transmission failure => UNKNOWN (no automatic replay, ever).
     Other driver failures => fail closed; reconcile before any future write.
     """
+    _guard_command(cmd)
     _guard_connection(conn)
     with conn.cursor() as cur:
         started = False
@@ -289,6 +308,7 @@ def apply_once(conn, cmd: Command) -> dict:
 
 def reconcile_readonly(conn, cmd: Command) -> dict:
     """A brand-new read-only transaction, including receipt/chain in one snapshot."""
+    _guard_command(cmd)
     _guard_connection(conn)
     with conn.cursor() as cur:
         try:
