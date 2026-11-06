@@ -16,14 +16,45 @@ const LOCK_SHA = '8241c9d02d2da25a11b2d6c16e0c6fc64aaf2835';
 const PKG_SHA = 'fa733e5bc20c5c257a042df9bfbea5377a6c7018';
 const PG_VERSION = '8.23.1';
 class Blocked extends Error { constructor(code) { super(code); this.code = code; } }
+// All path components must be physical and regular; on Windows Node reports
+// symlink/junction reparse-point links through lstatSync(). Windows-specific
+// non-link reparse-point classes still require a trusted immutable checkout.
 function requireFile(file) {
-  let st;
-  try { st = fs.lstatSync(file); } catch { throw new Blocked('FILE_UNAVAILABLE'); }
-  if (!st.isFile() || st.isSymbolicLink() || st.size > 1024 * 1024) {
-    throw new Blocked('FILE_NOT_REGULAR');
+  const target = path.resolve(file);
+  const volume = path.parse(target).root;
+  const parts = path.relative(volume, target).split(path.sep).filter(Boolean);
+  let current = volume;
+  for (let i = 0; i < parts.length; i++) {
+    current = path.join(current, parts[i]);
+    let st;
+    try { st = fs.lstatSync(current); } catch { throw new Blocked('FILE_UNAVAILABLE'); }
+    if (st.isSymbolicLink()) throw new Blocked('PATH_REDIRECT');
+    if (i < parts.length - 1 && !st.isDirectory()) throw new Blocked('PATH_NOT_DIRECTORY');
+    if (i === parts.length - 1 && (!st.isFile() || st.size > 1024 * 1024)) {
+      throw new Blocked('FILE_NOT_REGULAR');
+    }
   }
-  try { return fs.readFileSync(file); } catch { throw new Blocked('FILE_UNREADABLE'); }
+  let real;
+  try { real = fs.realpathSync.native(target); } catch { throw new Blocked('FILE_UNAVAILABLE'); }
+  const canonical = x => process.platform === 'win32' ? path.normalize(x).toLowerCase() : path.normalize(x);
+  if (canonical(real) !== canonical(target)) throw new Blocked('PATH_REDIRECT');
+  let fd;
+  try { fd = fs.openSync(target, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0)); }
+  catch { throw new Blocked('FILE_UNAVAILABLE'); }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile() || st.size > 1024 * 1024) throw new Blocked('FILE_NOT_REGULAR');
+    const content = fs.readFileSync(fd);
+    if (content.length !== st.size || content.length > 1024 * 1024) throw new Blocked('FILE_CHANGED');
+    return content;
+  } catch (error) {
+    if (error instanceof Blocked) throw error;
+    throw new Blocked('FILE_UNREADABLE');
+  } finally {
+    try { fs.closeSync(fd); } catch { /* parent contract treats close error as non-effect */ }
+  }
 }
+
 function gitBlob(content) {
   return crypto.createHash('sha1').update(Buffer.from(`blob ${content.length}\0`)).update(content).digest('hex');
 }
