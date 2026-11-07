@@ -52,8 +52,8 @@ def validate_dsn(dsn: str) -> None:
     options = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
     ensure(set(options).issubset({"sslmode", "channel_binding"}), "UNEXPECTED_DSN_OPTION")
     ensure(len(options.get("sslmode", [])) == 1 and
-           options["sslmode"][0] in ("require", "verify-ca", "verify-full"),
-           "TLS_REQUIRED")
+           options["sslmode"][0] == "verify-full",
+           "SERVER_NAME_VERIFICATION_REQUIRED")
     # Absence is NOT equivalent to libpq's explicit channel_binding=require.
     ensure(len(options.get("channel_binding", [])) == 1 and
            options["channel_binding"][0] == "require",
@@ -65,16 +65,16 @@ def self_test() -> None:
         "postgresql://" + EXPECTED_ROLE + ":fake-only-placeholder@"
         + EXPECTED_HOST + "/" + EXPECTED_DB
     )
-    validate_dsn(stem + "?sslmode=require&channel_binding=require")
     validate_dsn(stem + "?sslmode=verify-full&channel_binding=require")
     validate_dsn(stem.replace("fake-only-placeholder",
              "encoded%40colon%3Aslash%2Fpercent%25") +
              "?sslmode=verify-full&channel_binding=require")
-    valid_suffix = "?sslmode=require&channel_binding=require"
+    valid_suffix = "?sslmode=verify-full&channel_binding=require"
     invalid = (
-        # Missing channel_binding was the independent F001 false accept.
-        stem + "?sslmode=require",
+        # Missing channel_binding was independent F001; weak TLS must fail too.
         stem + "?sslmode=verify-full",
+        stem + "?sslmode=require&channel_binding=require",
+        stem + "?sslmode=verify-ca&channel_binding=require",
         stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
             + valid_suffix,
         stem.replace(EXPECTED_ROLE, "tsr3_owner", 1) + valid_suffix,
@@ -116,6 +116,7 @@ def qualify() -> dict[str, object]:
         connection = psycopg.connect(
             dsn, autocommit=True, row_factory=dict_row,
             connect_timeout=10, application_name=EXPECTED_APP,
+            sslrootcert="system",
         )
         ensure(connection.info.transaction_status.name == "IDLE",
                "NOT_TOP_LEVEL_IDLE")

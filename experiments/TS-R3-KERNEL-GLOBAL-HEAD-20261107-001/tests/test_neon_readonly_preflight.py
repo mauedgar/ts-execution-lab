@@ -1,7 +1,7 @@
 """A001 safe DSN metadata validation tests; strictly no network or credentials."""
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 import importlib.util
 import io
 from pathlib import Path
@@ -24,14 +24,10 @@ class NeonMetadataPreflightTests(unittest.TestCase):
             "ep-lucky-waterfall-b6244mdy.c-2.sa-east-1.aws.neon.tech/"
             "ts_remote_r3"
         )
-        self.good = self.base + "?sslmode=require&channel_binding=require"
+        self.good = self.base + "?sslmode=verify-full&channel_binding=require"
 
     def test_valid_pinned_metadata_and_encoded_password(self) -> None:
         mod.validate_dsn(self.good)
-        mod.validate_dsn(
-            self.base + "?sslmode=verify-full&channel_binding=require")
-        mod.validate_dsn(
-            self.base + "?sslmode=verify-ca&channel_binding=require")
 
     def test_missing_channel_binding_is_never_defaulted(self) -> None:
         for suffix in (
@@ -48,6 +44,8 @@ class NeonMetadataPreflightTests(unittest.TestCase):
 
     def test_rejects_unknown_or_downgraded_transport(self) -> None:
         for suffix in (
+            "?sslmode=require&channel_binding=require",
+            "?sslmode=verify-ca&channel_binding=require",
             "?sslmode=disable&channel_binding=require",
             "?sslmode=allow&channel_binding=require",
             "?sslmode=prefer&channel_binding=require",
@@ -102,6 +100,39 @@ class NeonMetadataPreflightTests(unittest.TestCase):
         with redirect_stdout(out):
             self.assertEqual(mod.main(["--not-approved"]), 2)
         self.assertIn("BLOCKED_UNEXPECTED_ARGUMENTS", out.getvalue())
+
+    def test_fake_driver_failure_is_redacted_and_system_roots_pinned(self) -> None:
+        import sys
+        import types
+
+        secret = "TEST_ONLY_FAKE_SECRET_DO_NOT_PRINT"
+        fake_dsn = self.good.replace(
+            "encoded%40with%3Acolons%2Fslash%25percent", secret
+        )
+        fake_psycopg = types.ModuleType("psycopg")
+        fake_psycopg.__version__ = "3.3.8"
+        fake_psycopg.pq = types.SimpleNamespace(__impl__="binary")
+        fake_psycopg.connect = mock.Mock(
+            side_effect=RuntimeError("FAKE_LIBPQ_ERROR_WITH_" + secret)
+        )
+        fake_rows = types.ModuleType("psycopg.rows")
+        fake_rows.dict_row = object()
+        out = io.StringIO()
+        err = io.StringIO()
+        with mock.patch.object(mod.sys, "version_info", (3, 15, 2)):
+            with mock.patch.dict(sys.modules, {
+                "psycopg": fake_psycopg, "psycopg.rows": fake_rows
+            }):
+                with mock.patch.dict(mod.os.environ, {mod.SECRET_ENV: fake_dsn}):
+                    with redirect_stdout(out), redirect_stderr(err):
+                        self.assertEqual(mod.main([]), 2)
+        self.assertEqual(err.getvalue(), "")
+        self.assertIn("BLOCKED_PRECONDITION", out.getvalue())
+        self.assertNotIn(secret, out.getvalue())
+        fake_psycopg.connect.assert_called_once()
+        self.assertEqual(
+            fake_psycopg.connect.call_args.kwargs["sslrootcert"], "system"
+        )
 
     def test_no_secret_fails_closed_without_importing_psycopg(self) -> None:
         out = io.StringIO()
