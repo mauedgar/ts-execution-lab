@@ -134,6 +134,60 @@ class NeonMetadataPreflightTests(unittest.TestCase):
             fake_psycopg.connect.call_args.kwargs["sslrootcert"], "system"
         )
 
+    def test_rejected_metadata_never_calls_driver(self) -> None:
+        import sys
+        import types
+
+        fake_psycopg = types.ModuleType("psycopg")
+        fake_psycopg.__version__ = "3.3.8"
+        fake_psycopg.pq = types.SimpleNamespace(__impl__="binary")
+        fake_psycopg.connect = mock.Mock(side_effect=AssertionError("CONNECT_FORBIDDEN"))
+        fake_rows = types.ModuleType("psycopg.rows")
+        fake_rows.dict_row = object()
+        bad = (
+            self.base + "?sslmode=require&channel_binding=require",
+            self.base + "?sslmode=verify-ca&channel_binding=require",
+            self.base + "?sslmode=verify-full",
+            self.good.replace("tsr3_host_a_rw", "tsr3_owner", 1),
+            self.good.replace("ts_remote_r3", "postgres", 1),
+            self.good.replace(".c-2.", "-pooler.c-2.", 1),
+            self.good.replace("encoded%40with%3Acolons%2Fslash%25percent", "%00"),
+            self.good + "&channel_binding=disable",
+        )
+        with mock.patch.object(mod.sys, "version_info", (3, 15, 2)):
+            with mock.patch.dict(sys.modules, {
+                "psycopg": fake_psycopg, "psycopg.rows": fake_rows
+            }):
+                for candidate in bad:
+                    output = io.StringIO()
+                    errors = io.StringIO()
+                    with self.subTest(candidate="rejected metadata"):
+                        with mock.patch.dict(mod.os.environ, {mod.SECRET_ENV: candidate}):
+                            with redirect_stdout(output), redirect_stderr(errors):
+                                self.assertEqual(mod.main([]), 2)
+                        self.assertIn("BLOCKED_PRECONDITION", output.getvalue())
+                        self.assertEqual(errors.getvalue(), "")
+        fake_psycopg.connect.assert_not_called()
+
+    def test_libpq_parser_synthetic_uri_agreement(self) -> None:
+        from psycopg.conninfo import conninfo_to_dict
+
+        # Public synthetic placeholders only; no network, no real secrets.
+        for password in (
+            "encoded%40with%3Acolons%2Fslash%25percent",
+            "synthetic%20pass%40symbol",
+        ):
+            uri = self.good.replace(
+                "encoded%40with%3Acolons%2Fslash%25percent", password
+            )
+            mod.validate_dsn(uri)
+            parsed = conninfo_to_dict(uri)
+            self.assertEqual(parsed["host"], mod.EXPECTED_HOST)
+            self.assertEqual(parsed["user"], mod.EXPECTED_ROLE)
+            self.assertEqual(parsed["dbname"], mod.EXPECTED_DB)
+            self.assertEqual(parsed["sslmode"], "verify-full")
+            self.assertEqual(parsed["channel_binding"], "require")
+
     def test_no_secret_fails_closed_without_importing_psycopg(self) -> None:
         out = io.StringIO()
         with mock.patch.dict(mod.os.environ, {mod.SECRET_ENV: ""}):
