@@ -93,6 +93,8 @@ def main() -> int:
             "CONFIRMED", True, rev
         )
         receipts.append(command)
+        # Bind the next event to this source Product generation's exact hash.
+        prior_hash = stage["event_hash"]
 
     # Read-only receipt replay must not append or modify a second event.
     before_head = read(db, scope)
