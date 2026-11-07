@@ -40,8 +40,20 @@ def obj(value: Any, fields: set[str]) -> None:
     ensure(type(value) is dict and set(value) == fields)
 
 
+# ECMAScript String.prototype.trim WhiteSpace and LineTerminator code points.
+# Python str.strip() is NOT equivalent: it removes U+0085 and U+001C..U+001F
+# but does not remove U+FEFF, which JS removes. Product source oracle:
+# tecnotron-ai@26509b74d50207bb247dcc9bdb929a63f5451e88,
+# src/state-kernel-v0/contracts.js (Git blob 5d2d3a8a24ebc17339675e0c801595956e0cd353).
+JS_TRIM = (
+    "\t\n\v\f\r \u00a0\u1680"
+    + "".join(chr(cp) for cp in range(0x2000, 0x200B))
+    + "\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
 def string(value: Any) -> bool:
-    return type(value) is str and bool(value) and value.strip() == value
+    return type(value) is str and bool(value) and value.strip(JS_TRIM) == value
 
 
 def refstring(value: Any) -> bool:
