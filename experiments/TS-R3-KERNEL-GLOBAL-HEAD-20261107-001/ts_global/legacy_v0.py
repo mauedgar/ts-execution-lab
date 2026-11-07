@@ -235,29 +235,65 @@ def _js_order(value: Any) -> Any:
     return value
 
 
-def exact_js_event_payload(payload: Any) -> bytes:
-    """Product V0 JSON.stringify(payload) for the supported no-float JSON subset.
+_LONE_SURROGATE = re.compile(r"[\ud800-\udfff]")
 
-    Preserve insertion order except ECMAScript array-index property ordering.
-    Any unsupported Unicode or number representation must fail closed: this
-    source mirror cannot silently change the persisted event hash input.
+
+def _js_normalize_utf16(value: Any) -> Any:
+    """Model JS UTF-16 strings: merge valid pairs, retain unpaired units.
+
+    json.loads normalizes escaped surrogate pairs for common JSON inputs,
+    but an in-memory Python string can still contain explicit UTF-16 units.
     """
+    if type(value) is str:
+        return value.encode("utf-16-le", "surrogatepass").decode(
+            "utf-16-le", "surrogatepass"
+        )
+    if type(value) is list:
+        return [_js_normalize_utf16(element) for element in value]
+    if type(value) is dict:
+        output = {}
+        for key, element in value.items():
+            ensure(type(key) is str, "PRODUCT_V0_ENCODING_UNSUPPORTED")
+            normalized_key = _js_normalize_utf16(key)
+            ensure(normalized_key not in output, "PRODUCT_V0_ENCODING_UNSUPPORTED")
+            output[normalized_key] = _js_normalize_utf16(element)
+        return output
+    return value
+
+
+def _js_encode_json(value: Any, *, indent: int | None = None) -> bytes:
+    """Exact JSON.stringify UTF-8 on Product V0's supported no-float subset.
+
+    ECMAScript's well-formed JSON.stringify escapes *unpaired* UTF-16
+    surrogate code units as lowercase \udxxx, but emits valid pairs as UTF-8.
+    Python json.dumps(ensure_ascii=False) leaves isolated surrogate code
+    points unencoded, which previously caused a false rejection.
+    """
+    normalized = _js_order(_js_normalize_utf16(value))
+    if indent is None:
+        encoded = json.dumps(normalized, ensure_ascii=False,
+                             separators=(",", ":"), allow_nan=False)
+    else:
+        encoded = json.dumps(normalized, ensure_ascii=False,
+                             indent=indent, allow_nan=False)
+    encoded = _LONE_SURROGATE.sub(
+        lambda match: "\\u%04x" % ord(match.group()), encoded
+    )
+    return encoded.encode("utf-8", "strict")
+
+
+def exact_js_event_payload(payload: Any) -> bytes:
+    """Product V0 JSON.stringify(payload), including well-formed JS UTF-16."""
     ensure(type(payload) is dict)
     try:
-        return json.dumps(_js_order(payload), ensure_ascii=False,
-                          separators=(",", ":"), allow_nan=False).encode("utf-8", "strict")
+        return _js_encode_json(payload)
     except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
         raise ValueError("PRODUCT_V0_ENCODING_UNSUPPORTED") from exc
 
 
 def exact_js_snapshot(s: Any) -> bytes:
-    """JS JSON.stringify(s, null, 2)+'\\n' for the accepted no-float V0 JSON subset.
-
-    Unsupported Unicode encodings fail closed; this does not grant Product
-    competence. The final acceptance still compares native JS Product outputs.
-    """
+    """Product V0 JSON.stringify(state, null, 2)+'\n' exact bytes."""
     try:
-        encoded=(json.dumps(_js_order(s), ensure_ascii=False, indent=2, allow_nan=False)+'\n').encode('utf-8','strict')
-    except (UnicodeError, ValueError, TypeError, RecursionError) as e:
-        raise ValueError('PRODUCT_V0_ENCODING_UNSUPPORTED') from e
-    return encoded
+        return _js_encode_json(s, indent=2) + b"\n"
+    except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
+        raise ValueError("PRODUCT_V0_ENCODING_UNSUPPORTED") from exc
