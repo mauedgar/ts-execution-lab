@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import base64
 import gc
-from hashlib import sha256
+from hashlib import sha1, sha256
 import json
+import resource
+import signal
 from pathlib import Path
 import sys
 import time
@@ -26,6 +28,32 @@ from ts_global.bridge import apply, initialize, read  # noqa: E402
 
 COUNTS = (0, 1, 7, 14)
 MAX_MUTATIONS = len(GOLDEN["mutations"])
+GOLDEN_GIT_BLOB = "e9937b4bf48a1e87d8d23d7742d9729334172d68"
+CAP_RLIMIT_AS_BYTES = 512 * 1024 * 1024
+CAP_CPU_SECONDS = 30
+CAP_WALL_SECONDS = 45
+
+
+def _time_limit(_signal: int, _frame: object) -> None:
+    raise TimeoutError("A003_WALL_TIME_LIMIT")
+
+
+def _preflight() -> None:
+    if sys.platform != "linux":
+        raise RuntimeError("A003_LINUX_ONLY_RESOURCE_LIMITS")
+    fixture = (ROOT / "oracle" / "golden.json").read_bytes()
+    git_hash = sha1(b"blob " + str(len(fixture)).encode("ascii") +
+                    b"\x00" + fixture).hexdigest()
+    if git_hash != GOLDEN_GIT_BLOB:
+        raise RuntimeError("A003_FROZEN_FIXTURE_MISMATCH")
+    if MAX_MUTATIONS != 14 or COUNTS != (0, 1, 7, 14):
+        raise RuntimeError("A003_UNEXPECTED_WORKLOAD")
+    resource.setrlimit(resource.RLIMIT_AS,
+                       (CAP_RLIMIT_AS_BYTES, CAP_RLIMIT_AS_BYTES))
+    resource.setrlimit(resource.RLIMIT_CPU,
+                       (CAP_CPU_SECONDS, CAP_CPU_SECONDS))
+    signal.signal(signal.SIGALRM, _time_limit)
+    signal.alarm(CAP_WALL_SECONDS)
 
 
 def qualify(count: int) -> dict[str, object]:
@@ -41,7 +69,11 @@ def qualify(count: int) -> dict[str, object]:
         before = time.perf_counter_ns()
         receipt = apply(db, mutation(index))
         per_mutation.append(time.perf_counter_ns() - before)
-        if receipt.disposition != "CONFIRMED" or receipt.revision != index + 1:
+        expected = GOLDEN["mutations"][index]
+        if (receipt.disposition != "CONFIRMED" or
+                receipt.revision != index + 1 or receipt.replay is not False or
+                receipt.event_hash != expected["event_hash"] or
+                receipt.fingerprint != mutation(index).fingerprint()):
             raise AssertionError("BAD_SYNTHETIC_RECEIPT")
     before_read = time.perf_counter_ns()
     view = read(db, GOLDEN["scope"])
@@ -79,12 +111,15 @@ def qualify(count: int) -> dict[str, object]:
 
 
 def main() -> int:
-    if MAX_MUTATIONS != 14:
-        raise ValueError("FROZEN_14_EVENT_ORACLE_CHANGED")
+    _preflight()
     observed = [qualify(n) for n in COUNTS]
     print(json.dumps({
         "schema": "ts-r3-a003-bounded-capacity/v1",
         "source": "frozen 14-event synthetic oracle",
+        "source_git_blob": GOLDEN_GIT_BLOB,
+        "rlimit_as_bytes": CAP_RLIMIT_AS_BYTES,
+        "cpu_seconds_ceiling": CAP_CPU_SECONDS,
+        "wall_seconds_ceiling": CAP_WALL_SECONDS,
         "python": sys.version.split()[0],
         "cases": observed,
         "scope": "NONPRODUCT / NO_DB / NOT_SCALE_PROOF",
@@ -96,4 +131,15 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as error:
+        print(json.dumps({
+            "schema": "ts-r3-a003-bounded-capacity/v2",
+            "status": "FAILED",
+            "error_type": type(error).__name__,
+            "error_code": str(error)[:200],
+            "Product": "NONE",
+            "PostgreSQL": "NOT_RUN",
+        }, sort_keys=True))
+        raise SystemExit(2)
