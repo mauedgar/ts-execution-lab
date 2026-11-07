@@ -1,0 +1,70 @@
+name: TS R3 A003 bounded synthetic capacity Linux smoke
+on:
+  push:
+    branches:
+      - ee/ts-r3-a003-capacity-native-20261107-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a003-capacity-native-20261107-001
+  cancel-in-progress: false
+jobs:
+  isolated-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Read-only checkout with pinned action
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Confirm frozen source and unique workflow-only change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "7c469d4fe32e7c1f5c7f1c45f4f6fe75f9b0e323"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/ts-r3-a003-capacity-20261107-001.yml"
+          test "$(git hash-object experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/benchmarks/capacity_smoke.py)" = "fbd81424aadd506e1054a7c273890aefbc148d64"
+          test "$(git hash-object experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/oracle/golden.json)" = "e9937b4bf48a1e87d8d23d7742d9729334172d68"
+          test -z "$(git status --porcelain)"
+          echo "SYNTHETIC_SOURCE_IDENTITY_PASS"
+      - name: Bounded Linux-only Python smoke, original exit and memory evidence
+        run: |
+          set -uo pipefail
+          python3 --version
+          test "$(uname -s)" = "Linux" || exit 90
+          start=$(date +%s)
+          set +e
+          timeout --signal=TERM --kill-after=5s 70s python3 -B experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/benchmarks/capacity_smoke.py 2>&1 | tee "$RUNNER_TEMP/a003-capacity-original.txt"
+          status=$?
+          set -e
+          end=$(date +%s)
+          echo "A003_NATIVE_PROCESS_EXIT=$status"
+          echo "A003_WALL_SECONDS=$((end-start))"
+          if [ -f /sys/fs/cgroup/memory.peak ]; then
+            printf 'A003_CGROUP_MEMORY_PEAK_BYTES='
+            cat /sys/fs/cgroup/memory.peak
+          else
+            echo "A003_CGROUP_MEMORY_PEAK_BYTES=UNAVAILABLE"
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "A003_PROCESS_FAILED_OR_TIMED_OUT"
+            exit "$status"
+          fi
+          python3 - "$RUNNER_TEMP/a003-capacity-original.txt" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          rows=p.read_text().splitlines()
+          assert len(rows)==1, "EXACTLY_ONE_JSON_LINE_REQUIRED"
+          data=json.loads(rows[0])
+          assert data["schema"]=="ts-r3-a003-bounded-capacity/v1"
+          assert [c["count"] for c in data["cases"]]==[0,1,7,14]
+          assert all(c["status"]=="PASS_SYNTHETIC_ONLY" and c["physical_postgresql"]=="NOT_RUN" for c in data["cases"])
+          assert data["scope"]=="NONPRODUCT / NO_DB / NOT_SCALE_PROOF"
+          print("A003_FOUR_CASES_VERIFIED")
+          PY
+          sha256sum "$RUNNER_TEMP/a003-capacity-original.txt"
