@@ -262,7 +262,7 @@ def _js_normalize_utf16(value: Any) -> Any:
 
 
 def _js_encode_json(value: Any, *, indent: int | None = None) -> bytes:
-    """Exact JSON.stringify UTF-8 on Product V0's supported no-float subset.
+    r"""Exact JSON.stringify UTF-8 on Product V0's supported no-float subset.
 
     ECMAScript's well-formed JSON.stringify escapes *unpaired* UTF-16
     surrogate code units as lowercase \udxxx, but emits valid pairs as UTF-8.

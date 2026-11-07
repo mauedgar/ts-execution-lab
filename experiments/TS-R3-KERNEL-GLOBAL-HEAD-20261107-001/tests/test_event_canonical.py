@@ -108,12 +108,12 @@ class CanonicalEventBytesTests(unittest.TestCase):
         with self.assertRaisesRegex(StorageRejected, "EVENT_JS_BYTES_MISMATCH"):
             read(self.conn, self.scope)
 
-    def test_11_lone_surrogate_fails_closed(self):
+    def test_11_surrogate_event_id_is_not_valid_event_sequence(self):
         m = mutation(0)
         modified = m.payload_bytes.replace(b'"id":"event-1"',
                                            b'"id":"\\ud800"', 1)
         self.assertNotEqual(modified, m.payload_bytes)
-        self.reject_without_sql(self.forged(m, modified), "PRODUCT_V0_ENCODING_UNSUPPORTED")
+        self.reject_without_sql(self.forged(m, modified), "INVALID_EVENT_ID")
 
 
 if __name__ == "__main__":
