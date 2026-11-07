@@ -162,8 +162,9 @@ class GlobalBridgeTests(unittest.TestCase):
             self.assertEqual(view.state_bytes,m.state_bytes)
         s=json.loads(view.state_bytes)
         self.assertEqual({k:len(v) for k,v in s["aggregates"].items()},
-                         {"Milestone":1,"TaskCycle":1,"Operation":1,"ExecutionAttempt":1})
+                         {"Milestone":1,"TaskCycle":2,"Operation":1,"ExecutionAttempt":1})
         self.assertEqual(s["aggregates"]["TaskCycle"]["TC-SYNTHETIC"]["state"],"CLOSED")
+        self.assertEqual(s["aggregates"]["TaskCycle"]["TC-SYNTHETIC-IMPORTED"]["state"],"READY")
         self.assertEqual(s["aggregates"]["ExecutionAttempt"]["AT-SYNTHETIC"]["state"],"FAILED")
         self.assertFalse(s["aggregates"]["ExecutionAttempt"]["AT-SYNTHETIC"]["reconciliation_required"])
 
