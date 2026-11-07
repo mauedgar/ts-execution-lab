@@ -15,6 +15,8 @@ import json
 import re
 from typing import Any
 
+from . import legacy_v0
+
 SCHEMA = "ts_r3_global_head_20261107_001"
 HEAD = f"{SCHEMA}.head"
 EVENTS = f"{SCHEMA}.events"
@@ -22,7 +24,7 @@ RECEIPTS = f"{SCHEMA}.receipts"
 KINDS = ("Milestone", "TaskCycle", "Operation", "ExecutionAttempt")
 MAX_SAFE = (1 << 53) - 1
 MAX_BYTES = 4 * 1024 * 1024  # bounded synthetic qualification, not a Product scale decision
-_ID = re.compile(r"[A-Za-z][A-Za-z0-9._-]{0,127}\Z")
+_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -44,7 +46,8 @@ def _require(condition: bool, code: str = "INVALID_CONTRACT") -> None:
 
 
 def _id(value: Any) -> None:
-    _require(type(value) is str and _ID.fullmatch(value) is not None, "INVALID_ID")
+    _require(type(value) is str and _ID.fullmatch(value) is not None and
+             value not in ("__proto__", "constructor", "prototype"), "INVALID_ID")
 
 
 def _hash(value: Any) -> None:
@@ -114,6 +117,25 @@ def _structure(snapshot: Any, revision: int) -> None:
             _id(ident)
             _require(type(agg) is dict and agg.get("kind") == k and agg.get("id") == ident,
                      "INVALID_SNAPSHOT")
+    try:
+        legacy_v0.validate_state(snapshot, revision)
+    except ValueError as exc:
+        raise StorageRejected("PRODUCT_V0_CONTRACT_MISMATCH") from exc
+
+
+def _exact_snapshot_bytes(state_bytes: bytes, state: dict) -> None:
+    try:
+        expected = legacy_v0.exact_js_snapshot(state)
+    except ValueError as exc:
+        raise StorageRejected("PRODUCT_V0_ENCODING_UNSUPPORTED") from exc
+    _require(state_bytes == expected, "SNAPSHOT_JS_BYTES_MISMATCH")
+
+
+def _product_event(payload: dict) -> None:
+    try:
+        legacy_v0.validate_event(payload)
+    except ValueError as exc:
+        raise StorageRejected("PRODUCT_V0_EVENT_MISMATCH") from exc
 
 
 def _exact_row(row: Any, keys: set[str]) -> None:
@@ -187,6 +209,8 @@ def _preflight_mutation(m: Mutation) -> tuple[str, dict, dict]:
     _require(payload.get("previous_hash") == m.previous_event_hash, "EVENT_PREVIOUS_HASH_MISMATCH")
     _require(type(payload.get("after")) is dict, "INVALID_EVENT_AFTER")
     _structure(state, m.expected_revision + 1)
+    _exact_snapshot_bytes(m.state_bytes, state)
+    _product_event(payload)
     target_kind = payload["kind"]
     target_id = payload.get("aggregate_id")
     _id(target_id)
@@ -227,7 +251,9 @@ def _snapshot_from_cursor(cur: Any, scope: str, *, locked: bool = False) -> Stat
     _hash(row["state_sha256"])
     _hash(row["events_sha256"])
     _require(_sha(state_bytes) == row["state_sha256"], "SNAPSHOT_TAMPERED")
-    _structure(_parse(state_bytes), revision)
+    parsed_state = _parse(state_bytes)
+    _structure(parsed_state, revision)
+    _exact_snapshot_bytes(state_bytes, parsed_state)
     cur.execute(f"SELECT revision,event_hash,previous_event_hash,payload_bytes,event_line FROM {EVENTS} "
                 "WHERE scope=%s ORDER BY revision", (scope,))
     rows = cur.fetchall()
@@ -254,6 +280,7 @@ def _snapshot_from_cursor(cur: Any, scope: str, *, locked: bool = False) -> Stat
                  {k: v for k, v in line_event.items() if k != "hash"} == payload,
                  "EVENT_LINE_PAYLOAD_MISMATCH")
         _require(_sha(payload_bytes) == event_row["event_hash"], "EVENT_HASH_MISMATCH")
+        _product_event(payload)
         _require(event_row["previous_event_hash"] == prev and payload.get("previous_hash") == prev,
                  "EVENT_CHAIN_MISMATCH")
         _require(payload.get("id") == f"event-{seq}" and payload.get("sequence") == seq,
@@ -278,6 +305,7 @@ def _snapshot_from_cursor(cur: Any, scope: str, *, locked: bool = False) -> Stat
     event_bytes = b"".join(event_parts)
     _require(_sha(event_bytes) == row["events_sha256"], "EVENT_STREAM_TAMPERED")
     _require(previous_state == _parse(state_bytes), "SNAPSHOT_REPLAY_MISMATCH")
+    _exact_snapshot_bytes(state_bytes, previous_state)
     return StateView(scope, revision, state_bytes, event_bytes, prev,
                      row["state_sha256"], row["events_sha256"])
 
@@ -303,7 +331,11 @@ def initialize(conn: Any, scope: str, state_bytes: bytes) -> StateView:
     _require_conn(conn)
     state = _parse(state_bytes)
     _structure(state, 0)
+    _exact_snapshot_bytes(state_bytes, state)
     _require(all(not state["aggregates"][k] for k in KINDS), "GENESIS_NOT_EMPTY")
+    virgin = {"schema_version": "tecnotron-state-kernel/v0", "revision": 0,
+              "aggregates": {k: {} for k in KINDS}}
+    _require(state_bytes == legacy_v0.exact_js_snapshot(virgin), "GENESIS_BYTES_MISMATCH")
     state_bytes = _bytes(state_bytes)
     attempted = False
     try:
@@ -361,9 +393,14 @@ def apply(conn: Any, command: Mutation) -> Receipt:
                 target = _parse(command.payload_bytes)
                 kind = target["kind"]
                 ident = target["aggregate_id"]
+                before = previous["aggregates"][kind].get(ident)
+                _require(target["before_revision"] == (before or {}).get("revision", 0),
+                         "AGGREGATE_REVISION_MISMATCH")
                 previous["aggregates"][kind][ident] = target["after"]
                 previous["revision"] += 1
                 _require(previous == proposed, "SNAPSHOT_REPLAY_MISMATCH")
+                _require(legacy_v0.exact_js_snapshot(previous) == command.state_bytes,
+                         "SNAPSHOT_JS_BYTES_MISMATCH")
                 new_stream = current.event_bytes + command.event_line
                 dispatched = True  # before UPDATE dispatch, including lost SQL response
                 cur.execute(f"UPDATE {HEAD} SET revision=%s,state_bytes=%s,state_sha256=%s,"
