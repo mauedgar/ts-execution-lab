@@ -171,6 +171,41 @@ def validate_state(s: Any, revision: int) -> None:
             validate_aggregate(aggregate, kind, ident)
 
 
+def validate_state_semantic(s: Any, revision: int) -> None:
+    """Validate Product-compatible in-memory state, independent of object key order.
+
+    Strict validate_state() remains the existing persisted-wire guard used by
+    bridge.py, including its historical byte-shape preconditions. This helper
+    does not modify its input, serialize bytes, authorize mutation or weaken
+    any existing bridge check. The Product JS runtime is the oracle.
+    """
+    obj(s, {"schema_version", "revision", "aggregates"})
+    obj(s["aggregates"], set(KINDS))
+    common_fields = ("schema_version", "kind", "id", "revision", "state",
+                     "created_at", "updated_at", "authority_refs", "related_ids",
+                     "last_event_id")
+    extra_fields = {
+        "Milestone": ("title",),
+        "TaskCycle": ("responsibility", "obligations", "terminal_disposition_ref"),
+        "Operation": ("taskcycle_id", "objective", "result_ref"),
+        "ExecutionAttempt": ("operation_id", "outcome",
+                             "reconciliation_required", "result_refs"),
+    }
+    normalized_aggregates: dict[str, dict[str, dict]] = {}
+    for kind in KINDS:
+        amap = s["aggregates"][kind]
+        ensure(type(amap) is dict)
+        normalized_map: dict[str, dict] = {}
+        for ident, aggregate in amap.items():
+            fields = common_fields + extra_fields[kind]
+            obj(aggregate, set(fields))
+            normalized_map[ident] = {field: aggregate[field] for field in fields}
+        normalized_aggregates[kind] = normalized_map
+    ordered = {"schema_version": s["schema_version"], "revision": s["revision"],
+               "aggregates": normalized_aggregates}
+    validate_state(ordered, revision)
+
+
 def validate_event(event: Any) -> None:
     ensure(type(event) is dict)
     required = {"id", "sequence", "kind", "aggregate_id", "before_revision", "after",

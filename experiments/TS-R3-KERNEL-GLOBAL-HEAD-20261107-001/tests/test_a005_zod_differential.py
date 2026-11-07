@@ -112,12 +112,22 @@ def main(oracle_path):
             py[name] = True
         except (ValueError, KeyError, TypeError):
             py[name] = False
+    semantic = {}
+    for name, state in vectors:
+        try:
+            legacy_v0.validate_state_semantic(state, state.get("revision", -1))
+            semantic[name] = True
+        except (ValueError, KeyError, TypeError):
+            semantic[name] = False
+    if semantic != js or semantic != EXPECTED_JS:
+        raise AssertionError("SEMANTIC_VALIDATION_PARITY_MISMATCH")
     if js != EXPECTED_JS:
         raise AssertionError("UNEXPECTED_PRODUCT_CONTRACT_RESULT")
     if py != EXPECTED_PY:
         raise AssertionError("UNEXPECTED_PYTHON_MIRROR_RESULT")
     if {name for name in js if js[name] != py[name]} != DIVERGENT:
         raise AssertionError("UNEXPECTED_PARITY_DELTA")
+    print("A005_SEMANTIC_PARITY_11_CASES_PASS_WIRE_VALIDATOR_UNCHANGED")
     print("A005_NATIVE_PRODUCT_ZOD_4_6_7_FALSE_REJECT_CONFIRMED_3_CASES")
     print(json.dumps({"status": "SOURCE_ORACLE_DIFFERENTIAL_CONFIRMED",
                       "js_zod": "4.6.7", "cases": len(vectors),
