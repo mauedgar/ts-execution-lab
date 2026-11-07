@@ -238,7 +238,7 @@ class GlobalBridgeTests(unittest.TestCase):
     def test_11_tamper_event_bytes_denied(self):
         apply(self.db,mutation(0))
         self.db.events[(self.scope,1)]["payload_bytes"]+=b' '
-        with self.assertRaisesRegex(StorageRejected,"EVENT_HASH_MISMATCH"):
+        with self.assertRaisesRegex(StorageRejected,"PAYLOAD_FRAMING"):
             read(self.db,self.scope)
 
     def test_12_tamper_chain_head_denied(self):
