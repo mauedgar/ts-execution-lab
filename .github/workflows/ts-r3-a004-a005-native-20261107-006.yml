@@ -1,0 +1,116 @@
+name: TS R3 A004-A005 isolated Python 3.15.2 source qualification
+
+on:
+  push:
+    branches:
+      - ee/ts-r3-native-a004-a005-ci-20261107-006
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ts-r3-native-a004-a005-ci-20261107-006
+  cancel-in-progress: false
+
+jobs:
+  source-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    env:
+      UV_NO_CONFIG: "1"
+      UV_CACHE_DIR: /tmp/ts-r3-uv-20261107
+      PYTHONDONTWRITEBYTECODE: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout bounded experimental candidate (read only)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Verify frozen source parent and only workflow addition
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "52284caf4ee6e721dd4995ada6ec03a53e798284"
+          actual="$(git diff --name-only HEAD^ HEAD)"
+          test "$actual" = ".github/workflows/ts-r3-a004-a005-native-20261107-006.yml"
+          test -z "$(git status --porcelain)"
+          echo "SOURCE_PARENT_VERIFIED=52284caf4ee6e721dd4995ada6ec03a53e798284"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
+
+      - name: Pin Node 22.16.0 (differential oracle only)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.16.0
+
+      - name: Pin uv 0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: 0.13.7
+          enable-cache: false
+
+      - name: Install managed Python 3.15.2 in hosted disposable runner
+        run: |
+          set -euo pipefail
+          uv_exit=0
+          node_exit=0
+          uv_report="$(uv --version 2>&1)" || uv_exit=$?
+          node_report="$(node --version 2>&1)" || node_exit=$?
+          printf 'UV_VERSION_EXIT=%s UV_ACTUAL_VERSION=%s\n' "$uv_exit" "$uv_report"
+          printf 'NODE_VERSION_EXIT=%s NODE_ACTUAL_VERSION=%s\n' "$node_exit" "$node_report"
+          if [ "$uv_exit" -ne 0 ] || { [ "$uv_report" != 'uv 0.13.7' ] && [ "$uv_report" != 'uv 0.13.7 (x86_64-unknown-linux-gnu)' ]; }; then
+            echo 'BLOCKED_UV_VERSION'; exit 31
+          fi
+          if [ "$node_exit" -ne 0 ] || [ "$node_report" != 'v22.16.0' ]; then
+            echo 'BLOCKED_NODE_VERSION'; exit 32
+          fi
+          uv python install 3.15.2
+          uv python find 3.15.2
+          echo "Native Python pin installed on ephemeral GitHub runner, not user's notebook."
+
+      - name: Lock and sync only frozen bridge dependencies
+        working-directory: experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pyproject.toml)" = "2fe9ee1733e71107eac5eb3c915642a3801e210f"
+          uv lock --no-config --python 3.15.2
+          sha256sum uv.lock | tee "$RUNNER_TEMP/ts-r3-lock.sha256"
+          uv lock --no-config --check --python 3.15.2
+          uv sync --no-config --locked --python 3.15.2 --no-install-project
+          sha256sum -c "$RUNNER_TEMP/ts-r3-lock.sha256"
+          .venv/bin/python -I -B -c 'import sys,psycopg,psycopg.pq; assert sys.version_info[:3] == (3,15,2); assert psycopg.__version__ == "3.3.8"; assert psycopg.pq.__impl__ == "binary"; print("PY315_AND_PSYCOPG_IMPORT_ONLY_PASS",sys.version,psycopg.__version__,psycopg.pq.__impl__)'
+          echo "Lock and installed import-only qualification; no DB connection."
+
+      - name: Run all frozen unittest cases and native Node parity
+        working-directory: experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+        run: |
+          set -euo pipefail
+          export PYTHONPATH=.
+          .venv/bin/python -B -m unittest discover -s tests -v 2>&1 | tee "$RUNNER_TEMP/ts-r3-source-unittest.log"
+          grep -Eq '^Ran ([6-9][0-9]|[1-9][0-9]{2,}) tests in' "$RUNNER_TEMP/ts-r3-source-unittest.log"
+          grep -q '^OK$' "$RUNNER_TEMP/ts-r3-source-unittest.log"
+          echo "FULL_SOURCE_TEST_PASS_AND_MINIMUM_60_VERIFIED"
+          echo "No Product JS/Zod or Neon/SQL connection executed."
+
+      - name: Persist compact read-only qualification evidence in job summary
+        if: always()
+        run: |
+          {
+            echo "## TS Remote State 002 hosted native CI receipt"
+            echo "Original GitHub Actions attempt: $GITHUB_RUN_ID / $GITHUB_RUN_ATTEMPT"
+            echo "Source parent: 52284caf4ee6e721dd4995ada6ec03a53e798284"
+            echo "No Product or Neon secrets provided; no direct DB connections or Product integration."
+            echo "Python3.15.2, psycopg3.3.8, uv lock and Node22 test gates are separately visible in job steps."
+            if test -f "$RUNNER_TEMP/ts-r3-lock.sha256"; then
+              echo "uv.lock SHA256:"
+              cat "$RUNNER_TEMP/ts-r3-lock.sha256"
+            fi
+            if test -f "$RUNNER_TEMP/ts-r3-source-unittest.log"; then
+              grep '^Ran ' "$RUNNER_TEMP/ts-r3-source-unittest.log" || true
+              grep -E '^(OK|FAILED)' "$RUNNER_TEMP/ts-r3-source-unittest.log" || true
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
