@@ -1,0 +1,63 @@
+name: TS R3 A001 Python315 secretless DSN metadata CI V2
+on:
+  push:
+    branches:
+      - ee/ts-r3-a001-metadata-native-20261107-003
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a001-metadata-native-20261107-003
+  cancel-in-progress: false
+jobs:
+  readonly-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout read-only, no stored Git credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact source parent and workflow-only change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "7d3d7845ad89b5180a8154ce8e7a93d572842998"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/ts-r3-a001-metadata-native-20261107-003.yml"
+          test "$(git hash-object experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py)" = "b224c7410da19e3e2b903917752d2d3cfd22e2bc"
+          test "$(git hash-object experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests/test_neon_readonly_preflight.py)" = "fcb87c2d6b50228d100c3cd7d800ebe1b71a7e97"
+          test -z "$(git status --porcelain)"
+          echo "A001_FROZEN_REPAIR_IDENTITY_PASS"
+      - name: Setup pinned uv for disposable Python
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+      - name: Python 3.15.2 secretless unit suite and fail-closed main
+        run: |
+          set -euo pipefail
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo "BLOCKED_UNEXPECTED_DSN_ENV"; exit 41; }
+          uv_report="$(uv --version)"
+          printf 'UV_ACTUAL_VERSION=%s\n' "$uv_report"
+          case "$uv_report" in
+            "uv 0.13.7"|"uv 0.13.7 (x86_64-unknown-linux-gnu)") ;;
+            *) echo "BLOCKED_UV_VERSION"; exit 31 ;;
+          esac
+          uv python install 3.15.2
+          py315="$(uv python find 3.15.2)"
+          "$py315" -c 'import sys; assert sys.version_info[:3] == (3,15,2)'
+          "$py315" -B experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py --self-test
+          "$py315" -B -m unittest discover -s experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests -p 'test_neon_readonly_preflight.py' -v
+          set +e
+          fail_out="$("$py315" -B experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py 2>&1)"
+          fail_status=$?
+          set -e
+          if [ "$fail_status" -ne 2 ]; then
+            echo "A001_NO_SECRET_EXIT_MISMATCH"
+            exit 42
+          fi
+          "$py315" -c 'import json,sys; obj=json.loads(sys.argv[1]); assert obj["status"]=="BLOCKED_PRECONDITION"; assert obj["error_type"]=="BlockedPrecondition"; assert obj["product_effect"]=="NONE"' "$fail_out"
+          echo "A001_NATIVE_SECRETLESS_SELFTEST_PASS_NO_DSN_NO_SQL"
