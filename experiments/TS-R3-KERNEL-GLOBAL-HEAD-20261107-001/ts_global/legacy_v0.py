@@ -193,7 +193,7 @@ def _js_keys(obj: dict) -> list[str]:
     indexes=[]
     other=[]
     for key in obj:
-        if (key.isascii() and key.isdigit() and key == str(int(key)) and
+        if (key.isascii() and key.isdigit() and len(key) <= 10 and key == str(int(key)) and
             0 <= int(key) < (1 << 32) - 1):
             indexes.append(key)
         else:
@@ -208,6 +208,21 @@ def _js_order(value: Any) -> Any:
     if type(value) is list:
         return [_js_order(x) for x in value]
     return value
+
+
+def exact_js_event_payload(payload: Any) -> bytes:
+    """Product V0 JSON.stringify(payload) for the supported no-float JSON subset.
+
+    Preserve insertion order except ECMAScript array-index property ordering.
+    Any unsupported Unicode or number representation must fail closed: this
+    source mirror cannot silently change the persisted event hash input.
+    """
+    ensure(type(payload) is dict)
+    try:
+        return json.dumps(_js_order(payload), ensure_ascii=False,
+                          separators=(",", ":"), allow_nan=False).encode("utf-8", "strict")
+    except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
+        raise ValueError("PRODUCT_V0_ENCODING_UNSUPPORTED") from exc
 
 
 def exact_js_snapshot(s: Any) -> bytes:

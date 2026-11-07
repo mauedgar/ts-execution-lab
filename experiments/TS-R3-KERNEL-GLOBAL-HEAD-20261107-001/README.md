@@ -21,6 +21,13 @@ The new `ts_global/legacy_v0.py` is a **fail-closed read mirror** pinned to froz
 
 The canonical Product store hashes **`JSON.stringify(payload)` insertion-order bytes** and writes `JSON.stringify({...payload,hash}) + '\n'` into its `events.ndjson`; it uses `JSON.stringify(state,null,2)+'\n'` for snapshots. **Never parse JSONB and reserialize** to reproduce those hashes. `oracle/generate.cjs` creates a deterministic **synthetic** 14-event four-kind fixture with exactly these JS byte rules, including TaskCycle obligation, nonterminal bootstrap import, `UNKNOWN` and explicit reconciliation. `oracle/golden.json` is the frozen fixture. The Python bridge tests verify byte-for-byte replay. This synthetic fixture **does not execute the real Product Zod contract engine or replace the E1 acceptance oracle**; full equivalence and historical migration remain deferred gates.
 
+The bridge rejects a payload whose original bytes differ from the supported
+compact ECMAScript `JSON.stringify(payload)` representation **before a write
+and during read/replay**, even when an attacker recomputes its matching event
+hash and stream digest. The frozen Product top-level event-field order is also
+enforced. This is a conservative source-level rule; the native Product JS/Zod
+differential and exceptional Unicode support remain unqualified.
+
 ### Native limits (do not overclaim)
 
 - **Tested locally** in isolated ChatGPT container: Python 3.13.5 stdlib fake-transaction tests, plus Node 22.16.0 fixture generator. `FakeConn` simulates rollbacks/ack-loss; it is **not a PostgreSQL execution**.

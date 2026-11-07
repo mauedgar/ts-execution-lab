@@ -69,6 +69,16 @@ def _sha(data: bytes) -> str:
     return sha256(data).hexdigest()
 
 
+def _exact_payload_bytes(payload_bytes: bytes, payload: Any) -> None:
+    """Require bytes from Product V0 compact JSON.stringify, not just valid JSON."""
+    _require(type(payload) is dict, "INVALID_EVENT")
+    try:
+        expected = legacy_v0.exact_js_event_payload(payload)
+    except ValueError as exc:
+        raise StorageRejected("PRODUCT_V0_ENCODING_UNSUPPORTED") from exc
+    _require(payload_bytes == expected, "EVENT_JS_BYTES_MISMATCH")
+
+
 def _expected_event_line(payload_bytes: bytes, event_hash: str) -> bytes:
     """Exact JS Product v0 append of a final `hash` property, no JSONB roundtrip."""
     payload_bytes = _bytes(payload_bytes)
@@ -194,6 +204,7 @@ def _preflight_mutation(m: Mutation) -> tuple[str, dict, dict]:
     if m.previous_event_hash is not None:
         _hash(m.previous_event_hash)
     payload = _parse(m.payload_bytes)
+    _exact_payload_bytes(m.payload_bytes, payload)
     state = _parse(m.state_bytes)
     line = _bytes(m.event_line)
     _require(line.endswith(b"\n") and not line.endswith(b"\n\n"), "EVENT_LINE_FRAMING")
@@ -273,6 +284,7 @@ def _snapshot_from_cursor(cur: Any, scope: str, *, locked: bool = False) -> Stat
         _require(line == _expected_event_line(payload_bytes, event_row["event_hash"]),
                  "EVENT_BYTES_MISMATCH")
         payload = _parse(payload_bytes)
+        _exact_payload_bytes(payload_bytes, payload)
         line_event = _parse(line[:-1])
         _require(type(payload) is dict and type(line_event) is dict and
                  set(line_event) == set(payload) | {"hash"} and
