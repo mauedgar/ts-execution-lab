@@ -1,0 +1,77 @@
+name: TS R3 A005 Product Zod Python mirror isolated differential V2
+on:
+  push:
+    branches:
+      - ee/ts-r3-a005-product-zod-differential-20261107-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a005-product-zod-differential-20261107-001
+  cancel-in-progress: false
+jobs:
+  product-zod-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout experimental tree without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify immutable parent and full six-path Git object manifest
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "52284caf4ee6e721dd4995ada6ec03a53e798284"
+          test "$(git show -s --format=%T HEAD^)" = "298ca2b61d8ea39130fb457612422eb079349287"
+          expected_paths="$(printf '%s\n' '.github/workflows/ts-r3-a005-product-zod-native-20261107-001.yml' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/oracle.cjs' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package-lock.json' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package.json' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-contracts-26509b74.js' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests/test_a005_zod_differential.py')"
+          expected_status="$(printf 'A\t%s\n' '.github/workflows/ts-r3-a005-product-zod-native-20261107-001.yml' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/oracle.cjs' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package-lock.json' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package.json' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-contracts-26509b74.js' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests/test_a005_zod_differential.py')"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$expected_paths"
+          test "$(git diff --name-status --no-renames HEAD^ HEAD)" = "$expected_status"
+          check_frozen() {
+            local path="$1" oid="$2"
+            test "$(git rev-parse "HEAD:$path")" = "$oid"
+            test "$(git ls-tree HEAD -- "$path")" = "$(printf '100644 blob %s\t%s' "$oid" "$path")"
+            test "$(git hash-object "$path")" = "$oid"
+          }
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/oracle.cjs' '6a24d848a59f38064298b5d261ecbfdb0343a4d4'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package-lock.json' 'ecf387f8f425598187f3a68b8eac5388376129ce'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package.json' '67b246532b4573af1477af8b11244c157151d371'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-contracts-26509b74.js' '5d2d3a8a24ebc17339675e0c801595956e0cd353'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests/test_a005_zod_differential.py' '9e9c6f01eaeb1d4773a2670bfa695ff84fd68b46'
+          test "$(git ls-tree HEAD -- '.github/workflows/ts-r3-a005-product-zod-native-20261107-001.yml' | cut -d' ' -f1)" = "100644"
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/legacy_v0.py' '1e39566fdd8cfb0a8de2726c613fb99fd1faa808'
+          test -z "$(git status --porcelain)"
+          echo A005_FROZEN_MANIFEST_AND_PARENT_PASS
+      - name: Setup pinned Node 22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - name: Setup pinned disposable uv 0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+      - name: Native Zod4.6.7 versus Python3.15.2 isolated differential
+        run: |
+          set -euo pipefail
+          test "$(node -p 'process.versions.node')" = "22.16.0"
+          test "$(uv --version | cut -d' ' -f1-2)" = "uv 0.13.7"
+          uv python install 3.15.2
+          py315="$(uv python find 3.15.2)"
+          "$py315" -B -c 'import sys; assert sys.version_info[:3] == (3,15,2)'
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          mkdir "$workdir/clean-home"
+          cp 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package.json' "$workdir/"
+          cp 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/package-lock.json' "$workdir/"
+          cp 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/a005/oracle.cjs' "$workdir/"
+          cp 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-contracts-26509b74.js' "$workdir/contracts.js"
+          env -i PATH="$PATH" HOME="$workdir/clean-home" npm_config_cache="$workdir/npm-cache" \
+            NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$workdir" --ignore-scripts --no-audit --no-fund
+          test "$(env -i PATH="$PATH" HOME="$workdir/clean-home" node -p "require('$workdir/node_modules/zod/package.json').version")" = "4.6.7"
+          env -i PATH="$PATH" HOME="$workdir/clean-home" PYTHONDONTWRITEBYTECODE=1 \
+            "$py315" -B 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/tests/test_a005_zod_differential.py' "$workdir/oracle.cjs"
