@@ -66,6 +66,15 @@ def _sha(data: bytes) -> str:
     return sha256(data).hexdigest()
 
 
+def _expected_event_line(payload_bytes: bytes, event_hash: str) -> bytes:
+    """Exact JS Product v0 append of a final `hash` property, no JSONB roundtrip."""
+    payload_bytes = _bytes(payload_bytes)
+    _hash(event_hash)
+    _require(payload_bytes.startswith(b"{") and payload_bytes.endswith(b"}"), "PAYLOAD_FRAMING")
+    line = payload_bytes[:-1] + b',"hash":"' + event_hash.encode("ascii") + b'"}\n'
+    return _bytes(line)
+
+
 def _no_dupes(pairs: list[tuple[str, Any]]) -> dict:
     d = {}
     for k, v in pairs:
@@ -166,6 +175,7 @@ def _preflight_mutation(m: Mutation) -> tuple[str, dict, dict]:
     state = _parse(m.state_bytes)
     line = _bytes(m.event_line)
     _require(line.endswith(b"\n") and not line.endswith(b"\n\n"), "EVENT_LINE_FRAMING")
+    _require(line == _expected_event_line(m.payload_bytes, _sha(m.payload_bytes)), "EVENT_BYTES_MISMATCH")
     event = _parse(line[:-1])
     _require(type(payload) is dict and type(event) is dict, "INVALID_EVENT")
     _require(set(event) == set(payload) | {"hash"} and event.get("hash") == _sha(m.payload_bytes), "INVALID_EVENT_HASH")
@@ -234,6 +244,8 @@ def _snapshot_from_cursor(cur: Any, scope: str, *, locked: bool = False) -> Stat
         payload_bytes = _bytes(event_row["payload_bytes"])
         line = _bytes(event_row["event_line"])
         _require(line.endswith(b"\n") and not line.endswith(b"\n\n"), "EVENT_LINE_FRAMING")
+        _require(line == _expected_event_line(payload_bytes, event_row["event_hash"]),
+                 "EVENT_BYTES_MISMATCH")
         payload = _parse(payload_bytes)
         line_event = _parse(line[:-1])
         _require(type(payload) is dict and type(line_event) is dict and
