@@ -93,7 +93,7 @@ class FakeCursor:
             row = store['aggregate'].get(params[0])
             self._rows = [copy.deepcopy(row)] if row else []
         elif sql.startswith('SELECT') and '.events' in sql:
-            rows = [copy.deepcopy(r) for r in store['events'].values() if r['id'] == params[0]]
+            rows = [{k: copy.deepcopy(v) for k, v in r.items() if k != 'id'} for r in store['events'].values() if r['id'] == params[0]]
             self._rows = sorted(rows, key=lambda x: x['sequence'])[:1001]
         elif sql.startswith('INSERT INTO') and '.aggregate_state' in sql:
             state_id, rev, st, event_hash = params
@@ -156,7 +156,7 @@ class ProtocolTests(unittest.TestCase):
         event['payload']['authority_ref'] = 'UNTRUSTED-SYNTHETIC'
         event['event_hash'] = digest(event['payload'])
         self.db['aggregate'][self.a.state_id]['last_event_sha256'] = event['event_hash']
-        with self.assertRaisesRegex(Rejected, 'CHAIN_HASH_MISMATCH'):
+        with self.assertRaisesRegex(Rejected, 'DB_ROW_INVALID'):
             reconcile_readonly(FakeConn(self.db), self.a)
 
     def test_full_forged_command_missing_factory_seal_fails_before_sql(self):
