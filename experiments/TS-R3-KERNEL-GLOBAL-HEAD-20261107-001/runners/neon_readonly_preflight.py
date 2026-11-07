@@ -11,6 +11,7 @@ import json
 import os
 import sys
 from urllib.parse import parse_qs, unquote, urlsplit
+import re
 
 EXPECTED_HOST = "ep-lucky-waterfall-b6244mdy.c-2.sa-east-1.aws.neon.tech"
 EXPECTED_ROLE = "tsr3_host_a_rw"
@@ -40,6 +41,11 @@ def validate_dsn(dsn: str) -> None:
     ensure("-pooler" not in parsed.hostname, "POOLED_ENDPOINT_FORBIDDEN")
     ensure(unquote(parsed.username or "") == EXPECTED_ROLE, "ROLE_MISMATCH")
     ensure(parsed.password is not None and bool(parsed.password), "MISSING_PASSWORD")
+    # Malformed percent escapes can be decoded inconsistently by URL parsers.
+    ensure(re.search(r"%(?![A-Fa-f0-9]{2})", parsed.password) is None,
+           "MALFORMED_PASSWORD_ESCAPING")
+    ensure(bool(unquote(parsed.password)), "EMPTY_DECODED_PASSWORD")
+    ensure(chr(0) not in unquote(parsed.password), "PASSWORD_CONTAINS_NUL")
     ensure(parsed.path == "/" + EXPECTED_DB, "DATABASE_MISMATCH")
     ensure(parsed.port in (None, 5432), "INVALID_PORT")
     ensure(not parsed.fragment, "UNEXPECTED_FRAGMENT")
@@ -48,8 +54,9 @@ def validate_dsn(dsn: str) -> None:
     ensure(len(options.get("sslmode", [])) == 1 and
            options["sslmode"][0] in ("require", "verify-ca", "verify-full"),
            "TLS_REQUIRED")
-    ensure(len(options.get("channel_binding", [])) <= 1 and
-           options.get("channel_binding", ["require"])[0] == "require",
+    # Absence is NOT equivalent to libpq's explicit channel_binding=require.
+    ensure(len(options.get("channel_binding", [])) == 1 and
+           options["channel_binding"][0] == "require",
            "CHANNEL_BINDING_NOT_STRICT")
 
 
@@ -59,18 +66,32 @@ def self_test() -> None:
         + EXPECTED_HOST + "/" + EXPECTED_DB
     )
     validate_dsn(stem + "?sslmode=require&channel_binding=require")
-    validate_dsn(stem + "?sslmode=verify-full")
+    validate_dsn(stem + "?sslmode=verify-full&channel_binding=require")
+    validate_dsn(stem.replace("fake-only-placeholder",
+             "encoded%40colon%3Aslash%2Fpercent%25") +
+             "?sslmode=verify-full&channel_binding=require")
+    valid_suffix = "?sslmode=require&channel_binding=require"
     invalid = (
+        # Missing channel_binding was the independent F001 false accept.
+        stem + "?sslmode=require",
+        stem + "?sslmode=verify-full",
         stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
-            + "?sslmode=require",
-        stem.replace(EXPECTED_ROLE, "tsr3_owner", 1) + "?sslmode=require",
+            + valid_suffix,
+        stem.replace(EXPECTED_ROLE, "tsr3_owner", 1) + valid_suffix,
         stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace(".c-2.", "-pooler.c-2.", 1))
-            + "?sslmode=require",
-        stem + "?sslmode=disable",
-        stem + "?sslmode=require&sslmode=disable",
-        stem + "?sslmode=require&options=superuser",
+            + valid_suffix,
+        stem + "?sslmode=disable&channel_binding=require",
+        stem + "?sslmode=require&sslmode=disable&channel_binding=require",
+        stem + "?sslmode=require&options=superuser&channel_binding=require",
         stem + "?sslmode=require&channel_binding=disable",
-        stem.replace("/" + EXPECTED_DB, "/postgres") + "?sslmode=require",
+        stem + "?sslmode=require&channel_binding=prefer",
+        stem + "?sslmode=require&channel_binding=",
+        stem + "?sslmode=require&channel_binding=require&channel_binding=prefer",
+        stem.replace("/" + EXPECTED_DB, "/postgres") + valid_suffix,
+        stem.replace("fake-only-placeholder", "broken%escape") + valid_suffix,
+        stem.replace("fake-only-placeholder", "%00") + valid_suffix,
+        stem.replace("fake-only-placeholder", "") + valid_suffix,
+        stem + "?sslmode=require&channel_binding=require&application_name=other",
     )
     for case in invalid:
         try:
