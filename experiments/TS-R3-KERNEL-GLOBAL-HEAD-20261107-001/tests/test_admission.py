@@ -139,7 +139,7 @@ class AdmissionTests(unittest.TestCase):
         self.conn.heads[self.scope]['state_bytes']=b'{"schema_version":"tecnotron-state-kernel/v0","revision":1,"aggregates":{"Milestone":{},"TaskCycle":{},"Operation":{},"ExecutionAttempt":{}}}'
         from hashlib import sha256
         self.conn.heads[self.scope]['state_sha256']=sha256(self.conn.heads[self.scope]['state_bytes']).hexdigest()
-        with self.assertRaisesRegex(StorageRejected,'SNAPSHOT_REPLAY_MISMATCH'):
+        with self.assertRaisesRegex(StorageRejected,'SNAPSHOT_JS_BYTES_MISMATCH'):
             read(self.conn,self.scope)
 
 
