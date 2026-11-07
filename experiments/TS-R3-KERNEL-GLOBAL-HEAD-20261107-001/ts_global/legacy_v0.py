@@ -11,6 +11,7 @@ Product validator remains the semantic oracle at cutover.
 """
 from __future__ import annotations
 
+import calendar
 from datetime import datetime
 import json
 import re
@@ -25,7 +26,7 @@ STATES = {
     "ExecutionAttempt": ("PREPARED", "DISPATCHED", "RUNNING", "COMPLETED", "BLOCKED", "FAILED", "UNAVAILABLE", "CANCELLED", "UNKNOWN"),
 }
 ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
-ISO_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\Z")
+ISO_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\Z")
 HEX64 = re.compile(r"[a-f0-9]{64}\Z")
 HEX_GIT = re.compile(r"[a-f0-9]{40,64}\Z")
 REF_TYPES = ("AUTHORITY", "EVIDENCE", "ARTIFACT", "GIT_OBJECT")
@@ -66,8 +67,20 @@ def identifier(value: Any) -> bool:
 
 
 def iso(value: Any) -> bool:
+    """Match Product V0's canonical four-digit millisecond UTC ISO predicate.
+
+    JS Date accepts year 0000 and emits it from toISOString, but Python's
+    datetime.strptime rejects year 0. Zod v4.6.7 date regex (pinned Product
+    package-lock) admits year 0000. All other years use datetime validation.
+    """
     if type(value) is not str or ISO_PATTERN.fullmatch(value) is None:
         return False
+    if value.startswith("0000-"):
+        # Proleptic Gregorian leap-year 0, as JS Date and Zod permit.
+        month, day = int(value[5:7]), int(value[8:10])
+        hour, minute, second = int(value[11:13]), int(value[14:16]), int(value[17:19])
+        return (1 <= month <= 12 and 1 <= day <= calendar.monthrange(0, month)[1]
+                and 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59)
     try:
         datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
     except ValueError:
