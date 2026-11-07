@@ -113,6 +113,26 @@ class AdmissionTests(unittest.TestCase):
         canonical=json.dumps(p,sort_keys=True,separators=(',',':')).encode()
         self.assertNotEqual(canonical,m.payload_bytes)
 
+    def test_15a_event_line_with_equivalent_json_but_different_bytes_rejected(self):
+        m=mutation(0)
+        # Whitespace changes the line but not JSON parse. Product requires exact
+        # JSON.stringify({...payload,hash}) bytes, not parse-equivalent JSON.
+        equivalent=m.event_line.replace(b',"hash":"',b', "hash":"')
+        before=self.conn.queries
+        with self.assertRaisesRegex(StorageRejected,'EVENT_BYTES_MISMATCH'):
+            apply(self.conn,replace(m,event_line=equivalent))
+        self.assertEqual(before,self.conn.queries)
+
+    def test_15b_tamper_event_line_storage_even_with_matching_stream_digest(self):
+        from hashlib import sha256
+        m=mutation(0)
+        apply(self.conn,m)
+        line=m.event_line.replace(b',"hash":"',b', "hash":"')
+        self.conn.events[(self.scope,1)]['event_line']=line
+        self.conn.heads[self.scope]['events_sha256']=sha256(line).hexdigest()
+        with self.assertRaisesRegex(StorageRejected,'EVENT_BYTES_MISMATCH'):
+            read(self.conn,self.scope)
+
     def test_15_read_only_snapshot_tamper_self_consistent_hash_cannot_forge_replay(self):
         m=mutation(0)
         apply(self.conn,m)
