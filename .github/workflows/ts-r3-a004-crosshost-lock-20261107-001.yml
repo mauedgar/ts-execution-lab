@@ -1,0 +1,58 @@
+name: TS R3 A004 cross-host universal uv lock qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a004-crosshost-lock-20261107-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a004-crosshost-lock-20261107-001
+  cancel-in-progress: false
+jobs:
+  reproducible-lock:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      UV_NO_CONFIG: "1"
+    steps:
+      - name: Checkout exact frozen experimental source without git token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify parent, source manifest and one-workflow-only change
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "52284caf4ee6e721dd4995ada6ec03a53e798284"
+          test "$(git show -s --format=%T HEAD^)" = "298ca2b61d8ea39130fb457612422eb079349287"
+          test "$(git diff --name-status --no-renames HEAD^ HEAD)" = "$(printf 'A\t%s' '.github/workflows/ts-r3-a004-crosshost-lock-20261107-001.yml')"
+          test "$(git hash-object experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/pyproject.toml)" = "2fe9ee1733e71107eac5eb3c915642a3801e210f"
+          test -z "$(git status --porcelain)"
+          echo A004_CROSSHOST_FROZEN_SOURCE_PASS
+      - name: Set up pinned uv0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+          enable-cache: false
+      - name: Qualify deterministic lock and Windows/Linux binary import
+        working-directory: experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+        run: |
+          set -euo pipefail
+          test "$(uv --version | cut -d' ' -f1-2)" = "uv 0.13.7"
+          uv python install 3.15.2
+          uv lock --no-config --python 3.15.2
+          actual="$(sha256sum uv.lock | cut -d' ' -f1)"
+          printf 'A004_CROSSHOST_LOCK_SHA256=%s\n' "$actual"
+          test "$actual" = "5f9d50047f5f55da1002c951e1f8f0da0d30f89bd7fdbd7359f7164d933b157d"
+          uv lock --no-config --check --python 3.15.2
+          uv sync --no-config --locked --python 3.15.2 --no-install-project
+          uv run --no-config --locked --no-sync --python 3.15.2 python -I -B -c 'import sys,psycopg,psycopg.pq; assert sys.version_info[:3] == (3,15,2); assert psycopg.__version__ == "3.3.8"; assert psycopg.pq.__impl__ == "binary"; print("A004_PY315_PSYCOPG_BINARY_IMPORT_PASS")'
+          echo A004_CROSSHOST_LOCK_AND_IMPORT_PASS
