@@ -1,0 +1,85 @@
+name: TS R3 D5 disposable PG16 synthetic ACK uncertainty proof
+on:
+  push:
+    branches:
+      - ee/ts-r3-d5-local-pg-ack-20261107-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-d5-local-pg-ack-20261107-001
+  cancel-in-progress: false
+jobs:
+  local-pg16-ack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tsr3_d5_synthetic
+          POSTGRES_PASSWORD: d5_only_local_nonproduction
+          POSTGRES_DB: tsr3_d5_synthetic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tsr3_d5_synthetic -d tsr3_d5_synthetic"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 12
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      UV_NO_CONFIG: "1"
+      TS_R3_LOCAL_SYNTHETIC_PG_URI: "postgresql://tsr3_d5_synthetic:d5_only_local_nonproduction@127.0.0.1:5432/tsr3_d5_synthetic?sslmode=disable"
+    steps:
+      - name: Checkout unique experimental candidate without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify exact parent and two new source blobs before dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "52284caf4ee6e721dd4995ada6ec03a53e798284"
+          test "$(git show -s --format=%T HEAD^)" = "298ca2b61d8ea39130fb457612422eb079349287"
+          expected="$(printf '%s\n' '.github/workflows/ts-r3-d5-local-pg-ack-20261107-001.yml' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/local_pg_ack.py')"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$expected"
+          expected_status="$(printf 'A\t%s\nA\t%s\n' '.github/workflows/ts-r3-d5-local-pg-ack-20261107-001.yml' 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/local_pg_ack.py')"
+          test "$(git diff --name-status --no-renames HEAD^ HEAD)" = "$expected_status"
+          check_frozen() {
+            local file="$1" sha="$2"
+            test "$(git rev-parse "HEAD:$file")" = "$sha"
+            test "$(git ls-tree HEAD -- "$file")" = "$(printf '100644 blob %s\t%s' "$sha" "$file")"
+            test "$(git hash-object "$file")" = "$sha"
+          }
+          test "$(git ls-tree HEAD -- '.github/workflows/ts-r3-d5-local-pg-ack-20261107-001.yml' | cut -d' ' -f1)" = "100644"
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/local_pg_ack.py' '55e81ba75e5d140860d467b9fb2cfc36580d8240'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/bridge.py' '61be5ce70662a31118f9ffe442d1a03a5e9f195d'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/legacy_v0.py' '1e39566fdd8cfb0a8de2726c613fb99fd1faa808'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/oracle/golden.json' 'e9937b4bf48a1e87d8d23d7742d9729334172d68'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/schema.sql' '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
+          check_frozen 'experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/pyproject.toml' '2fe9ee1733e71107eac5eb3c915642a3801e210f'
+          test -z "$(git status --porcelain)"
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_UNEXPECTED_NEON_DSN; exit 41; }
+          echo D5_EXACT_SOURCE_AND_LOCAL_ONLY_GUARD_PASS
+      - name: Install pinned uv0.13.7 and Python3.15.2
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+          enable-cache: false
+      - name: Verify native PG16 commit and synthetic client ACK fence
+        working-directory: experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+        run: |
+          set -euo pipefail
+          test "$(uv --version | cut -d' ' -f1-2)" = "uv 0.13.7"
+          uv python install 3.15.2
+          uv lock --no-config --python 3.15.2
+          test "$(sha256sum uv.lock | cut -d' ' -f1)" = "5f9d50047f5f55da1002c951e1f8f0da0d30f89bd7fdbd7359f7164d933b157d"
+          uv sync --no-config --locked --python 3.15.2 --no-install-project
+          .venv/bin/python -I -B -c 'import sys,psycopg,psycopg.pq; assert sys.version_info[:3] == (3,15,2) and psycopg.__version__ == "3.3.8" and psycopg.pq.__impl__ == "binary"'
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_UNEXPECTED_NEON_DSN; exit 41; }
+          PYTHONPATH="$PWD" .venv/bin/python -B runners/local_pg_ack.py | tee "$RUNNER_TEMP/d5-result.json"
+          .venv/bin/python -c 'import json,sys; obj=json.load(open(sys.argv[1])); assert obj["status"] == "PG16_NATIVE_SYNTHETIC_CLIENT_ACK_UNCERTAINTY_FENCING_PASS" and obj["before_commit"] == "UNKNOWN_NO_RECEIPT_FENCED" and obj["after_real_commit"] == "CONFIRMED_FROM_ORIGINAL_RECEIPT" and obj["network_packet_loss"] == "NOT_RUN" and obj["automatic_retry"] is False and obj["product_effect"] == "NONE"' "$RUNNER_TEMP/d5-result.json"
+          echo D5_REAL_PG16_SYNTHETIC_ACK_UNCERTAINTY_TWO_SCOPES_PASS_NO_NEON
