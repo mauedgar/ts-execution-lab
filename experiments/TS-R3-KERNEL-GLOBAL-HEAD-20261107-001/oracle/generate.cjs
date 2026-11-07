@@ -77,6 +77,19 @@ next('TaskCycle',tc.id,'ACTIVE');
 const beforeClose=state.aggregates.TaskCycle[tc.id];
 change('TaskCycle',tc.id,'TRANSITION:CLOSED',
        {...beforeClose,state:'CLOSED',terminal_disposition_ref:'EVIDENCE-SYNTHETIC-CLOSE'},beforeClose.revision);
+// One nonterminal TaskCycle bootstrap import, with provenance and an already
+// satisfied authority-bound obligation. Store read must validate these fields.
+const importAuthority=[{kind:'AUTHORITY',id:'AUTH-SYNTHETIC-ONLY'}];
+const importProvenance={mode:'IMPORTED_ESTABLISHED_STATE',cutover_at:date,
+  historical_events_reconstructed:false,authority_refs:structuredClone(importAuthority),
+  evidence_refs:[{kind:'EVIDENCE',id:'EVIDENCE-SYNTHETIC-IMPORT'}]};
+const imported={...common('TaskCycle','TC-SYNTHETIC-IMPORTED','READY'),
+  authority_refs:structuredClone(importAuthority),
+  responsibility:'synthetic imported TaskCycle',
+  obligations:[{id:'IMPORTED_EVIDENCE',status:'SATISFIED',authority_ref:'AUTH-SYNTHETIC-ONLY'}],
+  terminal_disposition_ref:null};
+change('TaskCycle',imported.id,'BOOTSTRAP_IMPORT',imported,0,
+  {bootstrap_provenance:structuredClone(importProvenance)});
 const artifact={schema:'ts-r3-global-head-oracle/v0', source_product_store_blob:'f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a',
                 scope:'scope-synthetic-20261107',genesis_b64:Buffer.from(seed).toString('base64'),mutations:snapshots};
 const dest=path.join(__dirname,'golden.json');
