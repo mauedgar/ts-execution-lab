@@ -89,11 +89,20 @@ def first_mutation() -> Mutation:
 
 
 def setup(conn):
-    ddl = (ROOT / "schema.sql").read_text(encoding="utf-8")
+    raw_sql = (ROOT / "schema.sql").read_text(encoding="utf-8")
+    # Fixed source schema contains a semicolon in an initial SQL comment.
+    # Discard standalone "--" line comments before the bounded DDL splitter.
+    ddl = "\n".join(
+        line for line in raw_sql.splitlines()
+        if not line.lstrip().startswith("--")
+    )
+    statements = [stmt.strip() for stmt in ddl.split(";") if stmt.strip()]
+    assert len(statements) == 4, "FROZEN_SCHEMA_FOUR_DDL_STATEMENTS"
+    assert statements[0].startswith("CREATE SCHEMA ")
+    assert all(stmt.startswith("CREATE TABLE ") for stmt in statements[1:])
     with conn.transaction():
-        for statement in ddl.split(";"):
-            if statement.strip():
-                conn.execute(statement)
+        for statement in statements:
+            conn.execute(statement)
     golden = json.loads((ROOT / "oracle" / "golden.json").read_text(encoding="utf-8"))
     initial = b64decode(golden["genesis_b64"], validate=True)
     result = initialize(conn, SCOPE, initial)
@@ -148,10 +157,13 @@ def main() -> int:
             deadline = time.monotonic() + 6.0
             while time.monotonic() < deadline:
                 row = admin.execute(
-                    "SELECT wait_event_type,wait_event FROM pg_stat_activity WHERE pid=%s",
+                    "SELECT wait_event_type,wait_event,pg_blocking_pids(pid) AS blockers "
+                    "FROM pg_stat_activity WHERE pid=%s",
                     (b.info.backend_pid,),
                 ).fetchone()
-                if row and row["wait_event_type"] == "Lock":
+                if (row and row["wait_event_type"] == "Lock"
+                        and row["wait_event"] in ("transactionid", "tuple")
+                        and a.info.backend_pid in row["blockers"]):
                     observed_lock = True
                     wait_label = row["wait_event"]
                     break
@@ -190,6 +202,7 @@ def main() -> int:
             "actual_client_sessions": 2,
             "additional_readonly_observer": 1,
             "physical_lock_wait_observed": observed_lock,
+            "verified_blocker_pid_is_A": observed_lock,
             "lock_wait_event": wait_label,
             "global_head_revision": view.revision,
             "event_count": counts["events"],
