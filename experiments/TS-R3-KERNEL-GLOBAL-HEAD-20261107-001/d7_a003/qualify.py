@@ -134,9 +134,9 @@ def qualify_rollback_and_capacity(conn, observer, generations, commands, final):
     with conn.transaction():
         conn.execute(
             f"CREATE FUNCTION {function_name}() RETURNS trigger LANGUAGE plpgsql AS "
-            f"$ BEGIN IF NEW.scope = '{rollback_scope}' THEN "
+            f"$d7$ BEGIN IF NEW.scope = '{rollback_scope}' THEN "
             "RAISE EXCEPTION 'D7_SYNTHETIC_SERVER_ABORT'; "
-            "END IF; RETURN NEW; END; $"
+            "END IF; RETURN NEW; END; $d7$"
         )
         conn.execute(
             f"CREATE TRIGGER {trigger_name} BEFORE INSERT ON {SCHEMA}.events "
