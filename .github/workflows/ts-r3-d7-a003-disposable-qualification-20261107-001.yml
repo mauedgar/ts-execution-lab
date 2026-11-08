@@ -72,6 +72,7 @@ jobs:
           env -i PATH="$PATH" HOME="$workdir/clean-home" npm_config_cache="$workdir/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$workdir" --ignore-scripts --no-audit --no-fund
           test "$(node -p "require('$workdir/node_modules/zod/package.json').version")" = "4.6.7"
           env -i PATH="$PATH" HOME="$workdir/clean-home" node "$workdir/capture.cjs" "$workdir" "$workdir/product-generations.json"
-          PYTHONPATH="$PWD" .venv/bin/python -B d7_a003/boundaries.py\n          PYTHONPATH="$PWD" .venv/bin/python -B d7_a003/qualify.py "$workdir/product-generations.json" | tee "$workdir/result.json"
+          PYTHONPATH="$PWD" .venv/bin/python -B d7_a003/boundaries.py
+          PYTHONPATH="$PWD" .venv/bin/python -B d7_a003/qualify.py "$workdir/product-generations.json" | tee "$workdir/result.json"
           .venv/bin/python -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="D7_A003_DISPOSABLE_PG16_PARTIAL_PASS" and r["product_effect"]=="NONE" and r["neon"]=="NOT_RUN" and r["negative_cases"]==5' "$workdir/result.json"
           echo D7_A003_PARTIAL_DISPOSABLE_PASS
