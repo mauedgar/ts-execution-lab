@@ -20,7 +20,9 @@ from ts_global.bridge import (
 URI = "postgresql://tsr3_e2_synthetic:e2_local_disposable_only@127.0.0.1:5432/tsr3_e2_synthetic?sslmode=disable"
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = "ts_r3_global_head_20261107_001"
-SCOPE = "ts-r3-d7-a003-disposable-20261107-001"
+RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+RUN_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+SCOPE = f"ts-r3-d7-a003-{RUN_ID}-{RUN_ATTEMPT}"
 
 
 def require(condition, message):
@@ -41,6 +43,8 @@ def db_open():
 
 
 def prepare(conn):
+    require(conn.execute("SELECT count(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
+                         (SCHEMA,)).fetchone()["n"] == 0, "SCHEMA_PREEXISTED_BLOCKED")
     source = (ROOT / "schema.sql").read_text(encoding="utf-8")
     statements = [p.strip() for p in "\n".join(
         line for line in source.splitlines() if not line.lstrip().startswith("--")
@@ -77,8 +81,8 @@ def rejected(conn, command, expected, before):
 def qualify_rollback_and_capacity(conn, observer, generations, commands, final):
     """Only disposable PG16 scopes; an injected server exception is not a lost network ACK."""
     genesis = decoded(generations[0]["state_b64"])
-    capacity_scope = "ts-r3-d7-a003-capacity-20261108-001"
-    rollback_scope = "ts-r3-d7-a003-rollback-20261108-001"
+    capacity_scope = SCOPE + "-capacity"
+    rollback_scope = SCOPE + "-rollback"
     initialize(conn, capacity_scope, genesis)
 
     def sample(scope, revision):
@@ -175,8 +179,29 @@ def qualify_rollback_and_capacity(conn, observer, generations, commands, final):
             "lost_network_ack": "NOT_RUN",
             "corrupt_historical_event_preflight": "PASS"}
 
+
+def cleanup_disposable_schema(conn, expected_scopes):
+    """Fail closed if a non-test scope exists; drop only the newly owned PG16 schema."""
+    scopes = {row["scope"] for row in conn.execute(
+        f"SELECT scope FROM {SCHEMA}.head").fetchall()}
+    require(scopes == expected_scopes, "SQL_CLEANUP_FOREIGN_SCOPE")
+    totals = conn.execute(
+        f"SELECT (SELECT count(*) FROM {SCHEMA}.head) AS heads, "
+        f"(SELECT count(*) FROM {SCHEMA}.events) AS events, "
+        f"(SELECT count(*) FROM {SCHEMA}.receipts) AS receipts").fetchone()
+    require(totals == {"heads": 3, "events": 20, "receipts": 20},
+            "SQL_CLEANUP_UNEXPECTED_ROWS")
+    with conn.transaction():
+        conn.execute(f"DROP SCHEMA {SCHEMA} CASCADE")
+    require(conn.execute("SELECT count(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
+                         (SCHEMA,)).fetchone()["n"] == 0, "SQL_CLEANUP_SCHEMA_PERSISTS")
+    return {"schema_absent_after_cleanup": True,
+            "observed_precleanup_rows": totals,
+            "owned_scopes": sorted(scopes)}
+
 def main():
     require(len(sys.argv) == 2, "ONE_FIXTURE")
+    require(RUN_ID.isdecimal() and RUN_ATTEMPT == "1", "SINGLE_NATIVE_RUN_NAMESPACE")
     fixture = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     require(fixture["kind"] == "PRODUCT_JS_V0_EXACT_GENERATIONS", "PRODUCT_FIXTURE")
     require(fixture["product_git_commit"] == "26509b74d50207bb247dcc9bdb929a63f5451e88", "PRODUCT_REF")
@@ -242,6 +267,7 @@ def main():
     rejected(conn, replace(commands[-1], mutation_id="d7-stage-19", authority_fingerprint=sha256(b"DIFFERENT").hexdigest()), "MUTATION_COLLISION", before)
     extra = qualify_rollback_and_capacity(conn, observer, generations, commands, final)
     observer.close()
+    cleanup = cleanup_disposable_schema(conn, {SCOPE, SCOPE + "-capacity", SCOPE + "-rollback"})
     conn.close()
     print(json.dumps({
         "status": "D7_A003_DISPOSABLE_PG16_PARTIAL_PASS",
@@ -254,6 +280,16 @@ def main():
         "d7_sql_failure_rollback": "PASS_SYNTHETIC_ABORT_OBSERVER_NONE",
         "d7_import_corruption": "PASS",
         "rollback_and_capacity_evidence": extra,
+        "sql_isolation_cleanup": cleanup,
+        "github_execution_identity": {"run_id": RUN_ID, "run_attempt": RUN_ATTEMPT},
+        "reused_d4_cas_evidence": {
+            "provider_run": 42422573285, "attempt": 1,
+            "head": "c49a5869c516c55703c92b6f319e390364e97d20",
+            "bridge_git_blob": "61be5ce70662a31118f9ffe442d1a03a5e9f195d",
+            "transport": "mauedgar/ts-execution-transport@71beeddfb3fe27a6521e2d0a61491cf8764da0db:results/TS-R3-D4-LOCAL-PG16-NATIVE-20261107-002-A001/RESULT.md",
+            "receipt_blob": "f45cd9420faac3db48a9737c842682b11636d01c",
+            "two_clients": True, "one_confirmed_one_stale": True,
+            "same_bridge_blob_as_current": True, "reexecuted": False},
         "a003_capacity_envelope": "PASS_LOCAL_0_1_19_BOUNDED",
     }, sort_keys=True))
 
