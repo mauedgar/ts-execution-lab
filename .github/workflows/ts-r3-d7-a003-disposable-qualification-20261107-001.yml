@@ -1,0 +1,77 @@
+name: TS R3 D7 A003 disposable PG16 qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-d7-a003-disposable-qualification-20261107-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-d7-a003-disposable-qualification-20261107-001
+  cancel-in-progress: false
+jobs:
+  disposable-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tsr3_e2_synthetic
+          POSTGRES_PASSWORD: e2_local_disposable_only
+          POSTGRES_DB: tsr3_e2_synthetic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tsr3_e2_synthetic -d tsr3_e2_synthetic"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 12
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      UV_NO_CONFIG: "1"
+      TS_R3_LOCAL_SYNTHETIC_PG_URI: "postgresql://tsr3_e2_synthetic:e2_local_disposable_only@127.0.0.1:5432/tsr3_e2_synthetic?sslmode=disable"
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Reject Neon and verify immutable Product source
+        run: |
+          set -euo pipefail
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_UNEXPECTED_NEON_DSN; exit 40; }
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/bridge.py)" = "61be5ce70662a31118f9ffe442d1a03a5e9f195d"
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/legacy_v0.py)" = "1e39566fdd8cfb0a8de2726c613fb99fd1faa808"
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/schema.sql)" = "3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0"
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/e1/capture.cjs)" = "a476c8f0ca39793494bc0551ca53dae05e241a62"
+          test -z "$(git status --porcelain)"
+      - name: Pinned Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - name: Pinned uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+          enable-cache: false
+      - name: Run isolated Product fixture and bounded D7 A003 checks
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          cd experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+          uv lock --no-config --python 3.15.2
+          test "$(sha256sum uv.lock | cut -d' ' -f1)" = "5f9d50047f5f55da1002c951e1f8f0da0d30f89bd7fdbd7359f7164d933b157d"
+          uv sync --no-config --locked --python 3.15.2 --no-install-project
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          mkdir "$workdir/clean-home"
+          cp differential/e1/package.json differential/e1/package-lock.json differential/e1/capture.cjs "$workdir/"
+          cp fixtures/product-kernel-v0/contracts.js fixtures/product-kernel-v0/index.js fixtures/product-kernel-v0/store.js "$workdir/"
+          env -i PATH="$PATH" HOME="$workdir/clean-home" npm_config_cache="$workdir/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$workdir" --ignore-scripts --no-audit --no-fund
+          test "$(node -p "require('$workdir/node_modules/zod/package.json').version")" = "4.6.7"
+          env -i PATH="$PATH" HOME="$workdir/clean-home" node "$workdir/capture.cjs" "$workdir" "$workdir/product-generations.json"
+          PYTHONPATH="$PWD" .venv/bin/python -B d7_a003/qualify.py "$workdir/product-generations.json" | tee "$workdir/result.json"
+          .venv/bin/python -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="D7_A003_DISPOSABLE_PG16_PARTIAL_PASS" and r["product_effect"]=="NONE" and r["neon"]=="NOT_RUN" and r["negative_cases"]==5' "$workdir/result.json"
+          echo D7_A003_PARTIAL_DISPOSABLE_PASS
