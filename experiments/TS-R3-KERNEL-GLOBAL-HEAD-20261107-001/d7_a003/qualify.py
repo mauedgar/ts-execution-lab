@@ -14,7 +14,7 @@ import time
 import psycopg
 from psycopg.rows import dict_row
 from ts_global.bridge import (
-    Mutation, StorageRejected, MAX_BYTES, apply, initialize, read, reconcile,
+    Mutation, StorageRejected, EffectUnknown, MAX_BYTES, apply, initialize, read, reconcile,
 )
 
 URI = "postgresql://tsr3_e2_synthetic:e2_local_disposable_only@127.0.0.1:5432/tsr3_e2_synthetic?sslmode=disable"
@@ -72,6 +72,108 @@ def rejected(conn, command, expected, before):
     require(counts(conn) == {"events": before.revision, "receipts": before.revision},
             "NEGATIVE_CHANGED_ROWS")
 
+
+
+def qualify_rollback_and_capacity(conn, observer, generations, commands, final):
+    """Only disposable PG16 scopes; an injected server exception is not a lost network ACK."""
+    genesis = decoded(generations[0]["state_b64"])
+    capacity_scope = "ts-r3-d7-a003-capacity-20261108-001"
+    rollback_scope = "ts-r3-d7-a003-rollback-20261108-001"
+    initialize(conn, capacity_scope, genesis)
+
+    def sample(scope, revision):
+        started = time.perf_counter_ns()
+        view = read(observer, scope)
+        elapsed_ms = round((time.perf_counter_ns() - started) / 1e6, 3)
+        require(view.revision == revision, "CAPACITY_REVISION")
+        require(view.state_sha256 == sha256(view.state_bytes).hexdigest(), "CAPACITY_STATE_HASH")
+        require(view.events_sha256 == sha256(view.event_bytes).hexdigest(), "CAPACITY_EVENTS_HASH")
+        require(len(view.state_bytes) <= MAX_BYTES and len(view.event_bytes) <= 19 * MAX_BYTES,
+                "CAPACITY_BOUND")
+        return {"revision": revision, "state_bytes": len(view.state_bytes),
+                "event_bytes": len(view.event_bytes), "read_ms": elapsed_ms}
+
+    samples = [sample(capacity_scope, 0)]
+    first_command = replace(commands[0], scope=capacity_scope, mutation_id="a003-capacity-step-01")
+    first_receipt = apply(conn, first_command)
+    require(first_receipt.disposition == "CONFIRMED" and not first_receipt.replay,
+            "CAPACITY_ONE_APPLY")
+    samples.append(sample(capacity_scope, 1))
+    samples.append(sample(SCOPE, 19))
+    require(samples[0]["event_bytes"] == 0 and samples[1]["event_bytes"] > 0 and
+            samples[2]["event_bytes"] > samples[1]["event_bytes"], "CAPACITY_EVENT_GROWTH")
+    require(read(observer, SCOPE).state_bytes == final.state_bytes, "CAPACITY_FINAL_STATE")
+
+    initialize(conn, rollback_scope, genesis)
+    rollback_command = replace(commands[0], scope=rollback_scope, mutation_id="d7-rollback-once-01")
+    corrupted = replace(rollback_command, mutation_id="d7-corrupt-preflight-01",
+                        event_line=rollback_command.event_line[:-2] + b"x\\n")
+    try:
+        apply(conn, corrupted)
+    except StorageRejected as exc:
+        require(exc.code == "EVENT_BYTES_MISMATCH", "IMPORT_CORRUPTION_REJECT_CODE")
+    else:
+        raise AssertionError("IMPORT_CORRUPTION_ACCEPTED")
+
+    def rollback_rows():
+        return observer.execute(
+            f"SELECT (SELECT count(*) FROM {SCHEMA}.events WHERE scope=%s) AS events, "
+            f"(SELECT count(*) FROM {SCHEMA}.receipts WHERE scope=%s) AS receipts",
+            (rollback_scope, rollback_scope),
+        ).fetchone()
+
+    require(read(observer, rollback_scope).revision == 0 and
+            rollback_rows() == {"events": 0, "receipts": 0},
+            "IMPORT_CORRUPTION_PERSISTED")
+
+    # The PostgreSQL BEFORE INSERT trigger aborts after bridge.apply has updated HEAD
+    # but before its transaction commits. The complete SQL transaction must roll back.
+    # This controlled server-side rejection is NOT a network lost-ACK qualification.
+    function_name = f"{SCHEMA}.d7_injected_abort_20261108_001"
+    trigger_name = "d7_injected_abort_20261108_001"
+    with conn.transaction():
+        conn.execute(
+            f"CREATE FUNCTION {function_name}() RETURNS trigger LANGUAGE plpgsql AS "
+            f"$ BEGIN IF NEW.scope = '{rollback_scope}' THEN "
+            "RAISE EXCEPTION 'D7_SYNTHETIC_SERVER_ABORT'; "
+            "END IF; RETURN NEW; END; $"
+        )
+        conn.execute(
+            f"CREATE TRIGGER {trigger_name} BEFORE INSERT ON {SCHEMA}.events "
+            f"FOR EACH ROW EXECUTE FUNCTION {function_name}()"
+        )
+    try:
+        apply(conn, rollback_command)
+    except EffectUnknown:
+        # The bridge must conservatively fence post-dispatch exceptions.
+        pass
+    else:
+        raise AssertionError("INJECTED_SQL_FAILURE_NOT_RAISED")
+
+    post = read(observer, rollback_scope)
+    require(post.revision == 0 and post.state_bytes == genesis and
+            post.event_bytes == b"" and rollback_rows() == {"events": 0, "receipts": 0},
+            "SQL_ROLLBACK_PERSISTED")
+    try:
+        reconcile(observer, rollback_command)
+    except EffectUnknown:
+        # A missing receipt alone must never be called a definitive NONE.
+        pass
+    else:
+        raise AssertionError("MISSING_RECEIPT_UNSAFELY_ADJUDICATED")
+    with conn.transaction():
+        conn.execute(f"DROP TRIGGER {trigger_name} ON {SCHEMA}.events")
+        conn.execute(f"DROP FUNCTION {function_name}()")
+    require(read(observer, rollback_scope).revision == 0 and
+            rollback_rows() == {"events": 0, "receipts": 0},
+            "ROLLBACK_CLEANUP_CHANGED_STATE")
+    return {"reads": samples, "scope_rows": {"capacity": {"events": 1, "receipts": 1},
+                                             "rollback": {"events": 0, "receipts": 0}},
+            "injected_api_effect": "UNKNOWN_FENCED",
+            "observer_sql_effect": "NONE",
+            "synthetic_sql_transaction_rollback": "PASS",
+            "lost_network_ack": "NOT_RUN",
+            "corrupt_historical_event_preflight": "PASS"}
 
 def main():
     require(len(sys.argv) == 2, "ONE_FIXTURE")
@@ -138,6 +240,7 @@ def main():
     rejected(conn, replace(commands[-1], event_line=b"invalid"), "EVENT_LINE_FRAMING", before)
     rejected(conn, replace(commands[-1], payload_bytes=b"x" * (MAX_BYTES + 1)), "INVALID_BYTES", before)
     rejected(conn, replace(commands[-1], mutation_id="d7-stage-19", authority_fingerprint=sha256(b"DIFFERENT").hexdigest()), "MUTATION_COLLISION", before)
+    extra = qualify_rollback_and_capacity(conn, observer, generations, commands, final)
     observer.close()
     conn.close()
     print(json.dumps({
@@ -148,8 +251,10 @@ def main():
         "events_sha256": sha256(final.event_bytes).hexdigest(),
         "negative_cases": 5, "bounded_apply_max_ms": round(max(times) / 1e6, 3),
         "d7_product_js_restore_oracle": "PASS",
-        "d7_sql_failure_rollback": "NOT_RUN",
-        "a003_capacity_envelope": "NOT_RUN",
+        "d7_sql_failure_rollback": "PASS_SYNTHETIC_ABORT_OBSERVER_NONE",
+        "d7_import_corruption": "PASS",
+        "rollback_and_capacity_evidence": extra,
+        "a003_capacity_envelope": "PASS_LOCAL_0_1_19_BOUNDED",
     }, sort_keys=True))
 
 
