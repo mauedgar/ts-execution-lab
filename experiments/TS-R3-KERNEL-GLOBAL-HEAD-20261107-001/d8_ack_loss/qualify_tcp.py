@@ -87,7 +87,7 @@ class DropCommitResponse:
                         break
                     frame = bytes(buf[:frame_length])
                     del buf[:frame_length]
-                    if frame[0:1] == b"C" and frame[5:] == b"COMMIT\\x00":
+                    if frame[0:1] == b"C" and frame[5:] == b"COMMIT\x00":
                         # COMMIT already executed server-side. Do not deliver its reply.
                         self.commit_response_suppressed.set()
                         try:
@@ -129,7 +129,7 @@ def main():
 
     with direct() as admin:
         schema = (ROOT / "schema.sql").read_text(encoding="utf-8")
-        statements = [p.strip() for p in "\\n".join(
+        statements = [p.strip() for p in "\n".join(
             line for line in schema.splitlines() if not line.lstrip().startswith("--")
         ).split(";") if p.strip()]
         require(len(statements) == 4, "SCHEMA_SHAPE")
