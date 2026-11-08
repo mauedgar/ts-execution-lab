@@ -128,7 +128,7 @@ def main():
             f.write(final.event_bytes)
         require(snapshot.read_bytes() == decoded(generations[-1]["state_b64"]), "RESTORE_STATE")
         require(events.read_bytes() == decoded(generations[-1]["events_b64"]), "RESTORE_EVENTS")
-        subprocess.run(["node", str(ROOT / "d7_a003" / "restore_oracle.cjs"), str(Path(sys.argv[1]).resolve().parent), str(snapshot), str(events)], check=True)
+        subprocess.run(["node", str(ROOT / "d7_a003" / "restore_oracle.cjs"), str(Path(sys.argv[1]).resolve().parent), str(snapshot), str(events)], check=True, stdout=sys.stderr)
     require(counts(conn) == {"events": 19, "receipts": 19}, "ROWS")
     replay = apply(conn, commands[-1])
     require(replay.disposition == "CONFIRMED" and replay.replay, "REPLAY")
