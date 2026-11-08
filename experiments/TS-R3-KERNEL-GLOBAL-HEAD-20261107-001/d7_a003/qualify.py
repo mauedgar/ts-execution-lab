@@ -107,7 +107,7 @@ def qualify_rollback_and_capacity(conn, observer, generations, commands, final):
     initialize(conn, rollback_scope, genesis)
     rollback_command = replace(commands[0], scope=rollback_scope, mutation_id="d7-rollback-once-01")
     corrupted = replace(rollback_command, mutation_id="d7-corrupt-preflight-01",
-                        event_line=rollback_command.event_line[:-2] + b"x\\n")
+                        event_line=rollback_command.event_line[:-2] + b"x\n")
     try:
         apply(conn, corrupted)
     except StorageRejected as exc:
