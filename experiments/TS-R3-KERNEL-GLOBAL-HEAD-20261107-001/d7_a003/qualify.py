@@ -5,6 +5,7 @@ from dataclasses import replace
 from hashlib import sha256
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -127,6 +128,7 @@ def main():
             f.write(final.event_bytes)
         require(snapshot.read_bytes() == decoded(generations[-1]["state_b64"]), "RESTORE_STATE")
         require(events.read_bytes() == decoded(generations[-1]["events_b64"]), "RESTORE_EVENTS")
+        subprocess.run(["node", str(ROOT / "d7_a003" / "restore_oracle.cjs"), str(Path(sys.argv[1]).resolve().parent), str(snapshot), str(events)], check=True)
     require(counts(conn) == {"events": 19, "receipts": 19}, "ROWS")
     replay = apply(conn, commands[-1])
     require(replay.disposition == "CONFIRMED" and replay.replay, "REPLAY")
@@ -145,7 +147,7 @@ def main():
         "state_sha256": sha256(final.state_bytes).hexdigest(),
         "events_sha256": sha256(final.event_bytes).hexdigest(),
         "negative_cases": 5, "bounded_apply_max_ms": round(max(times) / 1e6, 3),
-        "d7_product_js_restore_oracle": "NOT_RUN",
+        "d7_product_js_restore_oracle": "PASS",
         "d7_sql_failure_rollback": "NOT_RUN",
         "a003_capacity_envelope": "NOT_RUN",
     }, sort_keys=True))
