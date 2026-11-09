@@ -1,0 +1,129 @@
+name: TS EE Neon G3 isolated Function deploy
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g3.yml]
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g3-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  deploy-synthetic-function:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Positive-own/negative-foreign credential guard
+        id: preflight
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
+          own="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
+          foreign="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects/jolly-dew-53200016')"
+          [[ "$own" == "200" && ( "$foreign" == "403" || "$foreign" == "404" ) ]] || { echo G3_PRECONDITION_DENIED_NO_NEON_WRITE; exit 52; }
+          echo G3_SCOPE_PRECONDITION_PASS
+      - name: Checkout frozen head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Node 22 Linux
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.0'
+      - name: Generate lock and install exact direct dependency versions
+        id: npm
+        working-directory: experiments/ts-ee-neon-actions-001/g3
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --no-audit --no-fund --ignore-scripts
+          npm ci --no-audit --no-fund
+          node -e "const p=require('./package.json'); const l=require('./package-lock.json'); for (const [k,v] of Object.entries(p.dependencies)) { if(l.packages['node_modules/'+k]?.version!==v) throw Error('G3 exact package lock mismatch '+k) }; console.log('G3_DEPENDENCY_LOCK_PASS')"
+      - name: Python test client
+        run: python -m pip install --disable-pip-version-check --no-input -r experiments/ts-ee-neon-actions-001/g2/requirements.txt
+      - name: Set bounded disposable expiration
+        id: expiry
+        run: echo "value=$(date -u --date='+50 minutes' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Create G3 unique branch (one original attempt)
+        id: branch
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ts-ee-g3-${{ github.run_id }}
+          parent_branch: br-cool-sea-bc75qsj1
+          database: ts_ee_neon_ci
+          role: ts_ee_neon_ci_owner
+          expires_at: ${{ steps.expiry.outputs.value }}
+      - name: Verify created output and parent exclusion
+        id: ownership
+        env:
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CREATED" == "true" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || { echo G3_OWNERSHIP_NOT_PROVEN_NO_DEPLOY; exit 61; }
+          echo G3_PROVISIONAL_BRANCH_OWNER_PASS
+      - name: Bootstrap G3 synthetic SQL on the owned branch
+        id: sql
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          G3_BRANCH_CREATED: ${{ steps.branch.outputs.created }}
+        run: python experiments/ts-ee-neon-actions-001/g3/bootstrap.py
+      - name: Plan only and deploy one Function to exact owned branch
+        id: deploy
+        working-directory: experiments/ts-ee-neon-actions-001/g3
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || exit 63
+          ./node_modules/.bin/neon config plan --project-id "$NEON_PROJECT_ID" --branch "$BRANCH_ID" --config neon.ts --output json > "$RUNNER_TEMP/g3-plan.json"
+          echo G3_FUNCTION_PLAN_PASS
+          ./node_modules/.bin/neon deploy --project-id "$NEON_PROJECT_ID" --branch "$BRANCH_ID" --config neon.ts --output json > "$RUNNER_TEMP/g3-deploy.json"
+          echo G3_FUNCTION_DEPLOY_RETURNED_SUCCESS
+      - name: Emit bounded G3 deploy receipt (not trigger/IR PASS)
+        if: ${{ always() }}
+        env:
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          NPM: ${{ steps.npm.outcome }}
+          CREATE: ${{ steps.branch.outcome }}
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          OWNERSHIP: ${{ steps.ownership.outcome }}
+          SQL: ${{ steps.sql.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          keys=("PREFLIGHT","NPM","CREATE","CREATED","BRANCH_ID","OWNERSHIP","SQL","DEPLOY")
+          data={"gate":"G3_DEPLOY_ONLY","attempt_id":"TS-EE-NEON-G3-GH-"+os.environ["GITHUB_RUN_ID"],
+            "run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+            "head_commit":os.environ["GITHUB_SHA"],"project":"odd-pond-18952360",
+            "branch_name":"ts-ee-g3-"+os.environ["GITHUB_RUN_ID"],
+            "neon_parent":"br-cool-sea-bc75qsj1",
+            "statuses":{k.lower():os.getenv(k,"") for k in keys},
+            "product_effect":"NONE","status":"PENDING_TRIGGER_PROBE_AND_CONTROLLER_JOIN"}
+          (Path(os.environ["RUNNER_TEMP"])/"ts-ee-g3-deploy-receipt.json").write_text(json.dumps(data,sort_keys=True)+"\n",encoding="utf-8")
+          print("G3_BOUNDED_RECEIPT_WRITTEN")
+          PY
+      - name: Upload deploy receipt and generated npm lock
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee-neon-g3-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ts-ee-g3-deploy-receipt.json
+            experiments/ts-ee-neon-actions-001/g3/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
