@@ -263,12 +263,23 @@ def holder(conn):
             f"SELECT revision FROM {SCHEMA}.head WHERE scope=%s FOR UPDATE",
             (SCOPE,)).fetchone()
         require(row is not None and row["revision"] == 0, "HOLDER_EXPECTS_REVISION_ZERO")
-        print(json.dumps({"status":"A02_LAN_HOLDER_LOCK_ACQUIRED",
-                          "backend_pid":conn.info.backend_pid,
-                          "scope":SCOPE,"hold_seconds":45,
-                          "product_effect":"NONE"},sort_keys=True),flush=True)
+        acquired_epoch_ns = time.time_ns()
+        print(json.dumps({
+            "status":"A02_LAN_HOLDER_LOCK_ACQUIRED",
+            "backend_pid":conn.info.backend_pid,
+            "client_process_pid":os.getpid(),
+            "host_sha256":asserted_host_identity()[0],
+            "execution_attempt":os.getenv("TS_R3_A02_EXECUTION_ATTEMPT"),
+            "acquired_epoch_ns":acquired_epoch_ns,
+            "scope":SCOPE,"hold_seconds":45,"product_effect":"NONE",
+        }, sort_keys=True), flush=True)
         time.sleep(45)
-    print("A02_LAN_HOLDER_RELEASED_NO_MUTATION", flush=True)
+    print(json.dumps({
+        "status":"A02_LAN_HOLDER_RELEASED_NO_MUTATION",
+        "released_epoch_ns":time.time_ns(),
+        "backend_pid":conn.info.backend_pid,
+        "product_effect":"NONE",
+    },sort_keys=True),flush=True)
 
 
 def writer(conn, command, site, side):
