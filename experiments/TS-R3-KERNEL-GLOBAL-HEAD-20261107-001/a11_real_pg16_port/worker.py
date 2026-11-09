@@ -67,6 +67,14 @@ def connect():
     )
     require(conn.execute("SHOW server_version").fetchone()["server_version"].startswith("16."),
             "POSTGRES16_REQUIRED")
+    ident = conn.execute(
+        "SELECT current_database() AS db, current_user AS role, "
+        "inet_server_port() AS backend_port"
+    ).fetchone()
+    require(ident["db"] == "tsr3_a11_synthetic" and
+            ident["role"] == "tsr3_a11_synthetic" and
+            type(ident["backend_port"]) is int,
+            "LOCAL_DISPOSABLE_ROLE_DB_MISMATCH")
     return conn
 
 
