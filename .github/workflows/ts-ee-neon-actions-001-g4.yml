@@ -1,0 +1,147 @@
+name: TS EE Neon G4 two-candidate CAS and recovery E2E
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g4.yml]
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g4-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  isolated-candidate:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        candidate: [a, b]
+    steps:
+      - name: Verify credential own200 / other project denied before any write
+        id: preflight
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
+          own="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
+          foreign="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects/jolly-dew-53200016')"
+          [[ "$own" == "200" && ( "$foreign" == "403" || "$foreign" == "404" ) ]] || { echo G4_SCOPE_UNPROVEN; exit 52; }
+          echo G4_SCOPE_PASS
+      - name: Exact source checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python 3.12 for synthetic race/cas
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Pinned test package
+        shell: bash
+        run: python -m pip install --disable-pip-version-check --no-input -r experiments/ts-ee-neon-actions-001/g2/requirements.txt
+      - name: Per-candidate 25-minute TTL
+        id: expiry
+        shell: bash
+        run: echo "value=$(date -u --date='+25 minutes' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Unique candidate branch
+        id: branch
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ts-ee-g4-${{ github.run_id }}-${{ matrix.candidate }}
+          parent_branch: br-cool-sea-bc75qsj1
+          database: ts_ee_neon_ci
+          role: ts_ee_neon_ci_owner
+          expires_at: ${{ steps.expiry.outputs.value }}
+      - name: Verify fresh candidate owned branch
+        id: ownership
+        shell: bash
+        env:
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CREATED" == "true" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || { echo G4_UNOWNED_BRANCH_NO_SQL; exit 60; }
+          echo G4_BRANCH_OWNERSHIP_PROVISIONAL
+      - name: Four-thread insert + CAS, rollback and recovery
+        id: sql
+        shell: bash
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          BRANCH_CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          G4_CANDIDATE: ${{ matrix.candidate }}
+          G4_SQL_RECEIPT: ${{ runner.temp }}/ts-ee-g4-sql-${{ matrix.candidate }}.json
+        run: python experiments/ts-ee-neon-actions-001/g4/race_smoke.py
+      - name: Exact attempt-owned one-time branch cleanup
+        id: cleanup
+        if: ${{ always() && steps.branch.outputs.created == 'true' && steps.branch.outputs.branch_id != '' }}
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          NAME: ts-ee-g4-${{ github.run_id }}-${{ matrix.candidate }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || exit 70
+          url="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o "$RUNNER_TEMP/g4-branch.json" -w '%{http_code}' "$url")"
+          [[ "$code" == "200" ]] || { echo G4_OWNERSHIP_GET_FAILED; exit 71; }
+          python - "$RUNNER_TEMP/g4-branch.json" "$BRANCH_ID" "$NAME" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as f:
+              b=json.load(f)["branch"]
+          assert b["id"]==sys.argv[2]
+          assert b["name"]==sys.argv[3]
+          assert b["parent_id"]=="br-cool-sea-bc75qsj1"
+          assert not b.get("primary",False)
+          PY
+          echo G4_EXACT_BRANCH_OWNER_PASS
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -X DELETE -o /dev/null -w '%{http_code}' "$url")"
+          [[ "$code" == "200" || "$code" == "204" ]] || { echo G4_DELETE_UNKNOWN; exit 72; }
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" | curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "$url")"
+          [[ "$code" == "404" ]] || { echo G4_DELETE_UNCONFIRMED; exit 73; }
+          echo G4_EXACT_BRANCH_DELETE_CONFIRMED
+      - name: Safe G4 candidate receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CANDIDATE: ${{ matrix.candidate }}
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          SQL: ${{ steps.sql.outcome }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
+        run: |
+          python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          data={"responsibility":"TS_EXECUTION_ENGINEERING","gate":"G4",
+             "candidate":os.environ["CANDIDATE"],"run_id":os.environ["GITHUB_RUN_ID"],
+             "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+             "head":os.environ["GITHUB_SHA"],"ref":os.environ["GITHUB_REF"],
+             "neon_project":"odd-pond-18952360","neon_branch":os.environ["BRANCH_ID"],
+             "created":os.environ["CREATED"],
+             "statuses":{k.lower():os.environ[k] for k in ("PREFLIGHT","SQL","CLEANUP")},
+             "product_effect":"NONE","adjudication":"PENDING_EXACT_JOIN"}
+          (Path(os.environ["RUNNER_TEMP"])/("ts-ee-g4-"+os.environ["CANDIDATE"]+".json")).write_text(
+              json.dumps(data,sort_keys=True)+"\n",encoding="utf-8")
+          print("G4_SAFE_RECEIPT_CREATED")
+          PY
+      - name: Portable GitHub artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee-neon-g4-${{ github.run_id }}-${{ matrix.candidate }}
+          path: |
+            ${{ runner.temp }}/ts-ee-g4-${{ matrix.candidate }}.json
+            ${{ runner.temp }}/ts-ee-g4-sql-${{ matrix.candidate }}.json
+          if-no-files-found: error
+          retention-days: 7
