@@ -1,0 +1,44 @@
+name: TS R3 A001 exact DSN negative rejection qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a001-precise-negative-tests-20261108-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a001-precise-negative-tests-20261108-001
+  cancel-in-progress: false
+jobs:
+  exact-negative-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      UV_NO_CONFIG: "1"
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Reject DB credentials and verify exact test source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py)" = "d39520d1ff063cdb00edabd20b36a4f5f5ed582d"
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_UNEXPECTED_DSN; exit 41; }
+          test -z "${DATABASE_URL-}" || { echo BLOCKED_UNEXPECTED_DATABASE_URL; exit 42; }
+          test -z "${PGPASSWORD-}" || { echo BLOCKED_UNEXPECTED_PGPASSWORD; exit 43; }
+      - name: Pin uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+          enable-cache: false
+      - name: Execute fourteen exact negative rejection checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          py="$(uv python find 3.15.2)"
+          "$py" -B experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py --self-test | tee "$RUNNER_TEMP/a001-exact-negative-result.json"
+          "$py" -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="PASS_DSN_METADATA_SELFTEST" and r["negative_exact_reject_cases"]==14 and r["network"]=="NOT_RUN"' "$RUNNER_TEMP/a001-exact-negative-result.json"
+          echo A001_EXACT_NEGATIVE_DSN_14_PASS
