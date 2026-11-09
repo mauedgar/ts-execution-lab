@@ -24,9 +24,9 @@ export default {
     }
     const started = performance.now();
     const sql = neon(db);
-    await sql\`INSERT INTO ts_ee_g3.pulse(scheduled_at, occurrence)
-               VALUES (\${scheduledAt}, 1)
-               ON CONFLICT (scheduled_at) DO NOTHING\`;
+    await sql`INSERT INTO ts_ee_g3.pulse(scheduled_at, occurrence)
+               VALUES (${scheduledAt}, 1)
+               ON CONFLICT (scheduled_at) DO NOTHING`;
     const elapsedMs = Math.round(performance.now() - started);
     console.info("TS_EE_G3_TRIGGER_SQL_COMMIT_CONFIRMED", { elapsed_ms: elapsedMs });
     return Response.json({ gate: "G3", ok: true });
