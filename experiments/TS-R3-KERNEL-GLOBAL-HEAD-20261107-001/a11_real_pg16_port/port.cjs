@@ -10,11 +10,31 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const ROOT = path.resolve(__dirname, '..');
 const SCOPE = 'A10-DISPOSABLE-SINGLE-SCOPE';
 
+class BoundedPortError extends Error {
+  constructor(code, stage) {
+    super(code);
+    this.name = 'BoundedPortError';
+    this.code = code; // bounded constants only, never stderr or raw process errors
+    this.stage = stage; // PRE_DISPATCH or POSSIBLE_DISPATCH
+  }
+}
 class RealPg16DisposablePort {
-  constructor(python) {
+  constructor(python, options = {}) {
     assert.equal(typeof python, 'string');
     assert.ok(path.isAbsolute(python), 'pin absolute Python executable');
+    const fault = options.fault ?? null;
+    assert.ok([null, 'MALFORMED', 'EXIT', 'TIMEOUT'].includes(fault),
+      'TEST_FAULT_MODE_NOT_ALLOWED');
+    if (fault !== null) {
+      assert.equal(process.env.TS_R3_A11_SYNTHETIC_FAULTS, '1',
+        'SYNTHETIC_FAULT_ADMISSION_REQUIRED');
+    }
+    const deadlineMs = options.timeoutMs ?? 15000;
+    assert.ok(Number.isSafeInteger(deadlineMs) && deadlineMs >= 100 &&
+      deadlineMs <= 15000, 'BOUNDED_TIMEOUT_REQUIRED');
     this.python = python;
+    this.timeoutMs = deadlineMs;
+    this.fault = fault;
     this.simulateLostReplyOnce = false;
   }
   async call(body) {
@@ -23,8 +43,8 @@ class RealPg16DisposablePort {
     assert.ok(!process.env.PGPASSWORD, 'UNEXPECTED_PASSWORD_ENV');
     const message = JSON.stringify({...body, scope: SCOPE});
     assert.ok(Buffer.byteLength(message) <= 6 * 1024 * 1024, 'OVERSIZED_MESSAGE');
-    const worker = path.join(__dirname, 'worker.py');
-    const args = ['-B', worker];
+    const worker = path.join(__dirname, this.fault ? 'fault_worker.py' : 'worker.py');
+    const args = ['-B', worker, ...(this.fault ? [this.fault] : [])];
     return await new Promise((resolve, reject) => {
       const child = spawn(this.python, args, {
         cwd: ROOT,
@@ -33,38 +53,55 @@ class RealPg16DisposablePort {
           HOME: process.env.HOME || '',
           TS_R3_LOCAL_SYNTHETIC_PG_URI: process.env.TS_R3_LOCAL_SYNTHETIC_PG_URI || '',
           PYTHONDONTWRITEBYTECODE: '1',
+          ...(this.fault ? {TS_R3_A11_SYNTHETIC_FAULTS: '1'} : {}),
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
-      const stdout = [], stderr = [];
-      let total = 0, timedOut = false;
+      const stdout = [];
+      let total = 0, timedOut = false, overflow = false, spawnError = false;
       const deadline = setTimeout(() => {
         timedOut = true;
         child.kill();
-      }, 15000);
-      function collect(target, chunk) {
+      }, this.timeoutMs);
+      function collect(chunk, asOutput) {
         total += chunk.length;
         if (total > 7 * 1024 * 1024) {
-          timedOut = true;
+          overflow = true;
           child.kill();
-        } else target.push(chunk);
+        } else if (asOutput) stdout.push(chunk);
+        // stderr is counted but never stored or surfaced.
       }
-      child.stdout.on('data', chunk => collect(stdout, chunk));
-      child.stderr.on('data', chunk => collect(stderr, chunk));
-      child.on('error', () => { /* classified on close */ });
+      child.stdout.on('data', chunk => collect(chunk, true));
+      child.stderr.on('data', chunk => collect(chunk, false));
+      child.on('error', () => { spawnError = true; });
+      child.stdin.on('error', () => { /* already classified by close */ });
       child.on('close', code => {
         clearTimeout(deadline);
-        if (timedOut || code !== 0) {
-          // Deliberately do NOT include stderr, argv or environment in errors.
-          reject(new Error('A11_LOCAL_PORT_RESPONSE_UNAVAILABLE'));
+        const stage = child.pid === undefined ? 'PRE_DISPATCH' : 'POSSIBLE_DISPATCH';
+        if (spawnError && stage === 'PRE_DISPATCH') {
+          reject(new BoundedPortError('A11_IPC_SPAWN_FAILED', stage));
+          return;
+        }
+        if (timedOut) {
+          reject(new BoundedPortError('A11_IPC_TIMEOUT', stage));
+          return;
+        }
+        if (overflow) {
+          reject(new BoundedPortError('A11_IPC_OUTPUT_LIMIT', stage));
+          return;
+        }
+        if (code !== 0 || spawnError) {
+          reject(new BoundedPortError('A11_IPC_EXIT_UNCERTAIN', stage));
           return;
         }
         try {
           const line = Buffer.concat(stdout).toString('utf8');
           assert.ok(line.length > 0 && line.length < 7 * 1024 * 1024);
-          resolve(JSON.parse(line));
+          const result = JSON.parse(line);
+          assert.ok(result && typeof result === 'object' && !Array.isArray(result));
+          resolve(result);
         } catch (_error) {
-          reject(new Error('A11_LOCAL_PORT_MALFORMED_RESPONSE'));
+          reject(new BoundedPortError('A11_IPC_MALFORMED_RESPONSE', stage));
         }
       });
       child.stdin.end(message);
@@ -111,4 +148,4 @@ class RealPg16DisposablePort {
     return this.call({op: 'counts'});
   }
 }
-module.exports = {RealPg16DisposablePort};
+module.exports = {RealPg16DisposablePort, BoundedPortError};
