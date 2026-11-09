@@ -1,0 +1,46 @@
+name: TS R3 A001 credentialless preflight hardening selftest
+on:
+  push:
+    branches:
+      - ee/ts-r3-a001-secure-readonly-source-repair-20261108-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a001-source-selftest-20261108-001
+  cancel-in-progress: false
+jobs:
+  credentialless-source-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      UV_NO_CONFIG: "1"
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact source and reject any secret injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py)" = "2511a65073da04ed452096ba252613fb91d67026"
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_UNEXPECTED_DSN; exit 41; }
+          test -z "${DATABASE_URL-}" || { echo BLOCKED_UNEXPECTED_DATABASE_URL; exit 42; }
+          test -z "${PGPASSWORD-}" || { echo BLOCKED_UNEXPECTED_PGPASSWORD; exit 43; }
+          test -z "$(git status --porcelain)"
+      - name: Pin uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: "0.13.7"
+          enable-cache: false
+      - name: Validate metadata parser and effective libpq overrides without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          py="$(uv python find 3.15.2)"
+          "$py" -B experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py --self-test | tee "$RUNNER_TEMP/a001-preflight-source-selftest.json"
+          "$py" -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="PASS_DSN_METADATA_SELFTEST" and r["network"]=="NOT_RUN"' "$RUNNER_TEMP/a001-preflight-source-selftest.json"
+          "$py" -c 'import importlib.util,pathlib; p=pathlib.Path("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py"); m=importlib.util.module_from_spec(importlib.util.spec_from_file_location("safe_neon_preflight",p)); m.__spec__.loader.exec_module(m); assert m.secure_connection_kwargs()=={"sslmode":"verify-full","sslrootcert":"system","channel_binding":"require","gssencmode":"disable"}'
+          echo A001_SECURE_PREFLIGHT_SOURCE_SECRETLESS_PASS
