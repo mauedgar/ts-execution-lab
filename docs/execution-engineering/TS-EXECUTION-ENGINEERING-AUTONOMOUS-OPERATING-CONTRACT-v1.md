@@ -595,6 +595,36 @@ Do not switch canonical Product review transport from TAR to TXT solely because 
 
 Promotion still requires competent LC/Product reconciliation.
 
+### Reviewer completeness and omission diagnosis (2026-11-09; synthetic-qualified reporting only)
+
+For each Independent Review that Execution Engineering dispatches or consumes, report **three different facts** separately: declared scope, Git-source acquisition, and actual semantic inspection. A frozen blob inventory alone is not source inspection, and successful external CI is not a test executed by the reviewer. The return must include, within the existing original review result (not a new lifecycle gate or artifact):
+
+```yaml
+review_completeness:
+  expected_files: <nonnegative integer>                 # frozen changed-path inventory
+  fetched_and_verified_files: <nonnegative integer>      # exact bytes/blob identity confirmed
+  semantically_reviewed_files: <nonnegative integer>     # actual contents evaluated
+  omitted_files:
+    - path: <exact expected path>
+      reason: <observed reason, or UNKNOWN>
+  incomplete_reason:
+    category: NONE | ACCESS_DENIED | TOOL_UNAVAILABLE | TIME_OR_CONTEXT_LIMIT | API_ERROR | INSUFFICIENT_EVIDENCE | OTHER | UNKNOWN
+    observed_error: <exact provider/error text or null>
+    evidence: <original tool/receipt/immutable source ref or null>
+    recovery_precondition: <concrete needed action or UNKNOWN>
+  test_execution:
+    executed_by_reviewer: <boolean>
+    existing_CI_verified: <boolean>
+    missing_validation: <scope-specific description or NONE>
+  verdict: PASS | FAIL | PARTIAL | BLOCKED
+```
+
+Require path-level explanations for **every omitted changed file**, counts internally consistent with the frozen inventory, and a distinct inventory of material unchanged consumers when those affect the review. A file can be fetched/verified without receiving adequate semantic review: do not count it as semantically reviewed. When tool output or policy does not reveal a root cause, report `UNKNOWN` and the observed symptom, never speculate that security, quota, context limits, paid bundles, or models caused it. `TIME_OR_CONTEXT_LIMIT` requires an actually observed constraint, not a guess. Record whether validations were executed directly, merely observed in existing native CI, or NOT_RUN, with exact subject/run IDs.
+
+If any required file or relevant security interaction was not examined, the reviewer must return `PARTIAL` (or `BLOCKED` for a hard access or authority barrier), never a certified full `PASS` or inferred 0 findings/0 advisories. Reviewer completion and file coverage do not resolve uncovered semantic findings. Do not relaunch an original reviewer to repair only its receipt, switch modality, bypass a denied request, or expand Product scope based on this reporting requirement.
+
+**Qualification ceiling:** synthetic WEB_INLINE exercise `TS-EE-REVIEW-COMPLETENESS-QUAL-20261109-001`, attempt `TS-EE-REVIEW-COMPLETENESS-QUAL-20261109-001-A001`, provider run `439bc6cd-4e34-832a-84b2-ede83e9e4520`, frozen [input](https://github.com/mauedgar/ts-execution-transport/blob/63c901874038a0699ad1b0c941dd744e8b7c5446/requests/TS-EE-REVIEW-COMPLETENESS-QUAL-20261109-001/INPUT.md) blob `7b2646d2f5f9e9263d4cb10bb132c0d6e6e34872`, original [result](https://github.com/mauedgar/ts-execution-transport/blob/fca0d44ab34dd146a31034e169968f1479022649/results/TS-EE-REVIEW-COMPLETENESS-QUAL-20261109-001/ORIGINAL_RESULT.md) blob `d9ed03c5f9a708279635fbde8e8c29f45bcefa10`: FULL 1/1 PASS, deliberately missing-path PARTIAL 1/2 with observed GitHub 404 and no tests/CI claimed. This qualifies the **diagnostic reporting format in small synthetic cases only**. It does NOT qualify 62-file reviews, provider-internal independence, security testing, Product review, IR007 publication, or any Product acceptance.
+
 ## 15. Feedback capture
 
 Record friction as evidence, not immediate architecture.
