@@ -163,4 +163,4 @@ console.log(JSON.stringify({
   original_product_source_mutated: false,
   neon: 'NOT_RUN',
   product_effect: 'NONE',
-}, Object.keys({}).sort()));
+}));
