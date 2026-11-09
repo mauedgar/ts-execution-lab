@@ -1,0 +1,59 @@
+name: TS R3 A10 Original JS And Shadow Async Adapter Qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a10-semantic-async-adapter-20261108-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a10-async-shadow-20261108-001
+  cancel-in-progress: false
+jobs:
+  semantics-and-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Exact checkout no persisted token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate frozen Product JS and exact A10 source blobs
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/contracts.js")" = '5d2d3a8a24ebc17339675e0c801595956e0cd353'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/index.js")" = '0219b92e5f546407a6060a6dc449865c14c7f144'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/store.js")" = 'f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a'
+          test "$(git rev-parse "HEAD:$root/differential/e1/package-lock.json")" = 'ecf387f8f425598187f3a68b8eac5388376129ce'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/qualify.cjs")" = '838d4b9ce4490e28f1575c3d6ddbb4e6dd415b25'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/shadow_async_adapter.cjs")" = '5a02199a4c4fb6fb7f36cb7e38409998612ffbc5'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/qualify_async.cjs")" = '9246dd208ffeff942ee1c553579147d05b449976'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/SHADOW_ASYNC_QUALIFICATION.md")" = '0db9a127a4cd3ba72f90d9f1bdfe5a343442e9cc'
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_NEON_SECRET; exit 41; }
+          test -z "${DATABASE_URL-}" || { echo BLOCKED_DATABASE_URL; exit 42; }
+          test -z "$(git status --porcelain)"
+      - name: Pin Node22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Verify original Product semantics plus isolated async shadow
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(node -p 'process.versions.node')" = '22.16.0'
+          scratch="$(mktemp -d -p /tmp ts-r3-a10-XXXXXX)"
+          work="$scratch/product-js-oracle"
+          mkdir "$work" "$scratch/clean-home"
+          trap 'rm -rf "$scratch"' EXIT
+          cp "$root/fixtures/product-kernel-v0/"{contracts,index,store}.js "$work/"
+          cp "$root/differential/e1/package.json" "$work/"
+          cp "$root/differential/e1/package-lock.json" "$work/"
+          env -i PATH="$PATH" HOME="$scratch/clean-home" npm_config_cache="$scratch/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$work" --ignore-scripts --no-audit --no-fund
+          test "$(env -i PATH="$PATH" HOME="$scratch/clean-home" node -p "require('$work/node_modules/zod/package.json').version")" = '4.6.7'
+          env -i PATH="$PATH" HOME="$scratch/clean-home" node "$root/a10_lc_core_semantics/qualify.cjs" "$work" "$scratch" | tee "$scratch/semantics.json"
+          env -i PATH="$PATH" HOME="$scratch/clean-home" node "$root/a10_lc_core_semantics/qualify_async.cjs" "$work" "$scratch" | tee "$scratch/async.json"
+          node -e 'const s=require(process.argv[1]),a=require(process.argv[2]);if(s.status!=="A10_FROZEN_PRODUCT_SEMANTICS_PRESERVATION_PASS"||s.cases.length!==6||s.exact_rejections!==14||s.product_effect!=="NONE"||a.status!=="A10_ASYNC_STORAGE_SHADOW_PRESERVATION_PASS"||a.cases.length!==7||a.committed_mutations!==3||a.event_count!==3||a.receipts!==3||a.old_writer_effect!=="NONE_FENCED"||a.unknown_reconciled!=="CONFIRMED"||a.product_effect!=="NONE"||a.neon!=="NOT_RUN")process.exit(1)' "$scratch/semantics.json" "$scratch/async.json"
+          echo A10_ORIGINAL_PRODUCT_SEMANTICS_AND_ASYNC_SHADOW_LOCAL_PASS
