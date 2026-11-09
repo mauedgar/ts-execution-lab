@@ -16,7 +16,9 @@ from tempfile import TemporaryDirectory
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from a02_lan.lan_probe import preflight_runtime, strict_packet
+from a02_lan.lan_probe import (preflight_runtime, strict_packet,
+                                pinned_schema_statements, asserted_host_identity,
+                                assert_fresh_disposable_catalog)
 from ts_global.bridge import StorageRejected
 
 
@@ -89,10 +91,54 @@ def main() -> None:
     os.environ["TS_R3_A02_PACKET_SHA256"] = sha256(original).hexdigest()
     require(observed == 17, "EXACT_NEGATIVE_COUNT")
     assert strict_packet(str(source))[0]["schema"] == "TS_R3_A02_LAN_PROPOSALS_V1"
+    statements = pinned_schema_statements()
+    require(len(statements) == 4 and statements[0] ==
+            "CREATE SCHEMA ts_r3_global_head_20261107_001",
+            "IMMUTABLE_SQL_BLOB_NOT_RECOGNIZED")
+    class FakeResult:
+        def __init__(self, value):
+            self.value = value
+        def fetchall(self):
+            return self.value
+        def fetchone(self):
+            return self.value
+    class ForeignPublicObjectConn:
+        def execute(self, sql):
+            if "SELECT nspname" in sql and "pg_catalog.pg_namespace" in sql:
+                return FakeResult([{"nspname":"public"}])
+            if "pg_catalog.pg_class c" in sql and "ns.nspname='public'" in sql:
+                return FakeResult({"n":1})
+            raise AssertionError("UNEXPECTED_FAKE_DB_QUERY")
+    try:
+        assert_fresh_disposable_catalog(ForeignPublicObjectConn())
+    except AssertionError as exc:
+        require(str(exc) == "FOREIGN_PUBLIC_RELATION",
+                "FOREIGN_PUBLIC_REJECTION_WRONG_CODE")
+    else:
+        raise AssertionError("FOREIGN_PUBLIC_OBJECT_ACCEPTED")
+    hold_host = os.environ.pop("TS_R3_A02_EXPECTED_HOST_SHA256", None)
+    hold_attempt = os.environ.pop("TS_R3_A02_EXECUTION_ATTEMPT", None)
+    try:
+        try:
+            asserted_host_identity()
+        except AssertionError as exc:
+            require(str(exc) == "NATIVE_HOST_ATTESTATION_MISMATCH",
+                    "HOST_ATTESTATION_WRONG_CODE")
+        else:
+            raise AssertionError("UNATTESTED_HOST_ACCEPTED")
+    finally:
+        if hold_host is not None:
+            os.environ["TS_R3_A02_EXPECTED_HOST_SHA256"] = hold_host
+        if hold_attempt is not None:
+            os.environ["TS_R3_A02_EXECUTION_ATTEMPT"] = hold_attempt
     print(json.dumps({
         "status": "A02_LAN_SOURCE_ONLY_NEGATIVES_PASS",
         "original_js_pair": True,
         "negative_cases": observed,
+        "additional_preflight_negatives": 2,
+        "immutable_schema_pin": "PASS",
+        "host_attestation_source_guard": "PASS",
+        "foreign_public_object_rejected": True,
         "artifact_sha256": sha256(original).hexdigest(),
         "python": ".".join(map(str, sys.version_info[:3])),
         "postgresql": "NOT_RUN",
