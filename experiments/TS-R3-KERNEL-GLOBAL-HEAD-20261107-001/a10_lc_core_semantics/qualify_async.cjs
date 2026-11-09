@@ -64,6 +64,16 @@ async function main() {
   const fenced = await adapter.commit(loser);
   assert.equal(fenced.disposition, 'BLOCKED_UNRECONCILED');
   assert.equal(port.commitCount, 2);
+  // A03: an incorrectly attributed receipt MUST NOT clear the UNKNOWN fence.
+  const originalReceipt = port.receipts.get(lostReply.mutationId);
+  assert.ok(originalReceipt && originalReceipt.fingerprint === lostReply.fingerprint);
+  port.receipts.set(lostReply.mutationId, {...originalReceipt,
+    fingerprint: '0'.repeat(64), revision: originalReceipt.revision + 1});
+  const forged = await adapter.reconcile();
+  assert.equal(forged.disposition, 'UNKNOWN_FENCED');
+  assert.equal(adapter.pendingUnknown.mutationId, lostReply.mutationId);
+  assert.equal(port.commitCount, 2, 'mismatched receipt must not cause redispatch');
+  port.receipts.set(lostReply.mutationId, originalReceipt);
   const joined = await adapter.reconcile();
   assert.equal(joined.disposition, 'CONFIRMED');
   assert.equal(joined.mutationId, 'A10-WRITER-3');
@@ -95,6 +105,47 @@ async function main() {
   assert.equal(state.aggregates.Milestone['MS-A10-STALE'], undefined);
   assert.equal(port.eventBytes.toString('utf8').trimEnd().split('\n').length, 3);
 
+  // A04: force a real async interleaving. The second prepared operation is
+  // rejected BEFORE reaching port.apply while the first awaits a response.
+  const concurrentlyObserved = await adapter.observe();
+  const firstPrepared = adapter.propose(concurrentlyObserved, 'A10-WRITER-6',
+    (domain, store, revision) => domain.create(store, revision, 'Milestone',
+      'MS-A10-INFLIGHT-WINNER', {title: 'ONE INFLIGHT WINNER'}, authority));
+  const secondPrepared = adapter.propose(concurrentlyObserved, 'A10-WRITER-7',
+    (domain, store, revision) => domain.create(store, revision, 'Milestone',
+      'MS-A10-INFLIGHT-REJECTED', {title: 'NEVER DISPATCHED'}, authority));
+  const directApply = port.apply.bind(port);
+  let signalEntered, releaseApply;
+  const entered = new Promise(resolve => { signalEntered = resolve; });
+  const hold = new Promise(resolve => { releaseApply = resolve; });
+  let dispatchCount = 0;
+  port.apply = async proposal => {
+    dispatchCount++;
+    signalEntered();
+    await hold;
+    return directApply(proposal);
+  };
+  const firstInFlight = adapter.commit(firstPrepared);
+  await entered;
+  assert.throws(() => adapter.propose(concurrentlyObserved, 'A10-WRITER-8',
+    (domain, store, revision) => domain.create(store, revision, 'Milestone',
+      'MS-A10-PROPOSED-INFLIGHT', {title: 'BLOCKED PROPOSAL'}, authority)),
+    /INFLIGHT_OPERATION_BLOCKED/);
+  const secondRejected = await adapter.commit(secondPrepared);
+  assert.equal(secondRejected.disposition, 'BLOCKED_INFLIGHT');
+  assert.equal(dispatchCount, 1, 'only first original call entered async port');
+  assert.equal(port.commitCount, 3, 'no commit before held response released');
+  releaseApply();
+  const firstConfirmed = await firstInFlight;
+  port.apply = directApply;
+  assert.equal(firstConfirmed.disposition, 'CONFIRMED');
+  assert.equal(port.commitCount, 4);
+  assert.equal(port.receipts.size, 4);
+  assert.equal(port.revision, 4);
+  assert.equal(JSON.parse(port.stateBytes.toString('utf8'))
+    .aggregates.Milestone['MS-A10-INFLIGHT-REJECTED'], undefined);
+  assert.equal(port.eventBytes.toString('utf8').trimEnd().split('\n').length, 4);
+
   console.log(JSON.stringify({
     status: 'A10_ASYNC_STORAGE_SHADOW_PRESERVATION_PASS',
     source_engine: 'FROZEN_ORIGINAL_PRODUCT_JS_V0',
@@ -103,9 +154,10 @@ async function main() {
     cases: ['ORIGINAL_JS_BYTE_EXACT_PROPOSAL', 'STALENESS_NONE',
       'SYNTHETIC_POST_COMMIT_LOST_REPLY_UNKNOWN', 'NO_REDISPATCH',
       'READONLY_RECEIPT_RECONCILE', 'OLD_WRITER_EPOCH_FENCED',
-      'NEW_EPOCH_SINGLE_COMMIT'],
+      'NEW_EPOCH_SINGLE_COMMIT', 'MISMATCHED_RECEIPT_PRESERVES_UNKNOWN',
+      'INFLIGHT_CONCURRENT_DISPATCH_BLOCKED'],
     committed_mutations: port.commitCount,
-    event_count: 3,
+    event_count: 4,
     receipts: port.receipts.size,
     global_revision: port.revision,
     old_writer_effect: oldResult.disposition,
