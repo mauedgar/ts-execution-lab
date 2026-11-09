@@ -179,7 +179,8 @@ def assert_fresh_disposable_catalog(conn):
     roles = [r["rolname"] for r in conn.execute(
         "SELECT rolname FROM pg_catalog.pg_roles "
         "WHERE rolname NOT LIKE 'pg\\_%' ESCAPE '\\' ORDER BY rolname").fetchall()]
-    require(roles in ([ROLE], [ROLE, "postgres"]), "FOREIGN_DATABASE_ROLE_PRESENT")
+    require(set(roles) in ({ROLE}, {ROLE, "postgres"}) and
+            len(roles) == len(set(roles)), "FOREIGN_DATABASE_ROLE_PRESENT")
     databases = [r["datname"] for r in conn.execute(
         "SELECT datname FROM pg_catalog.pg_database "
         "WHERE NOT datistemplate ORDER BY datname").fetchall()]
