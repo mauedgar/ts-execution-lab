@@ -7,9 +7,10 @@ Do not retry a possible-dispatch failure. Host orchestration owns join/fencing.
 from __future__ import annotations
 
 import base64
-from hashlib import sha256
+from hashlib import sha256, sha1
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import sys
@@ -28,6 +29,7 @@ from psycopg.rows import dict_row
 
 SCHEMA = "ts_r3_global_head_20261107_001"
 PACKET_SCHEMA = "TS_R3_A02_LAN_PROPOSALS_V1"
+FROZEN_SCHEMA_GIT_BLOB = "3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0"
 DATABASE = "tsr3_a02_lab"
 ROLE = "tsr3_a02_lab"
 URI_ENV = "TS_R3_A02_LAN_PG_URI"
@@ -142,18 +144,75 @@ def user_schemas(conn):
     return [row["nspname"] for row in rows]
 
 
-def setup(conn, genesis):
-    require(user_schemas(conn) == ["public"], "NONDISPOSABLE_SCHEMA_FOUND")
-    require(conn.execute(
-        "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
-        (SCHEMA,)).fetchone()["n"] == 0, "DISPOSABLE_SCHEMA_ALREADY_EXISTS")
-    sql = (ROOT / "schema.sql").read_text(encoding="utf-8")
+def assert_fresh_disposable_catalog(conn):
+    """Never create schema in a database with foreign user objects or roles."""
+    require(user_schemas(conn) == ["public"], "FOREIGN_USER_SCHEMA_PRESENT")
+    checks = (
+        ("FOREIGN_PUBLIC_RELATION",
+         "SELECT COUNT(*) AS n FROM pg_catalog.pg_class c "
+         "JOIN pg_catalog.pg_namespace ns ON ns.oid=c.relnamespace "
+         "WHERE ns.nspname='public'"),
+        ("FOREIGN_PUBLIC_FUNCTION",
+         "SELECT COUNT(*) AS n FROM pg_catalog.pg_proc p "
+         "JOIN pg_catalog.pg_namespace ns ON ns.oid=p.pronamespace "
+         "WHERE ns.nspname='public'"),
+        ("FOREIGN_PUBLIC_TYPE",
+         "SELECT COUNT(*) AS n FROM pg_catalog.pg_type t "
+         "JOIN pg_catalog.pg_namespace ns ON ns.oid=t.typnamespace "
+         "WHERE ns.nspname='public'"),
+        ("FOREIGN_PUBLIC_OPERATOR",
+         "SELECT COUNT(*) AS n FROM pg_catalog.pg_operator p "
+         "JOIN pg_catalog.pg_namespace ns ON ns.oid=p.oprnamespace "
+         "WHERE ns.nspname='public'"),
+        ("FOREIGN_PUBLIC_TRIGGER",
+         "SELECT COUNT(*) AS n FROM pg_catalog.pg_trigger t "
+         "JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid "
+         "JOIN pg_catalog.pg_namespace ns ON ns.oid=c.relnamespace "
+         "WHERE ns.nspname='public' AND NOT t.tgisinternal"),
+    )
+    for code, query in checks:
+        row = conn.execute(query).fetchone()
+        require(type(row["n"]) is int and row["n"] == 0, code)
+    extensions = [r["extname"] for r in conn.execute(
+        "SELECT extname FROM pg_catalog.pg_extension ORDER BY extname").fetchall()]
+    require(extensions == ["plpgsql"], "FOREIGN_EXTENSION_PRESENT")
+    roles = [r["rolname"] for r in conn.execute(
+        "SELECT rolname FROM pg_catalog.pg_roles "
+        "WHERE rolname NOT LIKE 'pg\\_%' ESCAPE '\\' ORDER BY rolname").fetchall()]
+    require(roles in ([ROLE], [ROLE, "postgres"]), "FOREIGN_DATABASE_ROLE_PRESENT")
+    databases = [r["datname"] for r in conn.execute(
+        "SELECT datname FROM pg_catalog.pg_database "
+        "WHERE NOT datistemplate ORDER BY datname").fetchall()]
+    require(databases == ["postgres", DATABASE], "FOREIGN_DATABASE_PRESENT")
+
+
+def pinned_schema_statements():
+    raw = (ROOT / "schema.sql").read_bytes()
+    git_blob = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw).hexdigest()
+    require(git_blob == FROZEN_SCHEMA_GIT_BLOB, "FROZEN_SCHEMA_GIT_BLOB_MISMATCH")
+    sql = raw.decode("utf-8", "strict")
     statements = [item.strip() for item in "\n".join(
         line for line in sql.splitlines()
         if not line.lstrip().startswith("--")
     ).split(";") if item.strip()]
-    require(len(statements) == 4 and statements[0] == "CREATE SCHEMA " + SCHEMA,
-            "SCHEMA_SOURCE_MISMATCH")
+    prefixes = (
+        "CREATE SCHEMA " + SCHEMA,
+        "CREATE TABLE " + SCHEMA + ".head (",
+        "CREATE TABLE " + SCHEMA + ".events (",
+        "CREATE TABLE " + SCHEMA + ".receipts (",
+    )
+    require(len(statements) == 4 and statements[0] == prefixes[0] and
+            all(statements[i].startswith(prefixes[i]) for i in (1,2,3)),
+            "PINNED_SCHEMA_DDL_SHAPE")
+    return statements
+
+
+def setup(conn, genesis):
+    assert_fresh_disposable_catalog(conn)
+    require(conn.execute(
+        "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
+        (SCHEMA,)).fetchone()["n"] == 0, "DISPOSABLE_SCHEMA_ALREADY_EXISTS")
+    statements = pinned_schema_statements()
     with conn.transaction():
         for item in statements:
             conn.execute(item)
