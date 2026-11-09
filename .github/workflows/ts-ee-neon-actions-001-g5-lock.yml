@@ -37,11 +37,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo G5_SOURCE_HEAD_MISMATCH; exit 81; }
           path="experiments/ts-ee-neon-actions-001/g3/package-lock.json"
-          test ! -e "$path" || { echo G5_LOCK_ALREADY_EXISTS_NO_OVERWRITE; exit 82; }
-          test -s "$path" && { echo G5_UNEXPECTED_LOCK_PRESENT; exit 83; } || true
-          cd experiments/ts-ee-neon-actions-001/g3
-          test -s package-lock.json
-          cd -
+          if git cat-file -e "HEAD:$path" 2>/dev/null; then echo G5_LOCK_ALREADY_TRACKED_NO_OVERWRITE; exit 82; fi
+          test -s "$path" || { echo G5_GENERATED_LOCK_MISSING; exit 83; }
           git add -- "$path"
           test "$(git diff --cached --name-only)" = "$path" || { echo G5_WRITESET_VIOLATION; exit 84; }
           git config user.name 'ts-ee-neon-actions-qualification'
