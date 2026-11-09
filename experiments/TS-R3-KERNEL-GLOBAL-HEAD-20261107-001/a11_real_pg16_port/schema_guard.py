@@ -113,6 +113,26 @@ def main():
             require([row["tablename"] for row in tables] == ["events", "head", "receipts"],
                     "SCHEMA_TABLES")
             inventory(conn)
+            # Disposable negative proof: foreign objects must fail the guard
+            # and be rolled back before the actual qualification begins.
+            class ExpectedRollback(Exception):
+                pass
+
+            try:
+                with conn.transaction():
+                    conn.execute(f"CREATE TABLE {SCHEMA}.foreign_object_probe (id int)")
+                    try:
+                        inventory(conn)
+                    except AssertionError as error:
+                        require(str(error) == "SCHEMA_UNEXPECTED_RELATION",
+                                "FOREIGN_OBJECT_WRONG_REJECTION")
+                    else:
+                        raise AssertionError("FOREIGN_OBJECT_ACCEPTED")
+                    raise ExpectedRollback()
+            except ExpectedRollback:
+                pass
+            inventory(conn)
+            print("A11_FOREIGN_OBJECT_GUARD_NEGATIVE_PASS")
             print("A11_DISPOSABLE_SCHEMA_CREATED_PASS")
         else:
             require(exists == 1, "EXPECTED_DISPOSABLE_SCHEMA_ABSENT")
