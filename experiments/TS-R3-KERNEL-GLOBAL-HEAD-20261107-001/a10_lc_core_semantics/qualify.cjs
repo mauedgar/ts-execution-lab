@@ -16,9 +16,29 @@ const rules = require(path.join(source, 'contracts.js'));
 const authority = [{kind: 'AUTHORITY', id: 'A10-DEV-EXPLICIT'}];
 const evidence = [{kind: 'EVIDENCE', id: 'A10-RECONCILIATION-EVIDENCE'}];
 const outcomes = [];
+let activeStore = null;
+function persistedBytes(store) {
+  const head = fs.readFileSync(store.head);
+  const generation = JSON.parse(head.toString('utf8')).generation;
+  const committed = path.join(store.root, generation);
+  return {
+    head,
+    state: fs.readFileSync(path.join(committed, 'state.json')),
+    events: fs.readFileSync(path.join(committed, 'events.ndjson')),
+  };
+}
 function negative(action, code) {
+  const before = activeStore === null ? null : persistedBytes(activeStore);
   assert.throws(action, error => Boolean(error && error.code === code),
     'expected exact Product KernelError ' + code);
+  if (before) {
+    const after = persistedBytes(activeStore);
+    assert.deepEqual(after.head, before.head, code + ': HEAD bytes changed after rejection');
+    assert.deepEqual(after.state, before.state, code + ': snapshot bytes changed after rejection');
+    assert.deepEqual(after.events, before.events, code + ': event bytes changed after rejection');
+    assert.equal(activeStore.verify().revision, JSON.parse(before.state.toString('utf8')).revision,
+      code + ': revision changed after rejection');
+  }
   outcomes.push(code);
 }
 function withStore(label, check) {
@@ -28,11 +48,14 @@ function withStore(label, check) {
   const genesis = store.initialize();
   assert.equal(genesis.revision, 0);
   try {
+    assert.equal(activeStore, null, 'no nested stores');
+    activeStore = store;
     check(store);
     const result = store.verify();
     assert.equal(result.valid, true);
     assert.equal(result.revision, result.event_count);
   } finally {
+    activeStore = null;
     fs.rmSync(home, {recursive: true, force: true});
   }
 }
@@ -46,6 +69,20 @@ assert.equal(typeof api.bootstrapTaskCycle, 'function');
 assert.equal(typeof api.addObligations, 'function');
 assert.equal(typeof api.satisfy, 'function');
 assert.equal(typeof api.transition, 'function');
+
+withStore('milestone-positive-and-negative', store => {
+  api.create(store, 0, 'Milestone', 'MS-A10-01', {title: 'MILESTONE-CANARY'}, authority);
+  negative(() => api.transition(store, 1, 'Milestone', 'MS-A10-01', 'CLOSED'),
+    'INVALID_TRANSITION');
+  api.transition(store, 1, 'Milestone', 'MS-A10-01', 'ACTIVE');
+  api.transition(store, 2, 'Milestone', 'MS-A10-01', 'CLOSED');
+  negative(() => api.transition(store, 3, 'Milestone', 'MS-A10-01', 'CANCELLED'),
+    'INVALID_TRANSITION');
+  const projection = api.inspect(store, 'Milestone', 'MS-A10-01');
+  assert.equal(projection.aggregate.state, 'CLOSED');
+  assert.deepEqual(projection.legal_next, []);
+  assert.equal(store.verify().revision, 3);
+});
 
 withStore('taskcycle-obligation-close', store => {
   api.create(store, 0, 'TaskCycle', 'TC-A10-01',
@@ -154,7 +191,7 @@ console.log(JSON.stringify({
   status: 'A10_FROZEN_PRODUCT_SEMANTICS_PRESERVATION_PASS',
   frozen_product: 'mauedgar/tecnotron-ai:tools@26509b74d50207bb247dcc9bdb929a63f5451e88',
   four_kinds: rules.KINDS,
-  cases: ['TaskCycle-closure-obligation-authority', 'UNKNOWN-no-retry-reconciliation',
+  cases: ['Milestone-positive-negative', 'TaskCycle-closure-obligation-authority', 'UNKNOWN-no-retry-reconciliation',
           'monotonic-authorized-late-obligation', 'no-invented-bootstrap-history',
           'async-boundary-explicit'],
   exact_rejections: outcomes.length,
