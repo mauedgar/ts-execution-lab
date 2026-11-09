@@ -103,9 +103,23 @@ def preflight_runtime() -> None:
         require(not os.getenv(key), "FOREIGN_CREDENTIAL_FORBIDDEN")
 
 
+def asserted_host_identity():
+    # Host hash must be frozen by native Control observation, never invented by
+    # application_name, Tailscale address or caller-declared SITE alone.
+    observed = sha256(platform.node().strip().casefold().encode("utf-8")).hexdigest()
+    expected = os.getenv("TS_R3_A02_EXPECTED_HOST_SHA256", "")
+    require(re.fullmatch(r"[a-f0-9]{64}", expected) is not None and
+            observed == expected, "NATIVE_HOST_ATTESTATION_MISMATCH")
+    attempt = os.getenv("TS_R3_A02_EXECUTION_ATTEMPT")
+    require(attempt == "TS-R3-A02-LAN-PHYSICAL-RACE-20261109-001-A001",
+            "FROZEN_EXECUTION_ATTEMPT_REQUIRED")
+    return observed, attempt
+
+
 def site_uri():
     side = os.getenv("TS_R3_A02_SITE")
     require(side in ("NOTEBOOK", "DESKTOP"), "EXACT_PHYSICAL_SITE_REQUIRED")
+    asserted_host_identity()
     uri = os.getenv(URI_ENV, "")
     require(uri.startswith("postgresql://") and len(uri) < 400,
             "EXACT_SYNTHETIC_URI_REQUIRED")
@@ -132,6 +146,14 @@ def connect(mode: str):
             "PG16_REQUIRED")
     ident = cn.execute("SELECT current_database() AS db,current_user AS user").fetchone()
     require(ident == {"db": DATABASE, "user": ROLE}, "SYNTHETIC_DB_ROLE_MISMATCH")
+    expected_system_id = os.getenv("TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER", "")
+    require(re.fullmatch(r"[0-9]{16,20}", expected_system_id) is not None,
+            "EXTERNAL_DB_SYSTEM_ID_ATTESTATION_REQUIRED")
+    system = cn.execute(
+        "SELECT system_identifier::text AS id FROM pg_catalog.pg_control_system()"
+    ).fetchone()
+    require(system is not None and system["id"] == expected_system_id,
+            "DISPOSABLE_SERVER_ID_MISMATCH")
     return cn, site
 
 
