@@ -26,7 +26,7 @@ function makeOriginalReader(recovered, dirname) {
   fs.mkdirSync(home, {recursive: false});
   const store = new api.FilesystemStateStore(home);
   fs.mkdirSync(store.root, {recursive: true});
-  const gen = 'a11-recovered-gen';
+  const gen = crypto.randomUUID();
   const dir = path.join(store.root, gen);
   fs.mkdirSync(dir);
   fs.writeFileSync(path.join(dir, 'state.json'), recovered.stateBytes, {flag: 'wx'});
