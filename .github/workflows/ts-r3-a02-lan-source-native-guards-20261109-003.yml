@@ -1,0 +1,131 @@
+name: TS R3 A02-LAN F01-F04 source guards native qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a02-lan-physical-20261109-001
+    paths:
+      - .github/workflows/ts-r3-a02-lan-source-native-guards-20261109-003.yml
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a02-lan-source-guards-003-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  a02-lan-source-only:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.ref == 'refs/heads/ee/ts-r3-a02-lan-physical-20261109-001' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_NO_CONFIG: '1'
+    steps:
+      - name: Checkout source without credential persistence
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Frozen nonproduct source and no secret guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          frozen() { test "$(git rev-parse "HEAD:$root/$1")" = "$2"; }
+          frozen a02_lan/generate.cjs 2abc3a2a0846a1acb8f778b7b8caebe784f8a7c6
+          frozen a02_lan/lan_probe.py d32602bf6eb67fd82033f3d3adf156375d71513f
+          frozen a02_lan/selftest_source.py 42e8d5a9c92c858385ac58aa149c9ada28ec9087
+          frozen a02_lan/CONTROL_JOIN_CONTRACT.md b7d07422d494796778b88e74beab9918d1f3bfc2
+          frozen schema.sql 3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0
+          frozen a11_real_pg16_port/worker.py e02f2f9bff36071b26851a19234948224de3b26a
+          frozen ts_global/bridge.py 61be5ce70662a31118f9ffe442d1a03a5e9f195d
+          frozen a10_lc_core_semantics/shadow_async_adapter.cjs 4a9ee4f454dd28eddf8f863064e973f28e43341c
+          frozen fixtures/product-kernel-v0/index.js 0219b92e5f546407a6060a6dc449865c14c7f144
+          frozen fixtures/product-kernel-v0/contracts.js 5d2d3a8a24ebc17339675e0c801595956e0cd353
+          frozen fixtures/product-kernel-v0/store.js f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a
+          frozen differential/e1/package-lock.json ecf387f8f425598187f3a68b8eac5388376129ce
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || exit 41
+          test -z "${TS_R3_NEON_CHILD_RO_DSN-}" || exit 42
+          test -z "${DATABASE_URL-}" || exit 43
+          test -z "${PGPASSWORD-}" || exit 44
+          echo A02_LAN_NATIVE_SOURCE_GUARD_PASS
+      - name: Pin Node 22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Pin uv 0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+          enable-cache: false
+      - name: Original JS genesis and Python 3.15.2 negative source-only run
+        id: source_native
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(node -p 'process.versions.node')" = '22.16.0'
+          uv python install 3.15.2
+          scratch="$(mktemp -d -p "$RUNNER_TEMP" ts-r3-a02-source-XXXXXX)"
+          test -n "$scratch"
+          trap 'rm -rf "$scratch"' EXIT
+          work="$scratch/product-v0"
+          mkdir "$work" "$scratch/home"
+          cp "$root"/fixtures/product-kernel-v0/{contracts,index,store}.js "$work/"
+          cp "$root"/differential/e1/{package.json,package-lock.json} "$work/"
+          env -i PATH="$PATH" HOME="$scratch/home" npm_config_cache="$scratch/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$work" --ignore-scripts --no-audit --no-fund
+          test "$(env -i PATH="$PATH" HOME="$scratch/home" node -p "require('$work/node_modules/zod/package.json').version")" = '4.6.7'
+          mkdir -m 700 "$RUNNER_TEMP/a02-private"
+          export TS_R3_A02_PRODUCT_FIXTURE_DIR="$work"
+          node "$root/a02_lan/generate.cjs" "$RUNNER_TEMP/a02-private/a02-lan-packet.json" > "$RUNNER_TEMP/a02-lan-generator-result.json"
+          python3 - "$RUNNER_TEMP/a02-lan-generator-result.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          r=json.loads(Path(sys.argv[1]).read_text())
+          assert r['status']=='A02_LAN_ORIGINAL_JS_COMPETING_PROPOSALS_PASS' and r['competing_proposals']==2 and r['database']=='NOT_RUN' and r['product_effect']=='NONE'
+          PY
+          export TS_R3_A02_PACKET_SHA256="$(sha256sum "$RUNNER_TEMP/a02-lan-packet.json" | cut -d' ' -f1)"
+          uv run --no-project --python 3.15.2 --with 'psycopg[binary]==3.3.8' python -B "$root/a02_lan/selftest_source.py" "$RUNNER_TEMP/a02-lan-packet.json" > "$RUNNER_TEMP/a02-lan-selftest-result.json"
+          python3 - "$RUNNER_TEMP/a02-lan-selftest-result.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          r=json.loads(Path(sys.argv[1]).read_text())
+          assert r['status']=='A02_LAN_SOURCE_ONLY_NEGATIVES_PASS' and r['negative_cases']==17 and r['additional_preflight_negatives']==2 and r['immutable_schema_pin']=='PASS' and r['foreign_public_object_rejected'] is True and r['python']=='3.15.2' and r['postgresql']=='NOT_RUN' and r['product_effect']=='NONE'
+          PY
+          echo A02_LAN_NATIVE_PY3152_ORIGINAL_JS_17_NEGATIVES_2_GUARDS_PASS
+      - name: Write safe original run receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          SOURCE_STEP_OUTCOME: ${{ steps.source_native.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          result={
+            'operation':'TS-R3-A02-LAN-SOURCE-GUARDS-20261109-003',
+            'execution_attempt':'TS-R3-A02-LAN-SOURCE-GUARDS-20261109-003-A001',
+            'provider':'github-actions',
+            'run_id':os.environ['GITHUB_RUN_ID'],
+            'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],
+            'head_sha':os.environ['GITHUB_SHA'],
+            'step_id':'source_native',
+            'step_outcome':os.getenv('SOURCE_STEP_OUTCOME','UNAVAILABLE'),
+            'source_only':'PASS_PENDING_CONTROLLER_JOIN' if os.getenv('SOURCE_STEP_OUTCOME')=='success' else 'NOT_PASS_PENDING_CONTROLLER_JOIN',
+            'postgresql':'NOT_RUN',
+            'neon':'NOT_RUN',
+            'product_effect':'NONE',
+          }
+          Path(os.environ['RUNNER_TEMP'],'a02-private').mkdir(mode=0o700, exist_ok=True)
+          Path(os.environ['RUNNER_TEMP'],'a02-private','a02-lan-native-receipt.json').write_text(json.dumps(result,sort_keys=True)+'\n',encoding='utf8')
+          print('A02_LAN_NATIVE_BOUND_RECEIPT_WRITTEN')
+          PY
+      - name: Upload safe source-only artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ts-r3-a02-lan-source-guards-003-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/a02-private/a02-lan-packet.json
+            ${{ runner.temp }}/a02-private/a02-lan-generator-result.json
+            ${{ runner.temp }}/a02-private/a02-lan-selftest-result.json
+            ${{ runner.temp }}/a02-private/a02-lan-native-receipt.json
+          if-no-files-found: error
+          retention-days: 7
