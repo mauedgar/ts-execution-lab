@@ -1,8 +1,8 @@
 name: TS R3 A10 Shadow Async Receipt and Inflight Hardening
+# Original native terminal PASS run42547566263 HEAD99d9e01fdc73b132fd302403844058c2fab7e2e4.
+# Archived one-shot, manual dispatch skips job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a10-shadow-advisory-hardening-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   shadow-hardening:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
