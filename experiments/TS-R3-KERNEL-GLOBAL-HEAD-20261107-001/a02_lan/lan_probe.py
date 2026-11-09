@@ -287,6 +287,11 @@ def writer(conn, command, site, side):
     output.update({"status":"A02_LAN_WRITER_RESULT","writer":side.upper(),
                    "site":site,"backend_pid":conn.info.backend_pid,
                    "mutation_id":command.mutation_id,
+                   "execution_attempt":os.getenv("TS_R3_A02_EXECUTION_ATTEMPT"),
+                   "host_sha256":asserted_host_identity()[0],
+                   "client_process_pid":os.getpid(),
+                   "host_evidence":"EXTERNAL_PROVIDER_JOIN_REQUIRED",
+                   "server_effect_only":True,
                    "product_effect":"NONE"})
     print(json.dumps(output, sort_keys=True), flush=True)
 
@@ -298,7 +303,8 @@ def witness(conn, expected_holder):
     observed = None
     while time.monotonic() < deadline:
         rows = conn.execute(
-            "SELECT pid, application_name, wait_event_type, wait_event,"
+            "SELECT pid, application_name, client_addr::text AS client_addr, "
+            "backend_start::text AS backend_start, wait_event_type, wait_event,"
             "pg_blocking_pids(pid) AS blockers FROM pg_catalog.pg_stat_activity "
             "WHERE datname=current_database() AND "
             "application_name IN ('ts-a02-lan-writer-a','ts-a02-lan-writer-b') "
@@ -307,11 +313,26 @@ def witness(conn, expected_holder):
         if len(rows) == 2 and all(
             row["wait_event_type"] == "Lock" and row["blockers"]
             and type(row["pid"]) is int for row in rows
-        ) and any(expected_holder in row["blockers"] for row in rows):
+        ):
+            blockers_by_pid = {r["pid"]:r["blockers"] for r in rows}
+            def reaches_holder(pid, visited):
+                if pid in visited:
+                    return False
+                blockers = blockers_by_pid.get(pid, [])
+                return expected_holder in blockers or any(
+                    reaches_holder(blocked, visited | {pid})
+                    for blocked in blockers if blocked in blockers_by_pid
+                )
+            if not all(reaches_holder(row["pid"], set()) for row in rows):
+                time.sleep(0.1)
+                continue
             observed = [{
                 "writer": "A" if r["application_name"].endswith("-a") else "B",
                 "pid":r["pid"],"wait_event_type":r["wait_event_type"],
                 "wait_event":r["wait_event"],"blockers":r["blockers"],
+                "backend_start":r["backend_start"],
+                "client_addr_sha256":sha256(
+                    str(r["client_addr"]).encode("utf-8")).hexdigest(),
             } for r in rows]
             require(observed[0]["pid"] != observed[1]["pid"],
                     "DISTINCT_SERVER_BACKENDS_REQUIRED")
@@ -319,10 +340,13 @@ def witness(conn, expected_holder):
         time.sleep(0.1)
     require(observed is not None, "TRUE_TWO_WRITER_LOCK_GRAPH_NOT_OBSERVED")
     print(json.dumps({
-        "status":"A02_LAN_TWO_PHYSICAL_HOST_WRITERS_BLOCKED_PROVEN",
+        "status":"A02_LAN_SERVER_LOCK_GRAPH_AWAITING_HOST_JOIN",
         "expected_holder":expected_holder,
         "observer_pid":conn.info.backend_pid,
         "waiters":observed,
+        "server_lock_graph_only":True,
+        "physical_hosts":"EXTERNAL_NATIVE_JOIN_REQUIRED",
+        "observed_epoch_ns":time.time_ns(),
         "neon":"NOT_RUN","product_effect":"NONE",
     },sort_keys=True),flush=True)
 
@@ -344,12 +368,14 @@ def verify(conn, packet, commands):
             state.event_bytes == commands[key].event_line]
     require(len(wins) == 1, "EXACT_JS_EVENT_BYTES_PARITY_FAILED")
     print(json.dumps({
-        "status":"A02_LAN_SINGLE_WINNER_POSTGRES16_PASS",
+        "status":"A02_LAN_DB_SINGLE_WINNER_AWAITING_CONTROL_JOIN",
         "winner":wins[0].upper(),"revision":state.revision,
         "counts":row,
         "state_sha256":sha256(state.state_bytes).hexdigest(),
         "event_sha256":sha256(state.event_bytes).hexdigest(),
         "product_js_bytes_exact":True,
+        "physical_host_join":"NOT_RUN",
+        "writer_acks":"NOT_RECONCILED",
         "product_effect":"NONE","neon":"NOT_RUN",
     },sort_keys=True),flush=True)
 
@@ -402,7 +428,23 @@ def main():
                     "product_effect":"NONE",
                 },sort_keys=True))
             except EffectUnknown:
-                print("A02_LAN_ABSENT_RECEIPT_STILL_UNKNOWN",flush=True)
+                print(json.dumps({
+                    "status":"A02_LAN_ABSENT_RECEIPT_STILL_UNKNOWN",
+                    "effect":"UNKNOWN","mutation_id":command.mutation_id,
+                    "read_only":True,"redispatched":False,
+                    "product_effect":"NONE",
+                },sort_keys=True),flush=True)
+            except StorageRejected as failure:
+                require(failure.code in {"RECONCILE_UNAVAILABLE",
+                                        "RECEIPT_INCONSISTENT",
+                                        "STORAGE_UNAVAILABLE"},
+                        "UNEXPECTED_RECONCILIATION_REJECTION")
+                print(json.dumps({
+                    "status":"A02_LAN_RECONCILIATION_UNAVAILABLE_UNKNOWN",
+                    "effect":"UNKNOWN","reason_code":failure.code,
+                    "read_only":True,"redispatched":False,
+                    "product_effect":"NONE",
+                },sort_keys=True),flush=True)
     finally:
         conn.close()
 
