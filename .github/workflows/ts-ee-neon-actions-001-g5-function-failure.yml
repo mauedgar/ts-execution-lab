@@ -1,0 +1,138 @@
+name: TS EE Neon G5 Function controlled failure deploy
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g5-function-failure.yml]
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g5-failure-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  one-synthetic-failure:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 8
+    steps:
+      - name: Confirm original scoped project and bounded branch capacity
+        id: preflight
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
+          url="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o "$RUNNER_TEMP/g5-branches.json" -w '%{http_code}' "$url")"
+          [[ "$code" == 200 ]] || exit 52
+          python3 - "$RUNNER_TEMP/g5-branches.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as f: data=json.load(f)
+          branches=data.get("branches",[])
+          assert len(branches)<=3, "preflight branch envelope exhausted"
+          assert any(b["id"]=="br-cool-sea-bc75qsj1" and b.get("primary",False) for b in branches)
+          assert not any(b["name"].startswith("ts-ee-g5failure-") for b in branches)
+          PY
+          foreign="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects/jolly-dew-53200016')"
+          [[ "$foreign" == 403 || "$foreign" == 404 ]] || exit 53
+          echo G5_FAILURE_SCOPE_CAPACITY_PASS
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22.23.0'
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - name: Reproduce frozen G3 dependency graph
+        working-directory: experiments/ts-ee-neon-actions-001/g3
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '2147dd49d99a3fd9d22b6cc7c146f076f334de89f9df80726af4f5243ca846aa  package-lock.json' | sha256sum -c -
+          npm ci --no-audit --no-fund
+      - name: Synthetic SQL client
+        run: python -m pip install --disable-pip-version-check --no-input -r experiments/ts-ee-neon-actions-001/g2/requirements.txt
+      - name: Provider TTL (12 minutes)
+        id: expiry
+        shell: bash
+        run: echo "value=$(date -u --date='+12 minutes' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Create exact disposable G5 branch once
+        id: branch
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ts-ee-g5failure-${{ github.run_id }}
+          parent_branch: br-cool-sea-bc75qsj1
+          database: ts_ee_neon_ci
+          role: ts_ee_neon_ci_owner
+          expires_at: ${{ steps.expiry.outputs.value }}
+      - name: Verify created identity before any SQL or Function deployment
+        id: ownership
+        shell: bash
+        env:
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CREATED" == true && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || exit 61
+          echo G5_FAILURE_BRANCH_OWNED
+      - name: Prepare synthetic failure SQL only in exact branch
+        id: bootstrap
+        env:
+          BRANCH_CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+        run: python experiments/ts-ee-neon-actions-001/g5/failure/bootstrap.py
+      - name: Apply isolated Function policy on exact G5 branch
+        id: deploy
+        working-directory: experiments/ts-ee-neon-actions-001/g3
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == odd-pond-18952360 && "$BRANCH_ID" == br-* && "$BRANCH_ID" != br-cool-sea-bc75qsj1 ]] || exit 63
+          ./node_modules/.bin/neon config plan --project-id "$NEON_PROJECT_ID" --branch "$BRANCH_ID" --config neon-failure.ts --output json > "$RUNNER_TEMP/g5-plan.json"
+          echo G5_FAILURE_FUNCTION_PLAN_PASS
+          ./node_modules/.bin/neon deploy --project-id "$NEON_PROJECT_ID" --branch "$BRANCH_ID" --config neon-failure.ts --output json > "$RUNNER_TEMP/g5-deploy.json"
+          echo G5_FAILURE_FUNCTION_DEPLOY_PASS
+      - name: Emit limited safe receipt; intentionally no trigger yet
+        if: ${{ always() }}
+        shell: bash
+        env:
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          CREATED: ${{ steps.branch.outputs.created }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          OWNERSHIP: ${{ steps.ownership.outcome }}
+          BOOTSTRAP: ${{ steps.bootstrap.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          payload={"gate":"G5_FAILURE_DEPLOY_ONLY","attempt":"TS-EE-NEON-G5-FAILURE-GH-"+os.environ["GITHUB_RUN_ID"],
+          "run_id":os.environ["GITHUB_RUN_ID"],"source_sha":os.environ["GITHUB_SHA"],
+          "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"neon_project":"odd-pond-18952360",
+          "neon_branch":os.environ["BRANCH_ID"],"created":os.environ["CREATED"],
+          "status":{s.lower():os.environ.get(s) for s in ("PREFLIGHT","OWNERSHIP","BOOTSTRAP","DEPLOY")},
+          "product_effect":"NONE","trigger":"NOT_CREATED_PENDING_EXACT_JOIN"}
+          (Path(os.environ["RUNNER_TEMP"])/"g5-failure-receipt.json").write_text(json.dumps(payload,sort_keys=True)+"\n")
+          print("G5_FAILURE_DEPLOY_RECEIPT")
+          PY
+      - name: Store bounded receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ts-ee-g5-failure-${{ github.run_id }}
+          path: ${{ runner.temp }}/g5-failure-receipt.json
+          if-no-files-found: error
+          retention-days: 7
