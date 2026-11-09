@@ -1,0 +1,146 @@
+name: TS EE Neon G2 branch SQL E2E
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g2.yml]
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g2-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  isolated-sql:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 10
+    steps:
+      - name: Negative capability check (before any Neon write)
+        id: preflight
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
+          status="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects')"
+          [[ "$status" == "403" ]] || { echo "G2_SCOPE_UNPROVEN_NO_MUTATION status=$status"; exit 52; }
+          echo "G2_SCOPE_LIST_DENIED_PASS"
+      - name: Checkout frozen commit without persisted token
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install pinned synthetic test dependency before branch creation
+        run: python -m pip install --disable-pip-version-check --no-input -r experiments/ts-ee-neon-actions-001/g2/requirements.txt
+      - name: One-hour branch expiration
+        id: expiry
+        shell: bash
+        run: echo "value=$(date -u --date='+1 hour' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Create unique attempt-owned branch
+        id: branch
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: ts-ee-g2-${{ github.run_id }}
+          parent_branch: br-cool-sea-bc75qsj1
+          database: ts_ee_neon_ci
+          role: ts_ee_neon_ci_owner
+          expires_at: ${{ steps.expiry.outputs.value }}
+      - name: Reject preexisting or unidentified branch
+        id: ownership
+        shell: bash
+        env:
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CREATED" == "true" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || { echo G2_OWNERSHIP_UNPROVEN_NO_SQL; exit 60; }
+          echo G2_PROVISIONAL_OWNERSHIP_PASS
+      - name: SQL migration, unique-constraint negative test, and commit/readback
+        id: sql
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          G2_SQL_RECEIPT: ${{ runner.temp }}/ts-ee-g2-sql.json
+        run: python experiments/ts-ee-neon-actions-001/g2/sql_smoke.py
+      - name: Cleanup once only after exact identity and ownership verification
+        id: cleanup
+        if: ${{ always() && steps.branch.outputs.created == 'true' && steps.branch.outputs.branch_id != '' }}
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          BRANCH_NAME: ts-ee-g2-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || exit 70
+          url="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o "$RUNNER_TEMP/g2-branch.json" -w '%{http_code}' "$url")"
+          [[ "$code" == "200" ]] || { echo G2_GET_NOT_CONFIRMED_NO_DELETE; exit 71; }
+          python - "$RUNNER_TEMP/g2-branch.json" "$BRANCH_ID" "$BRANCH_NAME" <<'PY'
+          import json,sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              b=json.load(f)["branch"]
+          assert b["id"] == sys.argv[2], "ID mismatch"
+          assert b["name"] == sys.argv[3], "name mismatch"
+          assert b["parent_id"] == "br-cool-sea-bc75qsj1", "parent mismatch"
+          assert not b.get("primary", False), "primary branch forbidden"
+          PY
+          echo G2_EXACT_BRANCH_OWNERSHIP_VERIFIED
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -X DELETE -o /dev/null -w '%{http_code}' "$url")"
+          [[ "$code" == "200" || "$code" == "204" ]] || { echo G2_CLEANUP_EFFECT_UNCERTAIN; exit 72; }
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "$url")"
+          [[ "$code" == "404" ]] || { echo G2_CLEANUP_POSTCONDITION_UNCONFIRMED; exit 73; }
+          echo G2_BRANCH_DELETE_CONFIRMED
+      - name: Create bounded gate-status receipt for controller join
+        if: ${{ always() }}
+        shell: bash
+        env:
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          CREATE: ${{ steps.branch.outcome }}
+          CREATED: ${{ steps.branch.outputs.created }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          OWNERSHIP: ${{ steps.ownership.outcome }}
+          SQL: ${{ steps.sql.outcome }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          names=["PREFLIGHT","CREATE","CREATED","BRANCH_ID","OWNERSHIP","SQL","CLEANUP"]
+          data={
+              "responsibility":"TS_EXECUTION_ENGINEERING",
+              "gate":"G2",
+              "execution_attempt":"TS-EE-NEON-G2-GH-"+os.environ["GITHUB_RUN_ID"],
+              "run_id":os.environ["GITHUB_RUN_ID"],
+              "run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_sha":os.environ["GITHUB_SHA"],
+              "github_ref":os.environ["GITHUB_REF"],
+              "neon_project_id":"odd-pond-18952360",
+              "product_effect":"NONE",
+              "statuses":{n.lower():os.environ.get(n,"") for n in names},
+              "adjudication":"PENDING_EXACT_CONTROLLER_JOIN",
+          }
+          (Path(os.environ["RUNNER_TEMP"])/"ts-ee-g2-receipt.json").write_text(json.dumps(data,sort_keys=True)+"\n",encoding="utf-8")
+          print("G2_BOUNDED_RECEIPT_WRITTEN")
+          PY
+      - name: Upload safe receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee-neon-g2-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ts-ee-g2-receipt.json
+            ${{ runner.temp }}/ts-ee-g2-sql.json
+          if-no-files-found: error
+          retention-days: 7
