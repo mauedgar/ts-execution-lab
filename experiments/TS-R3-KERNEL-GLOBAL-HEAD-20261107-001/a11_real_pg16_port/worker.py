@@ -171,6 +171,15 @@ def main() -> int:
                 except StorageRejected as error:
                     if error.code == "STALE_REVISION":
                         output = {"disposition": "NONE_STALE", "effect": "NONE"}
+                    elif error.code == "MUTATION_COLLISION":
+                        # Deterministically rejected NEW request, original ID
+                        # may already have CONFIRMED history. Never label that
+                        # existing effect NONE or leak the command.
+                        output = {
+                            "disposition": "REJECTED_MUTATION_COLLISION",
+                            "reason_code": "MUTATION_COLLISION",
+                            "effect": "NONE_FOR_THIS_REQUEST",
+                        }
                     else:
                         raise
                 else:
