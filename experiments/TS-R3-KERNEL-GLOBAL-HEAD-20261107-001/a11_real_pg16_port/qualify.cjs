@@ -10,6 +10,8 @@ const {ShadowAsyncAdapter, snapshotBytes} = require('../a10_lc_core_semantics/sh
 const {RealPg16DisposablePort} = require('./port.cjs');
 const sha = v => crypto.createHash('sha256').update(v).digest('hex');
 const SCOPE = 'A10-DISPOSABLE-SINGLE-SCOPE';
+let phase = 'ENTRY';
+
 assert.equal(process.argv.length, 5, 'fixture, unique scratch, pinned python');
 const fixture = path.resolve(process.argv[2]);
 const scratch = path.resolve(process.argv[3]);
@@ -51,11 +53,14 @@ async function main() {
   const genesis = snapshotBytes(original);
   assert.equal(genesis.revision, 0);
   const port = new RealPg16DisposablePort(python);
+  phase = 'INIT';
   assert.equal((await port.initialize(genesis.stateBytes)).revision, 0);
   const adapter = new ShadowAsyncAdapter(api, scratch, port);
+  phase = 'READ_GENESIS';
   const first = await adapter.observe();
   assert.equal(first.revision, 0);
   assert.ok(first.stateBytes.equals(genesis.stateBytes));
+  phase = 'PROPOSE_A';
   const commandA = adapter.propose(first, 'A10-PG16-A',
     (domain, store, revision) => domain.create(store, revision,
       'TaskCycle', 'TC-A11', {
@@ -65,18 +70,23 @@ async function main() {
   const stale = adapter.propose(first, 'A10-PG16-STALE',
     (domain, store, revision) => domain.create(store, revision,
       'Milestone', 'MS-A11-STALE', {title: 'SHOULD-NOT-PERSIST'}, auth));
+  phase = 'APPLY_A';
   const confirmedA = await adapter.commit(commandA);
   assert.equal(confirmedA.disposition, 'CONFIRMED');
   assert.equal(confirmedA.revision, 1);
+  phase = 'STALE_B';
   const none = await adapter.commit(stale);
   assert.equal(none.disposition, 'NONE_STALE');
   assert.equal((await port.counts()).events, 1);
+  phase = 'READ_1';
   const second = await adapter.observe();
   assert.equal(second.revision, 1);
+  phase = 'PROPOSE_B';
   const commandB = adapter.propose(second, 'A10-PG16-B',
     (domain, store, revision) => domain.transition(
       store, revision, 'TaskCycle', 'TC-A11', 'ACTIVE'));
   port.simulateLostReplyOnce = true;
+  phase = 'POST_COMMIT_LOSS';
   const uncertain = await adapter.commit(commandB);
   assert.equal(uncertain.disposition, 'UNKNOWN_FENCED');
   assert.equal((await port.counts()).events, 2,
@@ -86,6 +96,7 @@ async function main() {
       'Milestone', 'MS-A11-RETRY', {title: 'FORBIDDEN'}, auth)),
     /UNKNOWN_EFFECT_REQUIRES_RECONCILIATION/);
   assert.equal((await adapter.commit(stale)).disposition, 'BLOCKED_UNRECONCILED');
+  phase = 'RECONCILE_B';
   const originalOnly = await adapter.reconcile();
   assert.equal(originalOnly.disposition, 'CONFIRMED');
   assert.equal(originalOnly.mutationId, 'A10-PG16-B');
@@ -93,21 +104,29 @@ async function main() {
   assert.equal((await port.counts()).receipts, 2,
     'reconciliation is read-only, not a new mutation');
 
+  phase = 'READ_2';
   const third = await adapter.observe();
+  phase = 'PROPOSE_C';
   const commandC = adapter.propose(third, 'A10-PG16-C',
     (domain, store, revision) => domain.satisfy(
       store, revision, 'TC-A11', 'VALIDATE'));
+  phase = 'APPLY_C';
   assert.equal((await adapter.commit(commandC)).disposition, 'CONFIRMED');
 
+  phase = 'READ_3';
   const fourth = await adapter.observe();
+  phase = 'PROPOSE_D';
   const commandD = adapter.propose(fourth, 'A10-PG16-D',
     (domain, store, revision) => domain.transition(
       store, revision, 'TaskCycle', 'TC-A11', 'PENDING_ACCEPTANCE'));
+  phase = 'APPLY_D';
   assert.equal((await adapter.commit(commandD)).disposition, 'CONFIRMED');
+  phase = 'READ_4';
   const result = await adapter.observe();
   assert.equal(result.revision, 4);
   const counts = await port.counts();
   assert.deepEqual(counts, {heads: 1, events: 4, receipts: 4});
+  phase = 'ORIGINAL_RESTORE';
   const originalJs = makeOriginalReader(result, 'original-js-restore');
   assert.ok(originalJs.read().state.aggregates.TaskCycle['TC-A11']);
   assert.equal(originalJs.read().state.aggregates.TaskCycle['TC-A11'].state,
@@ -116,6 +135,7 @@ async function main() {
   assert.equal(result.eventBytes.toString('utf8').trimEnd().split('\n').length, 4);
   assert.equal(result.stateBytes[result.stateBytes.length - 1], 10);
   assert.equal(result.eventBytes[result.eventBytes.length - 1], 10);
+  phase = 'EMIT_RESULT';
   console.log(JSON.stringify({
     status: 'A11_ORIGINAL_JS_ASYNC_REAL_POSTGRES16_BRIDGE_PASS',
     original_product_js: 'PINNED_3_BLOBS',
@@ -138,6 +158,6 @@ async function main() {
 }
 main().catch(_err => {
   // JSON status for CI; no local connection strings or error stack.
-  console.error('A11_FAIL_CLOSED');
+  console.error('A11_FAIL_CLOSED_' + phase);
   process.exitCode = 1;
 });
