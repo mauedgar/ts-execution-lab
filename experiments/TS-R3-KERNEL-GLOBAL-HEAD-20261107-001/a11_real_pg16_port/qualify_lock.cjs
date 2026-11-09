@@ -78,7 +78,9 @@ async function main() {
   const outcome = await lockedProbe(port.proposalWire(a), port.proposalWire(b));
   assert.equal(outcome.status, 'A11_REAL_PG16_POSITIVE_LOCK_OVERLAP_PASS');
   assert.equal(outcome.host_count, 1);
-  assert.equal(outcome.backend_count, 2);
+  assert.equal(outcome.backend_count, 4);
+  assert.equal(outcome.writer_backend_count, 2);
+  assert.equal(outcome.two_writers_waited_concurrently, true);
   assert.equal(outcome.server_blockers_observed, true);
   assert.equal(outcome.wait_event_type, 'Lock');
   assert.equal(outcome.winner, 'CONFIRMED');
@@ -87,13 +89,15 @@ async function main() {
   const end = await port.read();
   assert.equal(end.revision, 6);
   const state = JSON.parse(end.stateBytes.toString('utf8'));
-  assert.ok(state.aggregates.Milestone['MS-A11-LOCK-WRITER-A']);
-  assert.equal(state.aggregates.Milestone['MS-A11-LOCK-WRITER-B'], undefined);
+  const hasA = Boolean(state.aggregates.Milestone['MS-A11-LOCK-WRITER-A']);
+  const hasB = Boolean(state.aggregates.Milestone['MS-A11-LOCK-WRITER-B']);
+  assert.equal(Number(hasA) + Number(hasB), 1, 'one original JS winner persisted');
+  assert.equal(outcome.winner_side, hasA ? 'A' : 'B');
   assert.deepEqual(await port.counts(), {heads:1, events:6, receipts:6});
   console.log(JSON.stringify({
     status: 'A11_REAL_PG16_JS_CAS_WITH_LOCK_OVERLAP_PASS',
     server_lock_overlap_positive: true,
-    backend_sessions: 2, physical_hosts: 1,
+    backend_sessions: 4, writer_sessions: 2, physical_hosts: 1,
     heads: 1, events: 6, receipts: 6, revision: 6,
     original_js_proposal: true,
     neon: 'NOT_RUN', product_effect: 'NONE',
