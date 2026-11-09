@@ -460,5 +460,16 @@ if __name__ == "__main__":
                         "ProgrammingError","InvalidPassword","ConnectionTimeout"}:
             kind = "OTHER"
         stage = STAGE if STAGE in {"ARGS","SOURCE_VALIDATE","DB_CONNECT","OPERATION"} else "UNKNOWN"
-        print("A02_LAN_FAIL_" + stage + "_" + kind.upper(),file=sys.stderr)
+        # Only caller-owned fixed uppercase guards / StorageRejected codes are
+        # allowed in diagnostics; never print raw DB/URL/socket/SQL exceptions.
+        reason = ""
+        if type(exc) is AssertionError:
+            reason = str(exc)
+        elif type(exc) in (StorageRejected, EffectUnknown):
+            reason = getattr(exc, "code", "")
+        if not (type(reason) is str and
+                re.fullmatch(r"[A-Z0-9_]{3,72}", reason)):
+            reason = "REDACTED"
+        print("A02_LAN_FAIL_" + stage + "_" + kind.upper() +
+              "_" + reason, file=sys.stderr)
         raise SystemExit(2)
