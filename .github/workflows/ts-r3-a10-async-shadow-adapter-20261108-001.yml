@@ -1,8 +1,8 @@
 name: TS R3 A10 Original JS And Shadow Async Adapter Qualification
+# Native A10 terminal PASS run 42546806762 at 5df602c7237e1e514fa4efd164a24ed0eff00413.
+# Archived: no push launch; any manual dispatch skips this job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a10-semantic-async-adapter-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   semantics-and-adapter:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
