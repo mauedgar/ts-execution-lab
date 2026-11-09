@@ -1,8 +1,9 @@
 name: TS R3 A001 credentialless preflight hardening selftest
+# Archived original selftest native PASS run: 42539671996 at
+# 4d525b81b90f100de5bd70955d40d2edf35dcc8d.
+# No push dispatch; manually requested workflow has no runnable job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a001-secure-readonly-source-repair-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   credentialless-source-test:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     env:
