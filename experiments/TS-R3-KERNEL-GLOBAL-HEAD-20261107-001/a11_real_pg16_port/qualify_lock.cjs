@@ -35,19 +35,23 @@ function lockedProbe(a, b) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const output = [];
-    let count = 0, abnormal = false;
+    let count = 0, abnormal = false, safeStage = 'A11_LOCK_STAGE_UNKNOWN';
     const timeout = setTimeout(() => { abnormal = true; child.kill(); }, 18000);
     child.stdout.on('data', chunk => {
       count += chunk.length;
       if (count > 512 * 1024) { abnormal = true; child.kill(); }
       else output.push(chunk);
     });
-    child.stderr.on('data', () => {}); // no raw SQL or connection errors surfaced
+    child.stderr.on('data', chunk => {
+      // Only a bounded synthetic marker is accepted; discard all other stderr.
+      const marker = chunk.toString('utf8').match(/A11_LOCK_STAGE_[A-Z_]+/);
+      if (marker && marker[0].length <= 90) safeStage = marker[0];
+    });
     child.stdin.on('error', () => {});
     child.on('error', () => { abnormal = true; });
     child.on('close', code => {
       clearTimeout(timeout);
-      if (abnormal || code !== 0) return reject(new Error('A11_LOCK_PROBE_UNAVAILABLE'));
+      if (abnormal || code !== 0) return reject(new Error(safeStage));
       try { resolve(JSON.parse(Buffer.concat(output).toString('utf8'))); }
       catch (_error) { reject(new Error('A11_LOCK_PROBE_MALFORMED')); }
     });
@@ -95,7 +99,10 @@ async function main() {
     neon: 'NOT_RUN', product_effect: 'NONE',
   }));
 }
-main().catch(_error => {
-  console.error('A11_LOCK_QUALIFICATION_FAIL_CLOSED');
+main().catch(error => {
+  const marker = typeof error?.message === 'string' &&
+    /^A11_LOCK_STAGE_[A-Z_]+$/.test(error.message)
+    ? error.message : 'A11_LOCK_STAGE_UNCLASSIFIED';
+  console.error('A11_LOCK_QUALIFICATION_FAIL_CLOSED_' + marker);
   process.exitCode = 1;
 });
