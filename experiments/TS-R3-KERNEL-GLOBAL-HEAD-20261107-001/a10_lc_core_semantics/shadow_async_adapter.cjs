@@ -8,6 +8,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const copy = value => Buffer.from(value);
+const SHADOW_SCOPE = 'A10-DISPOSABLE-SINGLE-SCOPE';
+function fingerprint(p) {
+  // Bind all identity/commit dimensions, including the exact bytes.
+  return sha([
+    p.scope, p.mutationId, String(p.expectedRevision), String(p.expectedEpoch),
+    p.previousEventHash ?? '<GENESIS>', p.eventHash, sha(p.stateBytes), sha(p.eventLine),
+  ].join('\\0'));
+}
 
 function restoreSingleGeneration(api, home, observed) {
   const store = new api.FilesystemStateStore(home);
@@ -43,11 +51,13 @@ class ShadowAsyncAdapter {
     this.root = root;
     this.port = port;
     this.pendingUnknown = null;
+    this.inflight = false;
     this.proposalNumber = 0;
   }
   async observe() { return await this.port.read(); }
   propose(observed, mutationId, originalJsCall) {
     assert.equal(this.pendingUnknown, null, 'UNKNOWN_EFFECT_REQUIRES_RECONCILIATION');
+    assert.equal(this.inflight, false, 'INFLIGHT_OPERATION_BLOCKED');
     assert.match(mutationId, /^A10-[A-Z0-9-]+$/);
     const work = path.join(this.root, 'proposal-' + (++this.proposalNumber));
     fs.mkdirSync(work, {recursive: false});
@@ -67,7 +77,8 @@ class ShadowAsyncAdapter {
         ? JSON.parse(before.eventBytes.toString('utf8').trimEnd().split('\n').at(-1)).hash : null;
       assert.equal(parsed.previous_hash, originalLast);
       assert.equal(parsed.sequence, after.revision);
-      return Object.freeze({
+      const fields = {
+        scope: SHADOW_SCOPE,
         mutationId,
         expectedRevision: observed.revision,
         expectedEpoch: observed.epoch,
@@ -75,7 +86,8 @@ class ShadowAsyncAdapter {
         eventHash: parsed.hash,
         stateBytes: copy(after.stateBytes),
         eventLine: copy(line),
-      });
+      };
+      return Object.freeze({...fields, fingerprint: fingerprint(fields)});
     } finally {
       fs.rmSync(work, {recursive: true, force: true});
     }
@@ -83,23 +95,45 @@ class ShadowAsyncAdapter {
   async commit(proposal) {
     if (this.pendingUnknown !== null)
       return {disposition: 'BLOCKED_UNRECONCILED', effect: 'UNKNOWN'};
+    if (this.inflight)
+      return {disposition: 'BLOCKED_INFLIGHT', effect: 'NONE'};
+    this.inflight = true;
     try {
       return await this.port.apply(proposal);
     } catch (_error) {
       // Every post-dispatch exception conservatively preserves original attempt.
       this.pendingUnknown = proposal;
       return {disposition: 'UNKNOWN_FENCED', effect: 'UNKNOWN'};
+    } finally {
+      this.inflight = false;
     }
   }
   async reconcile() {
     assert.ok(this.pendingUnknown !== null, 'NO_UNCERTAIN_ATTEMPT');
+    if (this.inflight)
+      return {disposition: 'BLOCKED_INFLIGHT', effect: 'UNKNOWN'};
+    this.inflight = true;
     const original = this.pendingUnknown;
-    const result = await this.port.reconcile(original);
-    if (result.disposition === 'CONFIRMED' && result.mutationId === original.mutationId) {
-      this.pendingUnknown = null;
-      return result;
+    try {
+      const result = await this.port.reconcile(original);
+      if (result.disposition === 'CONFIRMED' &&
+          result.mutationId === original.mutationId &&
+          result.scope === original.scope &&
+          result.fingerprint === original.fingerprint &&
+          result.eventHash === original.eventHash &&
+          result.revision === original.expectedRevision + 1 &&
+          result.expectedEpoch === original.expectedEpoch &&
+          result.stateSha256 === sha(original.stateBytes) &&
+          result.eventLineSha256 === sha(original.eventLine)) {
+        this.pendingUnknown = null;
+        return result;
+      }
+      return {disposition: 'UNKNOWN_FENCED', effect: 'UNKNOWN'};
+    } catch (_error) {
+      return {disposition: 'UNKNOWN_FENCED', effect: 'UNKNOWN'};
+    } finally {
+      this.inflight = false;
     }
-    return {disposition: 'UNKNOWN_FENCED', effect: 'UNKNOWN'};
   }
 }
 
@@ -122,6 +156,8 @@ class DisposableFakeCasPort {
     };
   }
   async apply(p) {
+    assert.equal(p.scope, SHADOW_SCOPE, 'ISOLATED_SCOPE_REQUIRED');
+    assert.equal(p.fingerprint, fingerprint(p), 'REQUEST_FINGERPRINT_INVALID');
     if (p.expectedEpoch !== this.epoch) return {disposition: 'NONE_FENCED', effect: 'NONE'};
     if (p.expectedRevision !== this.revision) return {disposition: 'NONE_STALE', effect: 'NONE'};
     assert.ok(!this.receipts.has(p.mutationId), 'DUPLICATE_ATTEMPT_NOT_REISSUED');
@@ -140,7 +176,10 @@ class DisposableFakeCasPort {
     this.commitCount++;
     const receipt = Object.freeze({
       disposition: 'CONFIRMED', effect: 'CONFIRMED',
-      mutationId: p.mutationId, revision: this.revision, eventHash: p.eventHash,
+      scope: p.scope, mutationId: p.mutationId,
+      fingerprint: p.fingerprint, expectedEpoch: p.expectedEpoch,
+      revision: this.revision, eventHash: p.eventHash,
+      stateSha256: sha(p.stateBytes), eventLineSha256: sha(p.eventLine),
     });
     this.receipts.set(p.mutationId, receipt);
     if (this.dropResponseOnce) {
