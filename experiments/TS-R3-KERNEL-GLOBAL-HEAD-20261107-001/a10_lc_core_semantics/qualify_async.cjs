@@ -67,12 +67,23 @@ async function main() {
   // A03: an incorrectly attributed receipt MUST NOT clear the UNKNOWN fence.
   const originalReceipt = port.receipts.get(lostReply.mutationId);
   assert.ok(originalReceipt && originalReceipt.fingerprint === lostReply.fingerprint);
-  port.receipts.set(lostReply.mutationId, {...originalReceipt,
-    fingerprint: '0'.repeat(64), revision: originalReceipt.revision + 1});
-  const forged = await adapter.reconcile();
-  assert.equal(forged.disposition, 'UNKNOWN_FENCED');
-  assert.equal(adapter.pendingUnknown.mutationId, lostReply.mutationId);
-  assert.equal(port.commitCount, 2, 'mismatched receipt must not cause redispatch');
+  const receiptFaults = [
+    {mutationId: 'A10-WRONG-MUTATION'},
+    {scope: 'A10-WRONG-SCOPE'},
+    {fingerprint: '0'.repeat(64)},
+    {expectedEpoch: originalReceipt.expectedEpoch + 1},
+    {revision: originalReceipt.revision + 1},
+    {eventHash: '0'.repeat(64)},
+    {stateSha256: '0'.repeat(64)},
+    {eventLineSha256: '0'.repeat(64)},
+  ];
+  for (const bad of receiptFaults) {
+    port.receipts.set(lostReply.mutationId, {...originalReceipt, ...bad});
+    const forged = await adapter.reconcile();
+    assert.equal(forged.disposition, 'UNKNOWN_FENCED');
+    assert.equal(adapter.pendingUnknown.mutationId, lostReply.mutationId);
+    assert.equal(port.commitCount, 2, 'mismatched receipt must not cause redispatch');
+  }
   port.receipts.set(lostReply.mutationId, originalReceipt);
   const joined = await adapter.reconcile();
   assert.equal(joined.disposition, 'CONFIRMED');
@@ -160,6 +171,8 @@ async function main() {
     event_count: 4,
     receipts: port.receipts.size,
     global_revision: port.revision,
+    rejected_receipt_mismatches: receiptFaults.length,
+    inflight_port_dispatches: dispatchCount,
     old_writer_effect: oldResult.disposition,
     unknown_reconciled: joined.disposition,
     neon: 'NOT_RUN', product_effect: 'NONE',
