@@ -60,7 +60,13 @@ def validate_dsn(dsn: str) -> None:
     ensure(parsed.path == "/" + EXPECTED_DB, "DATABASE_MISMATCH")
     ensure(port in (None, 5432), "INVALID_PORT")
     ensure(not parsed.fragment, "UNEXPECTED_FRAGMENT")
-    options = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+    try:
+        options = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except ValueError:
+        raise BlockedPrecondition("INVALID_DSN_OPTIONS") from None
+    ensure(all(ord(c) >= 32 for values in options.values()
+               for value in values for c in value),
+           "UNSAFE_DSN_CHARACTER")
     ensure(set(options).issubset({"sslmode", "channel_binding"}), "UNEXPECTED_DSN_OPTION")
     ensure(len(options.get("sslmode", [])) == 1 and
            options["sslmode"][0] in ("require", "verify-ca", "verify-full"),
