@@ -1,8 +1,8 @@
 name: TS R3 A001 exact DSN negative rejection qualification
+# Native terminal PASS run 42540471392 on candidate 6a51f5c3b54bf6b9e0179acaee9eea5e0c55f65b
+# This archived single-shot test is intentionally inert.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a001-precise-negative-tests-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   exact-negative-source:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     env:
