@@ -14,6 +14,10 @@ import re
 import sys
 from pathlib import Path
 
+# Exact sibling ts_global package; no ambient PYTHONPATH or host imports.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
 import psycopg
 from psycopg.rows import dict_row
 
