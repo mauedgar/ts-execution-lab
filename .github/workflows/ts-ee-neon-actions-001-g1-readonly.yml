@@ -1,0 +1,40 @@
+name: TS EE Neon G1 read-only scope smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g1-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify-neon-project:
+    if: github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1'
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 5
+    steps:
+      - name: Read-only Neon project authentication canary
+        shell: bash
+        env:
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test "$NEON_PROJECT_ID" = "odd-pond-18952360" || { echo 'NEON_G1_PROJECT_ID_MISMATCH'; exit 41; }
+          test -n "$NEON_API_KEY" || { echo 'NEON_G1_SECRET_MISSING'; exit 42; }
+          output="$RUNNER_TEMP/ts-ee-neon-g1-project.json"
+          trap 'rm -f "$output"' EXIT
+          printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - --silent --show-error --fail --max-time 20 \
+              -H 'Accept: application/json' \
+              -o "$output" \
+              "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID"
+          python3 - "$output" "$NEON_PROJECT_ID" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding='utf-8') as f:
+              data = json.load(f)
+          if data.get('project', {}).get('id') != sys.argv[2]:
+              raise SystemExit('NEON_G1_SCOPED_PROJECT_MISMATCH')
+          print('NEON_G1_READ_ONLY_PASS')
+          PY
