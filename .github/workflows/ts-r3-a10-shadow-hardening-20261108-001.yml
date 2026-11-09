@@ -1,0 +1,57 @@
+name: TS R3 A10 Shadow Async Receipt and Inflight Hardening
+on:
+  push:
+    branches:
+      - ee/ts-r3-a10-shadow-advisory-hardening-20261108-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a10-shadow-hardening-20261108-001
+  cancel-in-progress: false
+jobs:
+  shadow-hardening:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout immutable candidate without persisted token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify original Product fixture and exact hardening blobs
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/contracts.js")" = "5d2d3a8a24ebc17339675e0c801595956e0cd353"
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/index.js")" = "0219b92e5f546407a6060a6dc449865c14c7f144"
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/store.js")" = "f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a"
+          test "$(git rev-parse "HEAD:$root/differential/e1/package-lock.json")" = "ecf387f8f425598187f3a68b8eac5388376129ce"
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/shadow_async_adapter.cjs")" = "4a9ee4f454dd28eddf8f863064e973f28e43341c"
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/qualify_async.cjs")" = "c3ecaff46be742b2eb3fe95d28991cfa07836582"
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/SHADOW_HARDENING.md")" = "4db323d658fe46ed3a6fb34524b2808752347807"
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_NEON_SECRET; exit 41; }
+          test -z "${DATABASE_URL-}" || { echo BLOCKED_DATABASE_URL; exit 42; }
+          test -z "$(git status --porcelain)"
+      - name: Pin Node 22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - name: Verify original JS proposals and adversarial concurrent/reconciliation cases
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(node -p 'process.versions.node')" = "22.16.0"
+          scratch="$(mktemp -d -p /tmp ts-r3-a10-XXXXXX)"
+          work="$scratch/original-product"
+          mkdir "$work" "$scratch/clean-home"
+          trap 'rm -rf "$scratch"' EXIT
+          cp "$root/fixtures/product-kernel-v0/"{contracts,index,store}.js "$work/"
+          cp "$root/differential/e1/package.json" "$work/"
+          cp "$root/differential/e1/package-lock.json" "$work/"
+          env -i PATH="$PATH" HOME="$scratch/clean-home" npm_config_cache="$scratch/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$work" --ignore-scripts --no-audit --no-fund
+          test "$(env -i PATH="$PATH" HOME="$scratch/clean-home" node -p "require('$work/node_modules/zod/package.json').version")" = "4.6.7"
+          env -i PATH="$PATH" HOME="$scratch/clean-home" node "$root/a10_lc_core_semantics/qualify_async.cjs" "$work" "$scratch" | tee "$scratch/async-result.json"
+          node -e 'const a=require(process.argv[1]);if(a.status!=="A10_ASYNC_STORAGE_SHADOW_PRESERVATION_PASS"||a.cases.length!==9||a.committed_mutations!==4||a.event_count!==4||a.receipts!==4||a.global_revision!==4||a.rejected_receipt_mismatches!==8||a.inflight_port_dispatches!==1||a.old_writer_effect!=="NONE_FENCED"||a.unknown_reconciled!=="CONFIRMED"||a.neon!=="NOT_RUN"||a.product_effect!=="NONE")process.exit(1)' "$scratch/async-result.json"
+          echo A10_SHADOW_RECEIPT_IDENTITY_AND_INFLIGHT_HARDENING_PASS
