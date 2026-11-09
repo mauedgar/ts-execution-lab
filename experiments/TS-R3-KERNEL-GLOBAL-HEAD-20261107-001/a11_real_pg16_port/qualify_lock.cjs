@@ -83,6 +83,21 @@ async function main() {
   assert.equal(outcome.two_writers_waited_concurrently, true);
   assert.equal(outcome.server_blockers_observed, true);
   assert.equal(outcome.wait_event_type, 'Lock');
+  const witness = outcome.lock_observation;
+  assert.ok(witness && Number.isSafeInteger(witness.holder_pid) &&
+    Number.isSafeInteger(witness.observer_pid));
+  assert.equal(witness.waiters.length, 2);
+  assert.deepEqual(witness.waiters.map(x => x.writer), ['A', 'B']);
+  assert.equal(new Set([witness.holder_pid, witness.observer_pid,
+    ...witness.waiters.map(x => x.pid)]).size, 4);
+  for (const waiter of witness.waiters) {
+    assert.equal(waiter.wait_event_type, 'Lock');
+    assert.ok(waiter.wait_event.length > 0 && waiter.wait_event.length <= 80);
+    assert.ok(waiter.blockers.length > 0 &&
+      waiter.blockers.every(id => Number.isSafeInteger(id) && id > 0));
+  }
+  assert.ok(witness.waiters.some(x => x.blockers.includes(witness.holder_pid)),
+    'holder must be an actual server-reported blocker');
   assert.equal(outcome.winner, 'CONFIRMED');
   assert.equal(outcome.contender, 'NONE_STALE');
   assert.equal(outcome.revision, 6);
@@ -100,6 +115,7 @@ async function main() {
     backend_sessions: 4, writer_sessions: 2, physical_hosts: 1,
     heads: 1, events: 6, receipts: 6, revision: 6,
     original_js_proposal: true,
+    lock_observation: witness,
     neon: 'NOT_RUN', product_effect: 'NONE',
   }));
 }
