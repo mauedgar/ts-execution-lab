@@ -1,0 +1,51 @@
+name: TS EE Neon G5 publish verified transitive lock (no Neon credentials)
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g5-lock.yml]
+permissions:
+  contents: write
+concurrency:
+  group: ts-ee-neon-g5-lock-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  publish-exact-lock:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact commit; no Neon project secret available in this job
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: true
+      - name: Exact Node 22 on Linux
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22.23.0'
+      - name: Reproduce G3 recorded complete dependency lock
+        shell: bash
+        working-directory: experiments/ts-ee-neon-actions-001/g3
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --no-audit --no-fund --ignore-scripts
+          echo "2147dd49d99a3fd9d22b6cc7c146f076f334de89f9df80726af4f5243ca846aa  package-lock.json" | sha256sum -c -
+          npm ci --no-audit --no-fund
+          echo G5_LOCK_SHA_AND_NPM_CI_REPRODUCIBLE_PASS
+      - name: Create-only commit constrained to one lockfile; fail on competing ref changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || { echo G5_SOURCE_HEAD_MISMATCH; exit 81; }
+          path="experiments/ts-ee-neon-actions-001/g3/package-lock.json"
+          test ! -e "$path" || { echo G5_LOCK_ALREADY_EXISTS_NO_OVERWRITE; exit 82; }
+          test -s "$path" && { echo G5_UNEXPECTED_LOCK_PRESENT; exit 83; } || true
+          cd experiments/ts-ee-neon-actions-001/g3
+          test -s package-lock.json
+          cd -
+          git add -- "$path"
+          test "$(git diff --cached --name-only)" = "$path" || { echo G5_WRITESET_VIOLATION; exit 84; }
+          git config user.name 'ts-ee-neon-actions-qualification'
+          git config user.email '54420195+mauedgar@users.noreply.github.com'
+          git commit -m 'lock(ee-neon-g5): publish SHA-verified npm dependency graph'
+          git push origin "HEAD:refs/heads/exp/ts-ee-neon-actions-001-g1"
+          echo G5_VERIFIED_LOCK_COMMIT_PUSHED
