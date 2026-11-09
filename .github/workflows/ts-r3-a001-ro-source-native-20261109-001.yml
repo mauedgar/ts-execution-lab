@@ -1,0 +1,84 @@
+name: TS R3 A001 RO source-only Python 3.15.2 DSN negative proof
+on:
+  push:
+    branches:
+      - ee/ts-r3-a001-ro-client-ir001-repair-20261109-001
+    paths:
+      - .github/workflows/ts-r3-a001-ro-source-native-20261109-001.yml
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a001-ro-source-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ro-source-negative:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/ee/ts-r3-a001-ro-client-ir001-repair-20261109-001' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_NO_CONFIG: '1'
+    steps:
+      - name: Checkout no persisted token
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Assert frozen source and credentialless scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py)" = "10cc5128363e1e2f4b0c31093849c30793a30ec7"
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || exit 41
+          test -z "${TS_R3_NEON_CHILD_RO_DSN-}" || exit 42
+          test -z "${DATABASE_URL-}" || exit 43
+          test -z "${PGPASSWORD-}" || exit 44
+          echo A001_RO_FROZEN_SOURCE_AND_NO_SECRETS_PASS
+      - name: Pin uv source-only runtime
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+          enable-cache: false
+      - name: Execute Python 3.15.2 exact negatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          py="$(uv python find 3.15.2)"
+          "$py" -B "experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/runners/neon_readonly_preflight.py" --self-test > "$RUNNER_TEMP/a001-ro-selftest.json"
+          "$py" - "$RUNNER_TEMP/a001-ro-selftest.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          assert data == {'status':'PASS_DSN_METADATA_SELFTEST','negative_exact_reject_cases':29,'network':'NOT_RUN'}, data
+          PY
+          echo A001_RO_NATIVE_PY3152_29_NEGATIVES_PASS
+      - name: Safe attempt receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          STEP_TEST: ${{ steps.selftest.outcome }}
+        run: |
+          python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          data={'operation':'TS-R3-A001-RO-SOURCE-NATIVE-20261109-001',
+                'execution_attempt':'TS-R3-A001-RO-SOURCE-NATIVE-20261109-001-A001',
+                'provider':'github-actions','run_id':os.environ['GITHUB_RUN_ID'],
+                'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],
+                'sha':os.environ['GITHUB_SHA'],
+                'source_blob':'10cc5128363e1e2f4b0c31093849c30793a30ec7',
+                'neon_secret':'NOT_USED','neon_sql':'NOT_RUN','product_effect':'NONE',
+                'status':'PENDING_CONTROLLER_JOIN'}
+          Path(os.environ['RUNNER_TEMP'],'a001-ro-source-receipt.json').write_text(json.dumps(data,sort_keys=True)+'\n',encoding='utf-8')
+          print('A001_RO_RECEIPT_WRITTEN')
+          PY
+      - name: Upload safe source-only receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ts-r3-a001-ro-source-native-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/a001-ro-source-receipt.json
+            ${{ runner.temp }}/a001-ro-selftest.json
+          if-no-files-found: warn
+          retention-days: 7
