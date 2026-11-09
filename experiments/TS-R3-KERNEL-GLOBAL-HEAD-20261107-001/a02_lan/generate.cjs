@@ -7,19 +7,45 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const fixture = path.resolve(process.env.TS_R3_A02_PRODUCT_FIXTURE_DIR || '');
-assert.ok(inQualifiedTemporaryRoot(fixture) && fs.statSync(fixture).isDirectory(),
-  'FROZEN_TEMP_PRODUCT_FIXTURE_REQUIRED');
+assertPrivateTempPath(fixture, true);
 const api = require(path.join(fixture, 'index.js'));
 const {ShadowAsyncAdapter, snapshotBytes} =
   require('../a10_lc_core_semantics/shadow_async_adapter.cjs');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
-function inQualifiedTemporaryRoot(candidate) {
+function assertPrivateTempPath(candidate, existingDirectory) {
   const dest = path.resolve(candidate);
   const roots = [os.tmpdir(), process.env.RUNNER_TEMP]
     .filter(value => typeof value === 'string' && path.isAbsolute(value))
     .map(value => path.resolve(value))
     .filter(value => value !== path.parse(value).root);
-  return roots.some(root => dest.startsWith(root + path.sep));
+  const root = roots.find(value => dest.startsWith(value + path.sep));
+  assert.ok(root, 'EXACT_TEMP_ROOT_REQUIRED');
+  assert.equal(fs.realpathSync.native(root), root, 'TEMP_ROOT_SYMLINK_FORBIDDEN');
+  const parts = path.relative(root, dest).split(path.sep);
+  assert.ok(parts.length >= 2, 'PRIVATE_SUBDIRECTORY_REQUIRED');
+  const privateBase = path.join(root, parts[0]);
+  const baseMeta = fs.lstatSync(privateBase);
+  assert.ok(baseMeta.isDirectory() && !baseMeta.isSymbolicLink(),
+    'PRIVATE_BASE_DIRECTORY_REQUIRED');
+  if (typeof process.getuid === 'function') {
+    assert.equal(baseMeta.uid, process.getuid(), 'PRIVATE_DIR_OWNER_REQUIRED');
+    assert.equal(baseMeta.mode & 0o077, 0, 'PRIVATE_DIR_MODE_0700_REQUIRED');
+  }
+  let ancestor = privateBase;
+  for (const part of parts.slice(1, -1)) {
+    ancestor = path.join(ancestor, part);
+    const meta = fs.lstatSync(ancestor);
+    assert.ok(meta.isDirectory() && !meta.isSymbolicLink(),
+      'INTERMEDIATE_SYMLINK_FORBIDDEN');
+  }
+  if (existingDirectory) {
+    const meta = fs.lstatSync(dest);
+    assert.ok(meta.isDirectory() && !meta.isSymbolicLink(),
+      'FIXTURE_REAL_DIRECTORY_REQUIRED');
+  } else {
+    assert.ok(!fs.existsSync(dest), 'CREATE_ONLY_DESTINATION_REQUIRED');
+  }
+  return dest;
 }
 const SCOPE = 'A10-DISPOSABLE-SINGLE-SCOPE';
 const SCHEMA = 'TS_R3_A02_LAN_PROPOSALS_V1';
@@ -27,8 +53,7 @@ const auth = [{kind:'AUTHORITY', id:'A02-LAN-SYNTHETIC-NONPRODUCT-ONLY'}];
 
 assert.equal(process.argv.length, 3, 'one artifact path required');
 const destination = path.resolve(process.argv[2]);
-assert.ok(inQualifiedTemporaryRoot(destination),
-  'MUST_WRITE_TO_DISPOSABLE_TEMP_ONLY');
+assertPrivateTempPath(destination, false);
 assert.ok(!fs.existsSync(destination), 'CREATE_ONLY');
 assert.ok(!process.env.TS_R3_NEON_CHILD_DSN && !process.env.TS_R3_NEON_CHILD_RO_DSN &&
   !process.env.DATABASE_URL && !process.env.PGPASSWORD);
