@@ -144,7 +144,7 @@ def main():
                 f" (SELECT COUNT(*) FROM {SCHEMA}.events) AS events,"
                 f" (SELECT COUNT(*) FROM {SCHEMA}.receipts) AS receipts"
             ).fetchone()
-            require(row == {"heads": 1, "events": 5, "receipts": 5},
+            require(row == {"heads": 1, "events": 6, "receipts": 6},
                     "DISPOSABLE_COUNTS_MISMATCH")
             inventory(conn)
             with conn.transaction():
