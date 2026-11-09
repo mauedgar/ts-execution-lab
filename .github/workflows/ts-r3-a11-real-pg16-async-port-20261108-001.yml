@@ -1,8 +1,8 @@
 name: TS R3 A11 Original JS Async Real PG16 Local Qualification
+# Original terminal A11 PASS GHA42550424798 on ebcdfc49ad0392beb9cf557d00c2a83835587a8f.
+# Archived one-shot workflow: no push trigger; manual dispatch job skipped.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a11-real-pg16-async-port-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-js-async-pg16:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     services:
