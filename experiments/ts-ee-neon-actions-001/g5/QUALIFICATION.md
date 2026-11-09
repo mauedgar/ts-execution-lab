@@ -13,7 +13,7 @@ No Product acceptance/integration, no TS Remote State / Attendance project mutat
 | G2 | Run 42551306634 | FAIL_PRECONDITION / NONE | GET /projects returned 404, no Neon writes |
 | G2 | Run 42551461126, head 2d26c6df7a013729377da1c7fa881caea89452fb | PASS / CONFIRMED | disposable branch created, synthetic SQL test, delete & GET404 |
 | G3 | Run 42552326983, head 802f23b8d7ba6fc26aee8370635210f799a918be | Function deployment PASS | Neon g3pulse Node24 Function, disposable branch |
-| G3 | Neon trigger trigger-2e5a241a-2d8c-41bd-b8f1-3181b3c0ba10 | E2E PASS | scheduled 02:43:00Z; persisted 02:43:19.039Z; SQL elapsed 45ms; trigger disabled afterwards |
+| G3 | Neon trigger trigger-2e5a241a-2d8c-41bd-b8f1-3181b3c0ba10 | E2E PASS | occurrences 02:43:00Z (persist 02:43:19.039Z, SQL 45ms) AND 02:44:00Z (persist 02:44:44.755Z, SQL 28ms); now disabled |
 | G4 | Run 42552680334, head 85ea170f1e1f5605f674de2346d4f794342b6753 | two parallel candidate jobs PASS | CAS/UNIQUE/rollback/recovery; both attempt-owned branches destroyed |
 | G5 lock | Run 42553077453 | FAIL_PRECONDITION / NONE | lock was generated; wrong working-tree existence guard prevented push |
 | G5 lock | Run 42553181797 (head c8de1c3b00ab8f5caee7c12e1caa0fa7298cdc42) | PASS | exactly one file added in commit eb0cfdf3ea519ea03018812313bae47c57168790 |
@@ -29,7 +29,7 @@ As of Nov 2026, Neon Free reference: [official October 2 2026](https://neon.com/
 - No paid service, plan upgrade or purchase was performed. These are quota limits, not measured actual consumption.
 - Peak observed branch count <=4: Neon main, G3 TTL branch, and G4 candidates while concurrent; below 10-branch cap.
 - G2 + G4 candidate branches deleted with ownership verification. G3 temporary branch expires 2026-11-09T03:32:00Z, not yet confirmed absent when dossier authored. G3 trigger disabled with next_run_at=null.
-- SQL synthetic, short-lived; one confirmed cron event; low consumption expected but exact metered CU-hours and function capacity-hours **unavailable** from Free API. No unverified $0 bill claims.
+- SQL synthetic, short-lived; TWO distinct confirmed cron events, even though first was observed before the disable operation. An occurrence already queued may finish after disable; don't equate `next_run_at: null` with cancellation of in-flight deliveries. Low consumption expected but exact metered CU-hours and function capacity-hours **unavailable** from Free API. No unverified $0 bill claims.
 
 ## Security and replay controls
 
@@ -47,7 +47,7 @@ As of Nov 2026, Neon Free reference: [official October 2 2026](https://neon.com/
 1. Cancellation after remote branch creation with UNKNOWN state and full crash/stop recovery **not empirically tested**. G4 covered parallel CAS, transaction abort and recovery but not GitHub cancellation.
 2. G3 negative HTTP error path and recovery after Function failure **not independently exercised**, despite proof of successful actual scheduled delivery, SQL write, telemetry and trigger shutdown.
 3. Credential rotation and explicit revocation protocol needs documented procedure; secret contents are never to be copied to evidence.
-4. G3 TTL branch deletion final provider observation pending its expiry; avoid asserting cleanup finished before checked.
+4. G3 TTL branch deletion final provider observation pending its expiry; avoid asserting cleanup finished before checked. There are two confirmed SQL rows (02:43 and 02:44). Provider reports trigger `enabled=false` / `next_run_at=null`, but this does not establish how many already queued deliveries existed at shutdown.
 5. Node20 runtime deprecation warning from older action pins remains a future portability maintenance item.
 6. Independent Review strict read-only with 0 findings and 0 advisories is **not yet done**. No QUALIFIED claim from self-review.
 
