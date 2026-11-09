@@ -48,9 +48,23 @@ def validate_dsn(dsn: str) -> None:
     ensure(len(options.get("sslmode", [])) == 1 and
            options["sslmode"][0] in ("require", "verify-ca", "verify-full"),
            "TLS_REQUIRED")
-    ensure(len(options.get("channel_binding", [])) <= 1 and
-           options.get("channel_binding", ["require"])[0] == "require",
+    ensure(options.get("channel_binding") == ["require"],
            "CHANNEL_BINDING_NOT_STRICT")
+
+
+
+def secure_connection_kwargs() -> dict[str, str]:
+    """Overrides any weaker options from the stored secret or PG* environment.
+
+    Libpq's actual connection is required to authenticate a TLS server,
+    validate its name with system CA roots, and use SCRAM channel binding.
+    """
+    return {
+        "sslmode": "verify-full",
+        "sslrootcert": "system",
+        "channel_binding": "require",
+        "gssencmode": "disable",
+    }
 
 
 def self_test() -> None:
@@ -59,7 +73,14 @@ def self_test() -> None:
         + EXPECTED_HOST + "/" + EXPECTED_DB
     )
     validate_dsn(stem + "?sslmode=require&channel_binding=require")
-    validate_dsn(stem + "?sslmode=verify-full")
+    validate_dsn(stem + "?sslmode=verify-full&channel_binding=require")
+    required = secure_connection_kwargs()
+    assert required == {
+        "sslmode": "verify-full",
+        "sslrootcert": "system",
+        "channel_binding": "require",
+        "gssencmode": "disable",
+    }
     invalid = (
         stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
             + "?sslmode=require",
@@ -70,6 +91,8 @@ def self_test() -> None:
         stem + "?sslmode=require&sslmode=disable",
         stem + "?sslmode=require&options=superuser",
         stem + "?sslmode=require&channel_binding=disable",
+        stem + "?sslmode=require",
+        stem + "?sslmode=verify-full",
         stem.replace("/" + EXPECTED_DB, "/postgres") + "?sslmode=require",
     )
     for case in invalid:
@@ -95,6 +118,7 @@ def qualify() -> dict[str, object]:
         connection = psycopg.connect(
             dsn, autocommit=True, row_factory=dict_row,
             connect_timeout=10, application_name=EXPECTED_APP,
+            **secure_connection_kwargs(),
         )
         ensure(connection.info.transaction_status.name == "IDLE",
                "NOT_TOP_LEVEL_IDLE")
@@ -165,6 +189,9 @@ def qualify() -> dict[str, object]:
         "postgres": "16",
         "host_match": True,
         "tls": True,
+        "libpq_sslmode": "verify-full",
+        "libpq_sslrootcert": "system",
+        "libpq_channel_binding": "require",
         "scope": EXPECTED_SCOPE,
         "head_events_receipts": [0, 0, 0],
         "product_effect": "NONE",
