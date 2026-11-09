@@ -34,7 +34,12 @@ def contender(proposal: dict, ready: threading.Event, observed: list) -> str:
         return value.disposition
 
 
+STAGE = "INPUT"
+
+
 def main() -> None:
+    global STAGE
+    STAGE = "REQUEST_PARSE"
     data = sys.stdin.buffer.read(6 * 1024 * 1024 + 1)
     require(len(data) <= 6 * 1024 * 1024, "INPUT_BOUND")
     request = json.loads(data.decode("utf-8", "strict"))
@@ -49,6 +54,7 @@ def main() -> None:
             "COMMON_PREDECESSOR_REQUIRED")
     require(a_command.event_line != b_command.event_line,
             "TWO_DISTINCT_JS_EVENTS_REQUIRED")
+    STAGE = "CONNECTION_AND_THREAD"
     started = threading.Event()
     b_pid = []
     executor = ThreadPoolExecutor(max_workers=1)
@@ -56,6 +62,7 @@ def main() -> None:
         with connect() as writer_a, connect() as observer:
             pid_a = writer_a.info.backend_pid
             require(type(pid_a) is int and pid_a > 0, "WRITER_A_BACKEND")
+            STAGE = "BEGIN_LOCK_TRANSACTION"
             with writer_a.transaction():
                 # Explicit real row-lock hold. The B bridge.apply() will
                 # request this SAME global head via SELECT ... FOR UPDATE.
@@ -65,9 +72,11 @@ def main() -> None:
                 ).fetchone()
                 require(locked is not None and locked["revision"] == 5,
                         "LOCKED_HEAD_REVISION")
+                STAGE = "START_CONTENDER"
                 future = executor.submit(contender, request["b"], started, b_pid)
                 require(started.wait(timeout=5.0), "CONTENDER_NOT_READY")
                 require(len(b_pid) == 1 and b_pid[0] != pid_a, "INDEPENDENT_BACKENDS")
+                STAGE = "OBSERVE_LOCK_WAIT"
                 overlap = False
                 wait_event = None
                 for _ in range(35):
@@ -88,12 +97,15 @@ def main() -> None:
                 # Existing real PostgreSQL bridge performs the real CAS/write
                 # in a nested savepoint; outer transaction makes it durable
                 # only after leaving this block, then B sees STALE.
+                STAGE = "APPLY_A_NESTED"
                 receipt_a = apply(writer_a, a_command)
                 require(receipt_a.disposition == "CONFIRMED" and
                         receipt_a.revision == 6, "WRITER_A_CAS_FAILED")
             # Outer transaction commits, B is now unblocked.
+            STAGE = "JOIN_CONTENDER"
             result_b = future.result(timeout=10.0)
             require(result_b == "NONE_STALE", "CONTENDER_SHOULD_BE_STALE")
+            STAGE = "READ_POSTCONDITIONS"
             checked = read(observer, SCOPE)
             require(checked.revision == 6, "FINAL_REVISION_INCONSISTENT")
             counts = observer.execute(
@@ -106,6 +118,7 @@ def main() -> None:
             ).fetchone()
             require(counts == {"heads": 1, "events": 6, "receipts": 6},
                     "CAS_EFFECT_COUNTS")
+        STAGE = "EMIT_RESULT"
         print(json.dumps({
             "status": "A11_REAL_PG16_POSITIVE_LOCK_OVERLAP_PASS",
             "host_count": 1,
@@ -126,7 +139,19 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        # Credentials, SQL details and raw exceptions never enter logs.
-        print("A11_REAL_PG16_LOCK_PROBE_FAIL_CLOSED", file=sys.stderr)
+    except Exception as exc:
+        # Emit ONLY whitelisted synthetic stage/type, no SQL, URI or exception text.
+        allowed = {
+            "REQUEST_PARSE", "CONNECTION_AND_THREAD", "BEGIN_LOCK_TRANSACTION",
+            "START_CONTENDER", "OBSERVE_LOCK_WAIT", "APPLY_A_NESTED",
+            "JOIN_CONTENDER", "READ_POSTCONDITIONS", "EMIT_RESULT",
+        }
+        stage = STAGE if STAGE in allowed else "UNKNOWN"
+        kind = type(exc).__name__
+        if kind not in {"AssertionError", "StorageRejected", "OperationalError",
+                        "ProgrammingError", "TransactionError", "TimeoutError",
+                        "ValueError", "TypeError"}:
+            kind = "OTHER"
+        print("A11_LOCK_STAGE_" + stage + "_" + kind.upper(),
+              file=sys.stderr)
         raise SystemExit(2)
