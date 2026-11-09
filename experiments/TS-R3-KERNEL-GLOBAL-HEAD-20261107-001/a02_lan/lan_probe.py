@@ -188,7 +188,7 @@ def assert_fresh_disposable_catalog(conn):
 
 def pinned_schema_statements():
     raw = (ROOT / "schema.sql").read_bytes()
-    git_blob = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw).hexdigest()
+    git_blob = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
     require(git_blob == FROZEN_SCHEMA_GIT_BLOB, "FROZEN_SCHEMA_GIT_BLOB_MISMATCH")
     sql = raw.decode("utf-8", "strict")
     statements = [item.strip() for item in "\n".join(
