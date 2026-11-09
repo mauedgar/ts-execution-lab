@@ -1,8 +1,8 @@
 name: TS R3 A11 IR001 Local Repair Qualification
+# Original native one-shot PASS GHA42552751718 at 788d36ff1fbe7808e9b6f233f3304e406bc4f62f.
+# Archived: no push trigger, manual dispatch always skips the test job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a11-ir001-local-repairs-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-js-async-pg16:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     services:
