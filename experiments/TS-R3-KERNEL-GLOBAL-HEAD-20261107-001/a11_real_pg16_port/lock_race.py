@@ -43,7 +43,8 @@ def competing_writer(name: str, proposal: dict, ready: threading.Event,
 
 
 def monitor_writers(observer, writer_pids: list[int],
-                    holder_pid: int, max_checks: int = 40) -> bool:
+                    holder_pid: int, max_checks: int = 40) -> list[dict] | None:
+    """Return one real PostgreSQL blocking witness, not an invented boolean."""
     require(len(writer_pids) == 2 and writer_pids[0] != writer_pids[1],
             "INDEPENDENT_WRITERS_REQUIRED")
     for _ in range(max_checks):
@@ -57,14 +58,29 @@ def monitor_writers(observer, writer_pids: list[int],
             states.append(row)
         if all(row is not None and row["wait_event_type"] == "Lock" and
                len(row["blockers"]) > 0 for row in states):
-            # A is held directly by the holder; B may wait behind the
-            # holder or the first queued writer.
+            # Both waiters were observed while the holder still owned
+            # the same global HEAD row. PostgreSQL supplies actual blockers.
             require(holder_pid in states[0]["blockers"] or
                     holder_pid in states[1]["blockers"],
                     "NO_HOLDER_IN_POSTGRES_BLOCKING_GRAPH")
-            return True
+            witness = []
+            for name, pid, row in zip(("A", "B"), writer_pids, states):
+                blockers = row["blockers"]
+                require(type(blockers) is list and
+                        all(type(v) is int and v > 0 for v in blockers),
+                        "INVALID_BLOCKER_PID_DATA")
+                require(type(row["wait_event"]) is str and
+                        len(row["wait_event"]) <= 80,
+                        "INVALID_WAIT_EVENT_DATA")
+                witness.append({
+                    "writer": name, "pid": pid,
+                    "blockers": blockers,
+                    "wait_event_type": row["wait_event_type"],
+                    "wait_event": row["wait_event"],
+                })
+            return witness
         time.sleep(0.1)
-    return False
+    return None
 
 
 def main() -> None:
@@ -113,8 +129,10 @@ def main() -> None:
                 require(len({holder_pid, observer_pid, pid_a, pid_b}) == 4,
                         "FOUR_DISTINCT_PG_BACKENDS_REQUIRED")
                 STAGE = "OBSERVE_LOCK_WAIT"
-                overlapping = monitor_writers(observer, [pid_a, pid_b], holder_pid)
-                require(overlapping, "TWO_REAL_WRITERS_LOCK_OVERLAP_NOT_PROVEN")
+                blocking_witness = monitor_writers(
+                    observer, [pid_a, pid_b], holder_pid)
+                require(blocking_witness is not None,
+                        "TWO_REAL_WRITERS_LOCK_OVERLAP_NOT_PROVEN")
                 require(not future_a.done() and not future_b.done(),
                         "WRITER_FINISHED_BEFORE_LOCK_RELEASE")
                 STAGE = "RELEASE_HOLDER"
@@ -148,6 +166,11 @@ def main() -> None:
             "server_blockers_observed": True,
             "two_writers_waited_concurrently": True,
             "wait_event_type": "Lock",
+            "lock_observation": {
+                "holder_pid": holder_pid,
+                "observer_pid": observer_pid,
+                "waiters": blocking_witness,
+            },
             "winner": "CONFIRMED",
             "contender": "NONE_STALE",
             "winner_side": "A" if outcomes[0] == "CONFIRMED" else "B",
