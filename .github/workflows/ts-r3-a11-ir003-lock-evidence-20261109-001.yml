@@ -1,8 +1,8 @@
 name: TS R3 A11 IR003 PostgreSQL Blocking Graph Evidence
+# Original native run42571954032 attempt1 PASS at 54055d3b7408298726bc33768ab60ee49f0b92e6.
+# Archived after terminal evidence: no push trigger, manual dispatch skips.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a11-ir003-lock-evidence-20261109-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-js-async-pg16:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     services:
