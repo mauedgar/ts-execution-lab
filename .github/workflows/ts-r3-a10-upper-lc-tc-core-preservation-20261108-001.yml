@@ -1,0 +1,57 @@
+name: TS R3 A10 Frozen Upper LC TC Core Preservation Qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a10-upper-lc-core-preservation-20261108-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a10-upper-lc-core-preservation-20261108-001
+  cancel-in-progress: false
+jobs:
+  product-semantics-canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout frozen A10 experiment without token persistence
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Confirm Product oracle and no credential exposure
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/qualify.cjs")" = '51572d75a0b5b023e0c47e5bd5b0b455c6266813'
+          test "$(git rev-parse "HEAD:$root/a10_lc_core_semantics/ADAPTATION_CONTRACT.md")" = '844ba6d9682b9c28bba385acd58c0dce15ccafbb'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/contracts.js")" = '5d2d3a8a24ebc17339675e0c801595956e0cd353'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/index.js")" = '0219b92e5f546407a6060a6dc449865c14c7f144'
+          test "$(git rev-parse "HEAD:$root/fixtures/product-kernel-v0/store.js")" = 'f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a'
+          test "$(git rev-parse "HEAD:$root/differential/e1/package.json")" = '67b246532b4573af1477af8b11244c157151d371'
+          test "$(git rev-parse "HEAD:$root/differential/e1/package-lock.json")" = 'ecf387f8f425598187f3a68b8eac5388376129ce'
+          test -z "${TS_R3_NEON_CHILD_DSN-}" || { echo BLOCKED_SECRET_PRESENT; exit 41; }
+          test -z "${DATABASE_URL-}" || { echo BLOCKED_DB_URL; exit 42; }
+          test -z "$(git status --porcelain)"
+      - name: Pin Node 22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - name: Run original frozen Product rule canaries only in disposable temp
+        run: |
+          set -euo pipefail
+          root='experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001'
+          test "$(node -p 'process.versions.node')" = '22.16.0'
+          scratch="$(mktemp -d -p /tmp ts-r3-a10-XXXXXX)"
+          workdir="$scratch/original-product"
+          mkdir "$workdir" "$scratch/clean-home"
+          trap 'rm -rf "$scratch"' EXIT
+          cp "$root/fixtures/product-kernel-v0/"{contracts,index,store}.js "$workdir/"
+          cp "$root/differential/e1/package.json" "$workdir/"
+          cp "$root/differential/e1/package-lock.json" "$workdir/"
+          env -i PATH="$PATH" HOME="$scratch/clean-home" npm_config_cache="$scratch/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$workdir" --ignore-scripts --no-audit --no-fund
+          test "$(env -i PATH="$PATH" HOME="$scratch/clean-home" node -p "require('$workdir/node_modules/zod/package.json').version")" = '4.6.7'
+          env -i PATH="$PATH" HOME="$scratch/clean-home" node "$root/a10_lc_core_semantics/qualify.cjs" "$workdir" "$scratch" | tee "$scratch/result.json"
+          node -e 'const r=require(process.argv[1]);if(r.status!=="A10_FROZEN_PRODUCT_SEMANTICS_PRESERVATION_PASS"||r.cases.length!==5||r.exact_rejections<10||!r.no_new_lifecycle||r.async_storage_dropin!=="REJECTED"||r.product_effect!=="NONE"||r.neon!=="NOT_RUN") process.exit(1)' "$scratch/result.json"
+          echo A10_ORIGINAL_PRODUCT_SEMANTICS_CANARY_PASS_NO_PRODUCT_OR_NEON
