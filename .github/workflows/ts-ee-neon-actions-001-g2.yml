@@ -24,10 +24,13 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
-          status="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
-            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects')"
-          [[ "$status" == "403" ]] || { echo "G2_SCOPE_UNPROVEN_NO_MUTATION status=$status"; exit 52; }
-          echo "G2_SCOPE_LIST_DENIED_PASS"
+          own_status="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
+          [[ "$own_status" == "200" ]] || { echo "G2_OWN_PROJECT_AUTH_FAIL status=$own_status"; exit 52; }
+          foreign_status="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects/jolly-dew-53200016')"
+          [[ "$foreign_status" == "403" || "$foreign_status" == "404" ]] || { echo "G2_CROSS_PROJECT_SCOPE_FAIL_NO_WRITE status=$foreign_status"; exit 53; }
+          echo "G2_OWN200_CROSS_PROJECT_DENIED_PASS"
       - name: Checkout frozen commit without persisted token
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
