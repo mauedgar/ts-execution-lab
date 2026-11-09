@@ -79,12 +79,14 @@ def self_test() -> int:
     assert required == {
         "sslmode": "verify-full",
         "sslrootcert": "system",
-        "channel_binding": "requir    allowed = "?sslmode=require&channel_binding=require"
+        "channel_binding": "require",
+        "gssencmode": "disable",
+    }
+    allowed = "?sslmode=require&channel_binding=require"
     invalid = (
         (stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
          + allowed, "BRANCH_COMPUTE_HOST_MISMATCH"),
-        (stem.replace(EXPECTED_ROLE, "tsr3_owner", 1)
-         + allowed, "ROLE_MISMATCH"),
+        (stem.replace(EXPECTED_ROLE, "tsr3_owner", 1) + allowed, "ROLE_MISMATCH"),
         (stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace(".c-2.", "-pooler.c-2.", 1))
          + allowed, "POOLED_ENDPOINT_FORBIDDEN"),
         (stem + "?sslmode=disable&channel_binding=require", "TLS_REQUIRED"),
@@ -112,7 +114,6 @@ def self_test() -> int:
         else:
             raise AssertionError("NEGATIVE_UNEXPECTED_ACCEPT_" + expected_code)
     return len(invalid)
-e AssertionError("MALFORMED_DSN_ACCEPTED")
 
 
 def qualify() -> dict[str, object]:
