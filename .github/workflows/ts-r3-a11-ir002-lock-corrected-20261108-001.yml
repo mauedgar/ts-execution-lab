@@ -1,8 +1,8 @@
 name: TS R3 A11 IR002 Durable Lock Writer Qualification
+# Original terminal native run 42554430370 PASS at 86378ef566925be72501c5aa07569fcba5751582.
+# Archived; no push dispatch and manual dispatch skips the job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a11-ir002-lock-corrected-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-js-async-pg16:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     services:
