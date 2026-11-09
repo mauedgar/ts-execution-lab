@@ -20,6 +20,63 @@ def require(ok: bool, reason: str) -> None:
         raise AssertionError(reason)
 
 
+def inventory(conn) -> None:
+    """Fail closed before any cleanup if the schema contains foreign objects."""
+    relations = conn.execute(
+        """SELECT c.relname, c.relkind FROM pg_catalog.pg_class c
+           JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+           WHERE n.nspname=%s ORDER BY c.relname""",
+        (SCHEMA,),
+    ).fetchall()
+    expected = [
+        ("events", "r"), ("events_pkey", "i"),
+        ("events_scope_event_hash_key", "i"), ("head", "r"),
+        ("head_pkey", "i"), ("receipts", "r"),
+        ("receipts_pkey", "i"), ("receipts_scope_result_revision_key", "i"),
+    ]
+    require([(x["relname"], x["relkind"]) for x in relations] == expected,
+            "SCHEMA_UNEXPECTED_RELATION")
+    types = conn.execute(
+        """SELECT t.typname, t.typtype FROM pg_catalog.pg_type t
+           JOIN pg_catalog.pg_namespace n ON n.oid=t.typnamespace
+           WHERE n.nspname=%s ORDER BY t.typname""",
+        (SCHEMA,),
+    ).fetchall()
+    require([(t["typname"], t["typtype"]) for t in types] ==
+            [("_events", "b"), ("_head", "b"), ("_receipts", "b"),
+             ("events", "c"), ("head", "c"), ("receipts", "c")],
+            "SCHEMA_UNEXPECTED_TYPE")
+    funcs = conn.execute(
+        """SELECT count(*) AS n FROM pg_catalog.pg_proc p
+           JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+           WHERE n.nspname=%s""", (SCHEMA,)).fetchone()["n"]
+    require(funcs == 0, "SCHEMA_UNEXPECTED_FUNCTION")
+    triggers = conn.execute(
+        """SELECT count(*) AS n FROM pg_catalog.pg_trigger t
+           JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+           JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+           WHERE n.nspname=%s AND NOT t.tgisinternal""",
+        (SCHEMA,),
+    ).fetchone()["n"]
+    require(triggers == 0, "SCHEMA_UNEXPECTED_TRIGGER")
+    for table in ("head", "events", "receipts"):
+        scopes = conn.execute(
+            f"SELECT DISTINCT scope FROM {SCHEMA}.{table} ORDER BY scope",
+        ).fetchall()
+        require([row["scope"] for row in scopes] in ([], [SCOPE]),
+                "SCHEMA_FOREIGN_SCOPE_" + table.upper())
+
+
+def user_schemas(conn) -> list[str]:
+    rows = conn.execute(
+        """SELECT nspname FROM pg_catalog.pg_namespace
+           WHERE nspname <> 'information_schema'
+             AND nspname NOT LIKE 'pg\\_%' ESCAPE '\\'
+           ORDER BY nspname"""
+    ).fetchall()
+    return [row["nspname"] for row in rows]
+
+
 def main():
     require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "cleanup"), "EXACT_MODE")
     require(os.getenv("TS_R3_LOCAL_SYNTHETIC_PG_URI") == URI, "LOCAL_DISPOSABLE_ONLY")
@@ -36,6 +93,9 @@ def main():
         exists = conn.execute(
             "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
             (SCHEMA,)).fetchone()["n"]
+        require(user_schemas(conn) ==
+                (["public"] if sys.argv[1] == "prepare" else
+                 ["public", SCHEMA]), "FOREIGN_USER_SCHEMA_PRESENT")
         if sys.argv[1] == "prepare":
             require(exists == 0, "DISPOSABLE_SCHEMA_PREEXISTS")
             sql = (ROOT / "schema.sql").read_text(encoding="utf-8")
@@ -52,6 +112,7 @@ def main():
                 (SCHEMA,)).fetchall()
             require([row["tablename"] for row in tables] == ["events", "head", "receipts"],
                     "SCHEMA_TABLES")
+            inventory(conn)
             print("A11_DISPOSABLE_SCHEMA_CREATED_PASS")
         else:
             require(exists == 1, "EXPECTED_DISPOSABLE_SCHEMA_ABSENT")
@@ -63,14 +124,19 @@ def main():
                 f" (SELECT COUNT(*) FROM {SCHEMA}.events) AS events,"
                 f" (SELECT COUNT(*) FROM {SCHEMA}.receipts) AS receipts"
             ).fetchone()
-            require(row == {"heads": 1, "events": 4, "receipts": 4},
+            require(row == {"heads": 1, "events": 5, "receipts": 5},
                     "DISPOSABLE_COUNTS_MISMATCH")
+            inventory(conn)
             with conn.transaction():
-                conn.execute(f"DROP SCHEMA {SCHEMA} CASCADE")
+                # No CASCADE: external dependencies cause a blocked cleanup, not data loss.
+                conn.execute(f"DROP TABLE {SCHEMA}.receipts, {SCHEMA}.events")
+                conn.execute(f"DROP TABLE {SCHEMA}.head")
+                conn.execute(f"DROP SCHEMA {SCHEMA} RESTRICT")
             after = conn.execute(
                 "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
                 (SCHEMA,)).fetchone()["n"]
-            require(after == 0, "DISPOSABLE_CLEANUP_FAILED")
+            require(after == 0 and user_schemas(conn) == ["public"],
+                    "DISPOSABLE_CLEANUP_FAILED")
             print("A11_DISPOSABLE_SCHEMA_CLEANUP_PASS")
 
 
