@@ -45,7 +45,7 @@ jobs:
           frozen() { test "$(git rev-parse "HEAD:$root/$1")" = "$2"; }
           frozen a11_real_pg16_port/worker.py 022c9728d5b34c9bbd9231f4095071356f6aa80d
           frozen a11_real_pg16_port/port.cjs 8090c9aa64f5802397aceca6f5853dff2db494a7
-          frozen a11_real_pg16_port/qualify.cjs dd89458226bce58df7f573c7bf1a5f2708bea69f
+          frozen a11_real_pg16_port/qualify.cjs cef9eea74393dd877fdef792860ebcc399d19d14
           frozen a11_real_pg16_port/schema_guard.py b03b81496d076c47078365a13be9dbfa8b535bbb
           frozen a11_real_pg16_port/QUALIFICATION_CONTRACT.md fadb99fbc39897d889f8f245049c68642b349fd7
           frozen a10_lc_core_semantics/shadow_async_adapter.cjs 4a9ee4f454dd28eddf8f863064e973f28e43341c
