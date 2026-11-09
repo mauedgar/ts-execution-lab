@@ -8,6 +8,7 @@ Native write/ACK-loss tests require distinct future reviewed attempts.
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -34,15 +35,30 @@ def validate_dsn(dsn: str) -> None:
     """Validate metadata only; never return, hash, log or echo any credential."""
     ensure(type(dsn) is str and 0 < len(dsn) <= MAX_DSN_CHARS, "NO_SECURE_DSN")
     ensure(all(ord(c) >= 32 for c in dsn), "UNSAFE_DSN_CHARACTER")
-    parsed = urlsplit(dsn)
+    ensure(re.search(r"%(?![0-9a-fA-F]{2})", dsn) is None,
+           "INVALID_URI_PERCENT_ENCODING")
+    try:
+        parsed = urlsplit(dsn)
+        host = parsed.hostname
+        port = parsed.port
+        user = unquote(parsed.username or "", errors="strict")
+        password = (
+            unquote(parsed.password, errors="strict")
+            if parsed.password is not None else None
+        )
+    except (ValueError, UnicodeError):
+        raise BlockedPrecondition("INVALID_DSN_URI") from None
+    ensure(all(ord(c) >= 32 for c in user) and
+           (password is None or all(ord(c) >= 32 for c in password)),
+           "UNSAFE_DSN_CHARACTER")
     ensure(parsed.scheme == "postgresql", "UNSUPPORTED_DSN_SCHEME")
-    ensure(parsed.hostname is not None and "-pooler" not in parsed.hostname,
+    ensure(host is not None and "-pooler" not in host,
            "POOLED_ENDPOINT_FORBIDDEN")
-    ensure(parsed.hostname == EXPECTED_HOST, "BRANCH_COMPUTE_HOST_MISMATCH")
-    ensure(unquote(parsed.username or "") == EXPECTED_ROLE, "ROLE_MISMATCH")
-    ensure(parsed.password is not None and bool(parsed.password), "MISSING_PASSWORD")
+    ensure(host == EXPECTED_HOST, "BRANCH_COMPUTE_HOST_MISMATCH")
+    ensure(user == EXPECTED_ROLE, "ROLE_MISMATCH")
+    ensure(password is not None and bool(password), "MISSING_PASSWORD")
     ensure(parsed.path == "/" + EXPECTED_DB, "DATABASE_MISMATCH")
-    ensure(parsed.port in (None, 5432), "INVALID_PORT")
+    ensure(port in (None, 5432), "INVALID_PORT")
     ensure(not parsed.fragment, "UNEXPECTED_FRAGMENT")
     options = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
     ensure(set(options).issubset({"sslmode", "channel_binding"}), "UNEXPECTED_DSN_OPTION")
@@ -104,6 +120,35 @@ def self_test() -> int:
         (stem.replace("postgresql://", "postgres://", 1) + allowed,
          "UNSUPPORTED_DSN_SCHEME"),
         ("", "NO_SECURE_DSN"),
+        (stem.replace(EXPECTED_HOST, EXPECTED_HOST + ":5433") + allowed,
+         "INVALID_PORT"),
+        (stem.replace(EXPECTED_HOST, EXPECTED_HOST + ":notaport") + allowed,
+         "INVALID_DSN_URI"),
+        (stem.replace(EXPECTED_HOST, EXPECTED_HOST + ":65536") + allowed,
+         "INVALID_DSN_URI"),
+        (stem.replace(EXPECTED_HOST, "[::1]") + allowed,
+         "BRANCH_COMPUTE_HOST_MISMATCH"),
+        (stem.replace(EXPECTED_HOST, "[::1") + allowed,
+         "INVALID_DSN_URI"),
+        (stem.replace(EXPECTED_ROLE + ":", ":") + allowed,
+         "ROLE_MISMATCH"),
+        (stem.replace(EXPECTED_ROLE + ":", EXPECTED_ROLE + "%00:") + allowed,
+         "UNSAFE_DSN_CHARACTER"),
+        (stem.replace(":fake-only-placeholder@", ":%00fake@") + allowed,
+         "UNSAFE_DSN_CHARACTER"),
+        (stem.replace(":fake-only-placeholder@", ":%ZZfake@") + allowed,
+         "INVALID_URI_PERCENT_ENCODING"),
+        (stem.replace(":fake-only-placeholder@", ":%FFfake@") + allowed,
+         "INVALID_DSN_URI"),
+        (stem + allowed + "&channel_binding=require",
+         "CHANNEL_BINDING_NOT_STRICT"),
+        (stem + allowed + "&sslmode=require",
+         "TLS_REQUIRED"),
+        (stem + allowed + "&channel_binding=%ZZ",
+         "INVALID_URI_PERCENT_ENCODING"),
+        (stem + allowed + "%0A", "UNSAFE_DSN_CHARACTER"),
+        (stem + allowed + "&sslrootcert=system",
+         "UNEXPECTED_DSN_OPTION"),
     )
     for case, expected_code in invalid:
         try:
@@ -148,6 +193,25 @@ def qualify() -> dict[str, object]:
                            has_schema_privilege(
                                current_user, 'ts_r3_global_head_20261107_001',
                                'USAGE') AS schema_use,
+                           has_schema_privilege(
+                               current_user, 'ts_r3_global_head_20261107_001',
+                               'CREATE') AS schema_create,
+                           (SELECT NOT (r.rolsuper OR r.rolcreatedb OR r.rolcreaterole)
+                            FROM pg_roles r WHERE r.rolname=current_user
+                           ) AS role_nonadmin,
+                           NOT pg_has_role(current_user, 'neon_superuser',
+                                           'member') AS not_neon_superuser,
+                           NOT (
+                               has_table_privilege(current_user,
+                                   'ts_r3_global_head_20261107_001.head',
+                                   'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                               OR has_table_privilege(current_user,
+                                   'ts_r3_global_head_20261107_001.events',
+                                   'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                               OR has_table_privilege(current_user,
+                                   'ts_r3_global_head_20261107_001.receipts',
+                                   'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                           ) AS no_table_write,
                            has_database_privilege(
                                current_user, current_database(), 'CREATE'
                            ) AS db_create,
@@ -172,7 +236,9 @@ def qualify() -> dict[str, object]:
                 ensure(row is not None, "NO_TLS_SESSION_ROW")
                 ensure(set(row) == {
                     "database_name", "role_name", "version_num", "isolation",
-                    "tls_in_use", "schema_use", "db_create", "head_update",
+                    "tls_in_use", "schema_use", "schema_create",
+                    "role_nonadmin", "not_neon_superuser", "no_table_write",
+                    "db_create", "head_update",
                     "head_count", "event_count", "receipt_count",
                 }, "UNEXPECTED_DB_RESULT")
                 ensure(row["database_name"] == EXPECTED_DB and
@@ -182,6 +248,10 @@ def qualify() -> dict[str, object]:
                 ensure(row["isolation"] == "read committed", "ISOLATION_MISMATCH")
                 ensure(row["tls_in_use"] is True, "TLS_INACTIVE")
                 ensure(row["schema_use"] is True and
+                       row["schema_create"] is False and
+                       row["role_nonadmin"] is True and
+                       row["not_neon_superuser"] is True and
+                       row["no_table_write"] is True and
                        row["head_update"] is False and
                        row["db_create"] is False, "DB_PRIVILEGE_MISMATCH")
                 ensure(tuple(row[k] for k in (
@@ -193,7 +263,7 @@ def qualify() -> dict[str, object]:
         if connection is not None:
             connection.close()
     return {
-        "schema": "ts-r3-a001-psycopg-readonly-preflight/v2-leastpriv",
+        "schema": "ts-r3-a001-psycopg-readonly-preflight/v3-leastpriv-full",
         "status": "PASS_READ_ONLY",
         "python": "3.15.2",
         "psycopg": "3.3.8",
