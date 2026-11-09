@@ -1,8 +1,8 @@
 name: TS R3 A11 IR002 Positive Lock Contention Qualification
+# Historical attempt 42553602037 terminal FAILURE; preserve original native result.
+# Archived: no push trigger, manual dispatch always skips this job.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a11-ir002-lock-overlap-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   original-js-async-pg16:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     services:
