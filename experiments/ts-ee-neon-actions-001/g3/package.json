@@ -1,0 +1,14 @@
+{
+  "name": "ts-ee-neon-g3",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@neon/config": "1.10.0",
+    "@neondatabase/serverless": "1.2.0",
+    "neon": "9.2.0"
+  }
+}
