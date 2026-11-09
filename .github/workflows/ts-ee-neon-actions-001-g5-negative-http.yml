@@ -1,0 +1,35 @@
+name: TS EE Neon G5 F002 native header forgery negative E2E
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g5-negative-http.yml]
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-neon-g5-negative-http-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  public-header-forgery:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Negative native Function HTTP capability (no credentials; existing row)
+        shell: bash
+        env:
+          FUNCTION_URL: https://br-holy-bird-bctkk4ym-g3pulse.compute.c-16.us-east-1.aws.neon.tech/
+        run: |
+          set -euo pipefail
+          [[ "$FUNCTION_URL" == "https://br-holy-bird-bctkk4ym-g3pulse.compute.c-16.us-east-1.aws.neon.tech/" ]] || exit 31
+          get_status="$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' "$FUNCTION_URL")"
+          [[ "$get_status" == 403 ]] || { echo "G5_GET_REJECTION_UNEXPECTED status=$get_status"; exit 32; }
+          no_header="$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"data":{"scheduled_at":"2026-11-09T02:43:00Z"}}' "$FUNCTION_URL")"
+          [[ "$no_header" == 403 ]] || { echo "G5_POST_NO_HEADER_REJECTION_UNEXPECTED status=$no_header"; exit 33; }
+          forged="$(curl --silent --show-error --max-time 15 -o /dev/null -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' \
+            -H 'x-neon-trigger-invocation-id: external-forgery-g5-001' \
+            --data '{"data":{"scheduled_at":"2026-11-09T02:43:00Z"}}' "$FUNCTION_URL")"
+          [[ "$forged" == 403 ]] || { echo "G5_NATIVE_HEADER_FORGERY_NOT_REJECTED status=$forged"; exit 34; }
+          echo "TS_EE_G5_NATIVE_HEADER_FORGERY_REJECTED_PASS"
