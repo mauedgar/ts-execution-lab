@@ -6,7 +6,10 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const api = require('../fixtures/product-kernel-v0/index.js');
+const fixture = path.resolve(process.env.TS_R3_A02_PRODUCT_FIXTURE_DIR || '');
+assert.ok(fixture.startsWith(path.resolve(os.tmpdir()) + path.sep),
+  'FROZEN_TEMP_PRODUCT_FIXTURE_REQUIRED');
+const api = require(path.join(fixture, 'index.js'));
 const {ShadowAsyncAdapter, snapshotBytes} =
   require('../a10_lc_core_semantics/shadow_async_adapter.cjs');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
