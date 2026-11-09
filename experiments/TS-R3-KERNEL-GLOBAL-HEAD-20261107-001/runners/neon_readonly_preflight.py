@@ -36,8 +36,9 @@ def validate_dsn(dsn: str) -> None:
     ensure(all(ord(c) >= 32 for c in dsn), "UNSAFE_DSN_CHARACTER")
     parsed = urlsplit(dsn)
     ensure(parsed.scheme == "postgresql", "UNSUPPORTED_DSN_SCHEME")
+    ensure(parsed.hostname is not None and "-pooler" not in parsed.hostname,
+           "POOLED_ENDPOINT_FORBIDDEN")
     ensure(parsed.hostname == EXPECTED_HOST, "BRANCH_COMPUTE_HOST_MISMATCH")
-    ensure("-pooler" not in parsed.hostname, "POOLED_ENDPOINT_FORBIDDEN")
     ensure(unquote(parsed.username or "") == EXPECTED_ROLE, "ROLE_MISMATCH")
     ensure(parsed.password is not None and bool(parsed.password), "MISSING_PASSWORD")
     ensure(parsed.path == "/" + EXPECTED_DB, "DATABASE_MISMATCH")
@@ -67,7 +68,7 @@ def secure_connection_kwargs() -> dict[str, str]:
     }
 
 
-def self_test() -> None:
+def self_test() -> int:
     stem = (
         "postgresql://" + EXPECTED_ROLE + ":fake-only-placeholder@"
         + EXPECTED_HOST + "/" + EXPECTED_DB
@@ -78,29 +79,40 @@ def self_test() -> None:
     assert required == {
         "sslmode": "verify-full",
         "sslrootcert": "system",
-        "channel_binding": "require",
-        "gssencmode": "disable",
-    }
+        "channel_binding": "requir    allowed = "?sslmode=require&channel_binding=require"
     invalid = (
-        stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
-            + "?sslmode=require",
-        stem.replace(EXPECTED_ROLE, "tsr3_owner", 1) + "?sslmode=require",
-        stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace(".c-2.", "-pooler.c-2.", 1))
-            + "?sslmode=require",
-        stem + "?sslmode=disable",
-        stem + "?sslmode=require&sslmode=disable",
-        stem + "?sslmode=require&options=superuser",
-        stem + "?sslmode=require&channel_binding=disable",
-        stem + "?sslmode=require",
-        stem + "?sslmode=verify-full",
-        stem.replace("/" + EXPECTED_DB, "/postgres") + "?sslmode=require",
+        (stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace("ep-", "ep-other-", 1))
+         + allowed, "BRANCH_COMPUTE_HOST_MISMATCH"),
+        (stem.replace(EXPECTED_ROLE, "tsr3_owner", 1)
+         + allowed, "ROLE_MISMATCH"),
+        (stem.replace(EXPECTED_HOST, EXPECTED_HOST.replace(".c-2.", "-pooler.c-2.", 1))
+         + allowed, "POOLED_ENDPOINT_FORBIDDEN"),
+        (stem + "?sslmode=disable&channel_binding=require", "TLS_REQUIRED"),
+        (stem + "?sslmode=require&sslmode=disable&channel_binding=require",
+         "TLS_REQUIRED"),
+        (stem + allowed + "&options=superuser", "UNEXPECTED_DSN_OPTION"),
+        (stem + "?sslmode=require&channel_binding=disable", "CHANNEL_BINDING_NOT_STRICT"),
+        (stem + "?sslmode=require", "CHANNEL_BINDING_NOT_STRICT"),
+        (stem + "?sslmode=verify-full", "CHANNEL_BINDING_NOT_STRICT"),
+        (stem.replace("/" + EXPECTED_DB, "/postgres") + allowed,
+         "DATABASE_MISMATCH"),
+        (stem.replace(":fake-only-placeholder@", "@", 1) + allowed,
+         "MISSING_PASSWORD"),
+        (stem + allowed + "#fragment", "UNEXPECTED_FRAGMENT"),
+        (stem.replace("postgresql://", "postgres://", 1) + allowed,
+         "UNSUPPORTED_DSN_SCHEME"),
+        ("", "NO_SECURE_DSN"),
     )
-    for case in invalid:
+    for case, expected_code in invalid:
         try:
             validate_dsn(case)
-        except (BlockedPrecondition, ValueError):
-            continue
-        raise AssertionError("MALFORMED_DSN_ACCEPTED")
+        except BlockedPrecondition as exc:
+            ensure(str(exc) == expected_code,
+                   "NEGATIVE_WRONG_REJECTION_" + expected_code)
+        else:
+            raise AssertionError("NEGATIVE_UNEXPECTED_ACCEPT_" + expected_code)
+    return len(invalid)
+e AssertionError("MALFORMED_DSN_ACCEPTED")
 
 
 def qualify() -> dict[str, object]:
@@ -201,8 +213,9 @@ def qualify() -> dict[str, object]:
 
 def main(args: list[str]) -> int:
     if args == ["--self-test"]:
-        self_test()
-        print(json.dumps({"status": "PASS_DSN_METADATA_SELFTEST", "network": "NOT_RUN"}))
+        tested = self_test()
+        print(json.dumps({"status": "PASS_DSN_METADATA_SELFTEST",
+                          "negative_exact_reject_cases": tested, "network": "NOT_RUN"}))
         return 0
     if args:
         print('{"status":"BLOCKED_UNEXPECTED_ARGUMENTS"}')
