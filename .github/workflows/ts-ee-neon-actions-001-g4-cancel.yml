@@ -1,0 +1,90 @@
+name: TS EE Neon G4 cancellation after remote branch (TTL recovery)
+on:
+  push:
+    branches: [exp/ts-ee-neon-actions-001-g1]
+    paths: [.github/workflows/ts-ee-neon-actions-001-g4-cancel.yml]
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: ts-ee-neon-g4-cancel-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  controlled-cancellation:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.ref == 'refs/heads/exp/ts-ee-neon-actions-001-g1' && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    environment: ts-ee-neon-ci
+    timeout-minutes: 5
+    steps:
+      - name: Verify isolated credential, identity and denied foreign project
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && -n "$NEON_API_KEY" ]] || exit 51
+          own="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
+          foreign="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o /dev/null -w '%{http_code}' 'https://console.neon.tech/api/v2/projects/jolly-dew-53200016')"
+          [[ "$own" == "200" && ( "$foreign" == "403" || "$foreign" == "404" ) ]] || { echo G4_CANCEL_SCOPE_PRECONDITION_FAILED; exit 52; }
+          echo G4_CANCEL_SCOPED_PASS
+      - name: Expire on provider regardless of job cancellation (eight minutes)
+        id: expiry
+        shell: bash
+        run: echo "value=$(date -u --date='+8 minutes' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Create exactly one unique branch
+        id: branch
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c
+        with:
+          api_key: ${{ secrets.NEON_API_KEY }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ts-ee-g4cancel-${{ github.run_id }}
+          parent_branch: br-cool-sea-bc75qsj1
+          database: ts_ee_neon_ci
+          role: ts_ee_neon_ci_owner
+          expires_at: ${{ steps.expiry.outputs.value }}
+      - name: Verify created ownership and parent before cancellation
+        id: ownership
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+          CREATED: ${{ steps.branch.outputs.created }}
+        run: |
+          set -euo pipefail
+          [[ "$NEON_PROJECT_ID" == "odd-pond-18952360" && "$CREATED" == "true" && "$BRANCH_ID" == br-* && "$BRANCH_ID" != "br-cool-sea-bc75qsj1" ]] || exit 61
+          url="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
+          data="$RUNNER_TEMP/g4-cancel-exact-branch.json"
+          code="$(printf 'header = "Authorization: Bearer %s"\n' "$NEON_API_KEY" |
+            curl --config - -sS --max-time 20 -o "$data" -w '%{http_code}' "$url")"
+          [[ "$code" == 200 ]] || { echo G4_CANCEL_READBACK_FAILED_NO_CANCEL; exit 62; }
+          python3 - "$data" "$BRANCH_ID" "ts-ee-g4cancel-$GITHUB_RUN_ID" <<'PY'
+          import json,sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              b=json.load(f)["branch"]
+          assert b["id"] == sys.argv[2]
+          assert b["name"] == sys.argv[3]
+          assert b["parent_id"] == "br-cool-sea-bc75qsj1"
+          assert not b.get("primary", False)
+          assert b["expires_at"], "mandatory provider TTL absent"
+          PY
+          echo G4_CANCEL_BRANCH_CREATED_AND_OWNER_CONFIRMED
+          echo "G4_CANCEL_BRANCH_ID=$BRANCH_ID"
+      - name: Cancel original run after remote branch effect, never delete or retry
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "mauedgar/ts-execution-lab" ]] || exit 71
+          [[ "$GITHUB_REF" == "refs/heads/exp/ts-ee-neon-actions-001-g1" ]] || exit 72
+          endpoint="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
+          status="$(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN" |
+            curl --config - -sS -X POST --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/vnd.github+json' "$endpoint")"
+          [[ "$status" == 202 ]] || { echo "G4_SELF_CANCEL_RESPONSE_NON202 status=$status"; exit 73; }
+          echo G4_SELF_CANCEL_ACCEPTED
+          sleep 120
+          echo G4_CANCEL_NOT_OBSERVED_FAIL
