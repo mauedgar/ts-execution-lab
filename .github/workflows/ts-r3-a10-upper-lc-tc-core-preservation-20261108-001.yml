@@ -1,8 +1,8 @@
 name: TS R3 A10 Frozen Upper LC TC Core Preservation Qualification
+# Original A10 semantic experiment terminal PASS 42545744515 on a6a9a46867d71cacfe2399256c58227939d250be.
+# Archived one-shot; no push execution and manual dispatch job always skipped.
 on:
-  push:
-    branches:
-      - ee/ts-r3-a10-upper-lc-core-preservation-20261108-001
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   product-semantics-canary:
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     defaults:
