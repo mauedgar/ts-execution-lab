@@ -13,11 +13,11 @@ import sys
 from urllib.parse import parse_qs, unquote, urlsplit
 
 EXPECTED_HOST = "ep-lucky-waterfall-b6244mdy.c-2.sa-east-1.aws.neon.tech"
-EXPECTED_ROLE = "tsr3_host_a_rw"
+EXPECTED_ROLE = "tsr3_a001_neon_ro_20261109"
 EXPECTED_DB = "ts_remote_r3"
 EXPECTED_SCOPE = "scope-tsr3-ack-native-20261107-a01"
-EXPECTED_APP = "tsr3-a001-readonly-c01"
-SECRET_ENV = "TS_R3_NEON_CHILD_DSN"
+EXPECTED_APP = "tsr3-a001-leastpriv-ro-20261109"
+SECRET_ENV = "TS_R3_NEON_CHILD_RO_DSN"
 MAX_DSN_CHARS = 4096
 
 
@@ -182,7 +182,7 @@ def qualify() -> dict[str, object]:
                 ensure(row["isolation"] == "read committed", "ISOLATION_MISMATCH")
                 ensure(row["tls_in_use"] is True, "TLS_INACTIVE")
                 ensure(row["schema_use"] is True and
-                       row["head_update"] is True and
+                       row["head_update"] is False and
                        row["db_create"] is False, "DB_PRIVILEGE_MISMATCH")
                 ensure(tuple(row[k] for k in (
                     "head_count", "event_count", "receipt_count",
@@ -193,7 +193,7 @@ def qualify() -> dict[str, object]:
         if connection is not None:
             connection.close()
     return {
-        "schema": "ts-r3-a001-psycopg-readonly-preflight/v1",
+        "schema": "ts-r3-a001-psycopg-readonly-preflight/v2-leastpriv",
         "status": "PASS_READ_ONLY",
         "python": "3.15.2",
         "psycopg": "3.3.8",
