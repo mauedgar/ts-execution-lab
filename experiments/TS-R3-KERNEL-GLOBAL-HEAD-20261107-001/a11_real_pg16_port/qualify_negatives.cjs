@@ -59,8 +59,14 @@ async function main() {
   const collision = aAdapter.propose(stored, winner.mutationId,
     (domain, store, revision) => domain.create(
       store, revision, 'Milestone', 'MS-A11-COLLISION', {title: 'COLLIDE'}, auth));
-  await expectPortError(() => aPort.apply(collision),
-    'A11_IPC_EXIT_UNCERTAIN', 'POSSIBLE_DISPATCH');
+  const collisionReply = await aPort.apply(collision);
+  assert.deepEqual(collisionReply, {
+    disposition: 'REJECTED_MUTATION_COLLISION',
+    reason_code: 'MUTATION_COLLISION',
+    effect: 'NONE_FOR_THIS_REQUEST',
+  });
+  // Old CONFIRMED receipt for the original ID still exists; only this
+  // different request is rejected, and no revision/event/receipt is added.
   assert.deepEqual(await aPort.counts(), afterRace);
 
   // An unknown receipt cannot be treated as NONE. This operation is a
