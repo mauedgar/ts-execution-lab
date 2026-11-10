@@ -1,0 +1,132 @@
+name: TS R3 A02 desktop uv OCI isolated WSL-equivalent runtime qualification
+on:
+  push:
+    branches:
+      - ee/ts-r3-a02-desktop-uv-container-20261109-001
+    paths:
+      - .github/workflows/ts-r3-a02-desktop-uv-oci-qual-20261109-001.yml
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a02-desktop-uv-oci-qual-001-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.ref == 'refs/heads/ee/ts-r3-a02-desktop-uv-container-20261109-001' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      IMAGE: ghcr.io/astral-sh/uv@sha256:f322acb98c05bcac1480b2e365d95328b1387123475e12d080c59b5b911d6d9d
+    steps:
+      - name: Check exact source and safe repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'mauedgar/ts-execution-lab'
+          test "$GITHUB_REF_NAME" = 'ee/ts-r3-a02-desktop-uv-container-20261109-001'
+          test "$GITHUB_EVENT_NAME" = 'push'
+          test "$(uname -m)" = 'x86_64'
+          test "$(docker info --format '{{.OSType}}|{{.Architecture}}')" = 'linux|x86_64'
+          echo TS_R3_A02_UV_OCI_INPUT_GUARDS_PASS
+      - name: Pin official uv OCI image and verify version
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$IMAGE"
+          docker image inspect "$IMAGE" --format '{{json .RepoDigests}}' |
+            grep -F 'sha256:f322acb98c05bcac1480b2e365d95328b1387123475e12d080c59b5b911d6d9d'
+          version="$(docker run --rm --network none --read-only --platform linux/amd64 --security-opt no-new-privileges --cap-drop ALL "$IMAGE" uv --version)"
+          test "$version" = 'uv 0.13.7'
+          echo TS_R3_A02_UV_OCI_PIN_PASS
+      - name: Isolated host-runnable Python 3.15.2 psycopg 3.3.8
+        id: qualify
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ROOT="$RUNNER_TEMP/ts-r3-a02-desktop-uv-oci-qual-20261109-001"
+          test ! -e "$ROOT"
+          install -d -m 700 "$ROOT"
+          test "$(stat -c %a "$ROOT")" = 700
+          fs="$(stat -f -c %T "$ROOT")"
+          test "$fs" = 'overlayfs' -o "$fs" = 'ext2/ext3'
+          # Docker mount source and target are identical absolute Linux paths.
+          # No global uv/Python or Product tree is mounted.
+          docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" \
+            --security-opt no-new-privileges --cap-drop=ALL --pids-limit 100 \
+            --memory 1g --cpus 2 \
+            --mount "type=bind,source=$ROOT,target=$ROOT" \
+            -e "HOME=$ROOT" -e "UV_PYTHON_INSTALL_DIR=$ROOT/python" \
+            -e "UV_PYTHON_BIN_DIR=$ROOT/bin" -e "UV_CACHE_DIR=$ROOT/cache" \
+            -e "UV_NO_MODIFY_PATH=1" -e "UV_NO_CONFIG=1" \
+            "$IMAGE" uv venv --python 3.15.2 "$ROOT/venv"
+          docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" \
+            --security-opt no-new-privileges --cap-drop=ALL --pids-limit 100 \
+            --memory 1g --cpus 2 \
+            --mount "type=bind,source=$ROOT,target=$ROOT" \
+            -e "HOME=$ROOT" -e "UV_PYTHON_INSTALL_DIR=$ROOT/python" \
+            -e "UV_PYTHON_BIN_DIR=$ROOT/bin" -e "UV_CACHE_DIR=$ROOT/cache" \
+            -e "UV_NO_MODIFY_PATH=1" -e "UV_NO_CONFIG=1" \
+            "$IMAGE" uv pip install --python "$ROOT/venv/bin/python" --only-binary :all: 'psycopg[binary]==3.3.8'
+          export VENV="$ROOT/venv/bin/python"
+          test -x "$VENV"
+          "$VENV" - <<'PY'
+          import json, os, pathlib, sys, psycopg, psycopg.pq
+          assert sys.version_info[:3] == (3,15,2), sys.version
+          assert psycopg.__version__ == '3.3.8', psycopg.__version__
+          assert psycopg.pq.__impl__ == 'binary', psycopg.pq.__impl__
+          root=pathlib.Path(os.environ['ROOT']).resolve()
+          interpreter=pathlib.Path(sys.executable)
+          assert interpreter.is_relative_to(root)
+          assert pathlib.Path(sys.prefix).is_relative_to(root)
+          original={
+             'operation':'TS-R3-A02-DESKTOP-UV-OCI-QUAL-20261109-001',
+             'execution_attempt':'TS-R3-A02-DESKTOP-UV-OCI-QUAL-20261109-001-A001',
+             'runtime':sys.version.split()[0],
+             'psycopg':psycopg.__version__,
+             'pq_impl':psycopg.pq.__impl__,
+             'uv':'0.13.7',
+             'oci_manifest':'sha256:f322acb98c05bcac1480b2e365d95328b1387123475e12d080c59b5b911d6d9d',
+             'outside_docker_interpreter':True,
+             'wsl_desktop_effect':'NONE',
+             'postgresql':'NOT_RUN',
+             'product_effect':'NONE'
+          }
+          (root/'qualification.json').write_text(json.dumps(original,sort_keys=True)+'\n')
+          print('TS_R3_A02_UV_OCI_PY3152_PSYCOPG338_HOST_SIDE_PASS')
+          PY
+      - name: Write original outcome-bound receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          QUALIFICATION_OUTCOME: ${{ steps.qualify.outcome }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,pathlib
+          r={
+             'operation':'TS-R3-A02-DESKTOP-UV-OCI-QUAL-20261109-001',
+             'execution_attempt':'TS-R3-A02-DESKTOP-UV-OCI-QUAL-20261109-001-A001',
+             'provider':'github-actions',
+             'run_id':os.environ['GITHUB_RUN_ID'],
+             'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],
+             'head_sha':os.environ['GITHUB_SHA'],
+             'qualification_step_outcome':os.environ.get('QUALIFICATION_OUTCOME','UNAVAILABLE'),
+             'oci_manifest':'sha256:f322acb98c05bcac1480b2e365d95328b1387123475e12d080c59b5b911d6d9d',
+             'wsl_desktop_effect':'NONE',
+             'postgresql':'NOT_RUN',
+             'product_effect':'NONE'
+          }
+          pathlib.Path(os.environ['RUNNER_TEMP'],'ts-r3-a02-uv-oci-original-receipt.json').write_text(json.dumps(r,sort_keys=True)+'\n')
+          print('TS_R3_A02_UV_OCI_NATIVE_RECEIPT_WRITTEN')
+          PY
+      - name: Upload only safe qualification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ts-r3-a02-desktop-uv-oci-qual-001-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ts-r3-a02-desktop-uv-oci-qual-20261109-001/qualification.json
+            ${{ runner.temp }}/ts-r3-a02-uv-oci-original-receipt.json
+          if-no-files-found: error
+          retention-days: 7
