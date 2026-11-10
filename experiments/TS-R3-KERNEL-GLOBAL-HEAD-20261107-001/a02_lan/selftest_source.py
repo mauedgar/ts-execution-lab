@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT))
 
 from a02_lan.lan_probe import (preflight_runtime, strict_packet,
                                 pinned_schema_statements, asserted_host_identity,
-                                assert_fresh_disposable_catalog)
+                                assert_fresh_disposable_catalog,
+                                private_receipt_dir, write_once_receipt)
 from ts_global.bridge import StorageRejected
 
 
@@ -131,11 +132,43 @@ def main() -> None:
             os.environ["TS_R3_A02_EXPECTED_HOST_SHA256"] = hold_host
         if hold_attempt is not None:
             os.environ["TS_R3_A02_EXECUTION_ATTEMPT"] = hold_attempt
+    # Exercise the write-ahead receipt guard without any DB connectivity.
+    previous_dir = os.environ.pop("TS_R3_A02_PRIVATE_RECEIPT_DIR", None)
+    receipt_negatives = 0
+    try:
+        try:
+            private_receipt_dir()
+        except AssertionError as exc:
+            require(str(exc) == "PRIVATE_RECEIPT_DIR_REQUIRED",
+                    "MISSING_PRIVATE_RECEIPT_DIR_WRONG_CODE")
+            receipt_negatives += 1
+        else:
+            raise AssertionError("MISSING_PRIVATE_RECEIPT_DIR_ACCEPTED")
+        with TemporaryDirectory(prefix="ts-r3-a02-lan-physical-race-") as directory:
+            os.environ["TS_R3_A02_PRIVATE_RECEIPT_DIR"] = directory
+            target = private_receipt_dir()
+            record = {"product_effect": "NONE", "phase": "SOURCE_ONLY_TEST"}
+            write_once_receipt(target, "writer-a.intent.json", record)
+            require((target / "writer-a.intent.json").is_file(),
+                    "CREATE_ONLY_INTENT_NOT_WRITTEN")
+            try:
+                write_once_receipt(target, "writer-a.intent.json", record)
+            except FileExistsError:
+                receipt_negatives += 1
+            else:
+                raise AssertionError("DUPLICATE_WRITER_INTENT_ACCEPTED")
+    finally:
+        os.environ.pop("TS_R3_A02_PRIVATE_RECEIPT_DIR", None)
+        if previous_dir is not None:
+            os.environ["TS_R3_A02_PRIVATE_RECEIPT_DIR"] = previous_dir
+    require(receipt_negatives == 2, "CREATE_ONLY_RECEIPT_GUARDS_FAILED")
     print(json.dumps({
         "status": "A02_LAN_SOURCE_ONLY_NEGATIVES_PASS",
         "original_js_pair": True,
         "negative_cases": observed,
         "additional_preflight_negatives": 2,
+        "additional_receipt_negatives": receipt_negatives,
+        "durable_original_writer_intent_guard": "PASS",
         "immutable_schema_pin": "PASS",
         "host_attestation_source_guard": "PASS",
         "foreign_public_object_rejected": True,
