@@ -42,24 +42,45 @@ STAGE = "ENTRY"
 RECEIPT_DIR_ENV = "TS_R3_A02_PRIVATE_RECEIPT_DIR"
 
 
-def private_receipt_dir() -> Path:
-    """Native runner must create this single-purpose private directory."""
-    raw = os.getenv(RECEIPT_DIR_ENV, "")
-    require(raw and os.path.isabs(raw), "PRIVATE_RECEIPT_DIR_REQUIRED")
-    p = Path(raw)
-    root = Path(tempfile.gettempdir()).resolve(strict=True)
-    require(p.parent.resolve(strict=True) == root and
-            p.name.startswith("ts-r3-a02-lan-physical-race-"),
-            "RECEIPT_DIR_OUTSIDE_EXACT_TEMP_SCOPE")
-    st = p.lstat()
-    require(stat.S_ISDIR(st.st_mode) and not p.is_symlink(),
-            "RECEIPT_DIR_SYMLINK_OR_NOT_DIRECTORY")
-    if os.name == "posix":
-        require(st.st_uid == os.getuid() and st.st_mode & 0o077 == 0,
-                "RECEIPT_DIR_NOT_PRIVATE")
-    require(p.resolve(strict=True) == p, "RECEIPT_DIR_RESOLVED_PATH_DIFFERS")
-    return p
+def linux_mount_type(path: Path) -> str:
+    """Determine the longest matching mount for this resolved Linux directory."""
+    require(sys.platform.startswith("linux") and os.name == "posix",
+            "LINUX_POSIX_RECEIPTS_REQUIRED")
+    resolved = str(path.resolve(strict=True))
+    matches = []
+    for line in Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+        first, sep, second = line.partition(" - ")
+        require(bool(sep), "MOUNTINFO_MALFORMED")
+        before, after = first.split(), second.split()
+        require(len(before) >= 5 and len(after) >= 1, "MOUNTINFO_INVALID")
+        mount = before[4].replace(r"\040", " ").replace(r"\011", "\t")
+        mount = os.path.normpath(mount)
+        if resolved == mount or resolved.startswith(mount.rstrip("/") + "/"):
+            matches.append((len(mount), after[0]))
+    require(bool(matches), "NO_MOUNTINFO_FOR_RECEIPT")
+    return max(matches)[1]
 
+
+def private_receipt_dir() -> Path:
+    """Only Linux ext4 home-backed POSIX private receipts; NEVER /tmp, NTFS or tmpfs."""
+    raw = os.getenv(RECEIPT_DIR_ENV, "")
+    require(bool(raw) and os.path.isabs(raw), "PRIVATE_RECEIPT_DIR_REQUIRED")
+    require(sys.platform.startswith("linux") and os.name == "posix",
+            "LINUX_POSIX_RECEIPTS_REQUIRED")
+    path = Path(raw)
+    home = Path.home().resolve(strict=True)
+    require(path.parent == home and
+            path.name.startswith("ts-r3-a02-lan-physical-race-"),
+            "RECEIPT_DIR_OUTSIDE_LINUX_HOME")
+    st = path.lstat()
+    require(stat.S_ISDIR(st.st_mode) and not stat.S_ISLNK(st.st_mode),
+            "RECEIPT_DIR_SYMLINK_OR_NOT_DIRECTORY")
+    require(st.st_uid == os.getuid() and stat.S_IMODE(st.st_mode) == 0o700,
+            "RECEIPT_DIR_NOT_PRIVATE_0700")
+    require(path.resolve(strict=True) == path and not home.is_symlink(),
+            "RECEIPT_PATH_NOT_CANONICAL")
+    require(linux_mount_type(path) == "ext4", "RECEIPT_FS_NOT_DURABLE_EXT4")
+    return path
 
 def write_once_receipt(directory: Path, name: str, record: dict) -> None:
     """Create-only and fsync: intent survives a possible lost SQL ACK."""
