@@ -39,7 +39,7 @@ def digest(value) -> bool:
 
 
 def positive(n) -> bool:
-    return type(n) is int and 0 < n < 2**31
+    return type(n) is int and 0 < n < 2**63
 
 
 def zero_or_one(n) -> bool:
@@ -185,6 +185,11 @@ def check(report: dict) -> dict:
     need(set(observed) == {"A", "B"} and
          all(observed[side]["pid"] == provider[side]["native_backend_pid"]
              for side in ("A", "B")), "PROVIDER_BACKEND_BINDING_FAILED")
+    need(all(provider[side]["native_run_start_ns"] <= witness["observed_epoch_ns"] <=
+                 provider[side]["native_run_end_ns"] and
+                 intents[side]["created_ns"] <= witness["observed_epoch_ns"] <=
+                 results[side]["recorded_ns"]
+             for side in ("A", "B")), "NATIVE_WRITER_LIFETIME_NOT_OVERLAPPING_LOCK")
     blockers = {w["pid"]: w["blockers"] for w in observed.values()}
     def reaches_holder(pid, seen):
         if pid == holder["backend_pid"]:
