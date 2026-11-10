@@ -553,7 +553,7 @@ def writer(conn, command, site, side):
         output = {"disposition":"UNKNOWN_FENCED", "effect":"UNKNOWN"}
     except StorageRejected as err:
         require(err.code == "STALE_REVISION", "UNEXPECTED_STORAGE_REJECTION")
-        output = {"disposition":"NONE_STALE", "effect":"NONE"}
+        output = {"disposition":"NONE_STALE", "effect":"NONE", "revision":None}
     output.update({"status":"A02_LAN_WRITER_RESULT","writer":side.upper(),
                    "site":site,"backend_pid":conn.info.backend_pid,
                    "backend_start":backend_start,
