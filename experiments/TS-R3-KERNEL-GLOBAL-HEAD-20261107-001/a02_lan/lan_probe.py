@@ -461,6 +461,15 @@ def reconcile_setup(conn, genesis: bytes, phase: str):
             "sql_mutation":"NONE","redispatched":False,"product_effect":"NONE",
         }
     require(phase == "genesis", "SETUP_PHASE_NOT_SUPPORTED")
+    # Genesis receipt can only be attributed within the exact DDL-marked
+    # disposable schema; a missing DDL marker does not establish NONE.
+    if ddl_comment_readonly(conn) != "DDL_METADATA_CONSISTENT_PENDING_NATIVE_CONTROL":
+        return {
+            "status":"A02_LAN_GENESIS_ORIGINAL_READONLY_RECONCILED",
+            "original_effect_id":SETUP_GENESIS_EFFECT,
+            "effect":"UNKNOWN", "sql_mutation":"NONE",
+            "redispatched":False, "product_effect":"NONE",
+        }
     try:
         state = read(conn, SCOPE)  # bridge read-only original scope
         require(state.revision == 0 and state.state_bytes == genesis and
