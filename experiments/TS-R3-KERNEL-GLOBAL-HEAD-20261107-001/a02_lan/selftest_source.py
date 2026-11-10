@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -144,9 +145,32 @@ def main() -> None:
             receipt_negatives += 1
         else:
             raise AssertionError("MISSING_PRIVATE_RECEIPT_DIR_ACCEPTED")
-        with TemporaryDirectory(prefix="ts-r3-a02-lan-physical-race-") as directory:
+        # A private ext4 home directory is required on BOTH WSL Linux clients.
+        with TemporaryDirectory(prefix="ts-r3-a02-lan-physical-race-",
+                                dir=str(Path.home())) as directory:
             os.environ["TS_R3_A02_PRIVATE_RECEIPT_DIR"] = directory
             target = private_receipt_dir()
+            with patch("a02_lan.lan_probe.linux_mount_type", return_value="tmpfs"):
+                try:
+                    private_receipt_dir()
+                except AssertionError as exc:
+                    require(str(exc) == "RECEIPT_FS_NOT_DURABLE_EXT4",
+                            "VOLATILE_TMPFS_REJECTION_WRONG_CODE")
+                    receipt_negatives += 1
+                else:
+                    raise AssertionError("VOLATILE_TMPFS_RECEIPT_ACCEPTED")
+            target.chmod(0o755)
+            try:
+                private_receipt_dir()
+            except AssertionError as exc:
+                require(str(exc) == "RECEIPT_DIR_NOT_PRIVATE_0700",
+                        "WORLD_READABLE_RECEIPT_REJECTION_WRONG_CODE")
+                receipt_negatives += 1
+            else:
+                raise AssertionError("WORLD_READABLE_RECEIPT_ACCEPTED")
+            finally:
+                target.chmod(0o700)
+            # Source-native test of original-intent creation and duplicate fence.
             record = {"product_effect": "NONE", "phase": "SOURCE_ONLY_TEST"}
             write_once_receipt(target, "writer-a.intent.json", record)
             require((target / "writer-a.intent.json").is_file(),
@@ -161,7 +185,7 @@ def main() -> None:
         os.environ.pop("TS_R3_A02_PRIVATE_RECEIPT_DIR", None)
         if previous_dir is not None:
             os.environ["TS_R3_A02_PRIVATE_RECEIPT_DIR"] = previous_dir
-    require(receipt_negatives == 2, "CREATE_ONLY_RECEIPT_GUARDS_FAILED")
+    require(receipt_negatives == 4, "CREATE_ONLY_RECEIPT_GUARDS_FAILED")
     print(json.dumps({
         "status": "A02_LAN_SOURCE_ONLY_NEGATIVES_PASS",
         "original_js_pair": True,
