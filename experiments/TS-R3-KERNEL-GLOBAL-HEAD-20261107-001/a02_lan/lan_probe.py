@@ -307,7 +307,7 @@ def pinned_schema_statements():
 
 
 def setup(conn, genesis):
-    """One serializable transaction, with catalog/role/peer checks before DDL."""
+    """Pre-DDL serializable inventory and SQL; bridge genesis is separate."""
     statements = pinned_schema_statements()  # immutable Git blob before any SQL
     require(conn.info.transaction_status.name == "IDLE", "SETUP_CONNECTION_NOT_IDLE")
     with conn.transaction():
@@ -333,16 +333,21 @@ def setup(conn, genesis):
             (SCHEMA,)).fetchall()
         require([r["tablename"] for r in tables] == ["events", "head", "receipts"],
                 "DISPOSABLE_SCHEMA_SHAPE")
-        state = initialize(conn, SCOPE, genesis)
-        require(state.revision == 0, "INITIALIZED_REVISION")
-        readback = read(conn, SCOPE)
-        require(readback.revision == 0 and readback.state_bytes == genesis and
-                len(readback.event_bytes) == 0, "GENESIS_READBACK_MISMATCH")
+    # A11's public bridge explicitly prohibits initialize/read inside an
+    # enclosing transaction (it requires autocommit+IDLE to prove durable ACK).
+    # The two non-idempotent effects remain separate and must be reconciled
+    # independently if the acknowledgement of either is lost.
+    state = initialize(conn, SCOPE, genesis)
+    require(state.revision == 0, "INITIALIZED_REVISION")
+    readback = read(conn, SCOPE)
+    require(readback.revision == 0 and readback.state_bytes == genesis and
+            len(readback.event_bytes) == 0, "GENESIS_READBACK_MISMATCH")
     print(json.dumps({
         "status":"A02_LAN_DISPOSABLE_GENESIS_CONFIRMED",
         "revision":0, "physical_site":"NOTEBOOK", "product_effect":"NONE",
         "neon":"NOT_RUN","schema":SCHEMA,
-        "atomic_schema_and_genesis":True,
+        "ddl_transaction":"SEPARATE_COMMITTED_EFFECT",
+        "bridge_initialize":"SEPARATE_COMMITTED_EFFECT",
         "external_docker_exclusivity":"INDEPENDENT_CONTROL_EVIDENCE_REQUIRED",
     }, sort_keys=True), flush=True)
 
