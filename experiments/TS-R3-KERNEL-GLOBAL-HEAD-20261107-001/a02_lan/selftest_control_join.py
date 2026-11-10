@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 import sys
@@ -17,20 +18,30 @@ def synthetic() -> dict:
     for side, (device, site) in DEVICES.items():
         backend = 201 if side == "A" else 202
         host_hash = ("a" if side == "A" else "b") * 64
+        output = "A02_LAN_ORIGINAL_NATIVE_" + side + "_SOURCE_ONLY_FIXTURE"
         providers[side] = {
             "device_id":device, "site":site, "host_sha256":host_hash,
             "native_original_pid":11 if side == "A" else 12,
             "native_run_start_ns":t, "native_run_end_ns":t + 60_000_000_000,
-            "native_exit_code":0, "native_original_output_sha256":"c" * 64,
-            "native_receipt_sha256":"d" * 64,
-            "native_backend_pid":backend, "native_client_pid":301 if side == "A" else 302,
+            "native_exit_code":0,
+            "native_original_output_sha256":sha256(output.encode("utf-8")).hexdigest(),
+            "native_original_output":output,
+            "native_backend_pid":backend,
+            "native_backend_start":"2026-11-09T21:00:00+00:00",
+            "native_client_pid":301 if side == "A" else 302,
             "original_tool":"mcp__Remote_Desktop_Commander__start_process",
         }
+        body = {k:v for k,v in providers[side].items()
+                if k != "native_original_output"}
+        providers[side]["native_receipt_body"] = body
+        providers[side]["native_receipt_sha256"] = sha256(
+            json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         common = {
             "execution_attempt":ATTEMPT, "writer":side,
             "site_claim":site, "host_sha256":host_hash,
             "client_process_pid":providers[side]["native_client_pid"],
             "backend_pid":backend,
+            "backend_start":"2026-11-09T21:00:00+00:00",
             "mutation_id":"A10-A02-LAN-"+side,
             "mutation_fingerprint":("e" if side == "A" else "f") * 64,
             "packet_sha256":"1" * 64, "expected_revision":0,
@@ -94,7 +105,8 @@ def synthetic() -> dict:
 
 def main():
     base = synthetic()
-    good = check(base)
+    good = check(base, frozen_source_commit="0"*40,
+                 frozen_packet_sha256="1"*64)
     assert good["physical_two_host_pass"] is False
     assert good["status"] == "STRUCTURAL_JOIN_COHERENT_PENDING_PROVIDER_NATIVE_READBACK"
     assert good["winner"] == "A" and good["loser"] == "B"
@@ -117,18 +129,27 @@ def main():
         ("lock-chain-break", lambda x: x["witness"]["waiters"][1].update(blockers=[777])),
         ("wrong-attempt", lambda x: x.update(execution_attempt="REPLAY")),
         ("wrong-packet", lambda x: x["intents"]["A"].update(packet_sha256="0"*64)),
+        ("wrong-frozen-source", lambda x: x.update(source_commit="f"*40)),
+        ("wrong-frozen-packet", lambda x: x.update(packet_sha256="0"*64)),
+        ("provider-output-tampered", lambda x: x["provider"]["A"].update(
+            native_original_output="TAMPERED")),
+        ("provider-receipt-tampered", lambda x: x["provider"]["B"]["native_receipt_body"].update(
+            native_backend_pid=999)),
+        ("backend-start-not-bound", lambda x: x["witness"]["waiters"][1].update(
+            backend_start="2027-11-09T21:00:00+00:00")),
     ]
     failures = 0
     for name, mutate in cases:
         x = deepcopy(base)
         mutate(x)
         try:
-            check(x)
+            check(x, frozen_source_commit="0"*40,
+                  frozen_packet_sha256="1"*64)
         except (ValueError, KeyError, TypeError):
             failures += 1
         else:
             raise AssertionError("JOIN_NEGATIVE_FALSE_ACCEPT_"+name)
-    assert failures == 12, "JOIN_NEGATIVE_COUNT"
+    assert failures == 17, "JOIN_NEGATIVE_COUNT"
     print(json.dumps({
         "status":"A02_LAN_STRUCTURAL_JOIN_SOURCE_NEGATIVES_PASS",
         "negative_cases":failures,
