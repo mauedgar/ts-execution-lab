@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+from pathlib import Path
+import sys
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 from a02_lan.control_join import ATTEMPT, SCHEMA, DEVICES, check
 
 
