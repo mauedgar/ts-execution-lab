@@ -214,8 +214,14 @@ def connect(mode: str):
     )
     require(cn.execute("SHOW server_version").fetchone()["server_version"].startswith("16."),
             "PG16_REQUIRED")
-    ident = cn.execute("SELECT current_database() AS db,current_user AS user").fetchone()
-    require(ident == {"db": DATABASE, "user": ROLE}, "SYNTHETIC_DB_ROLE_MISMATCH")
+    ident = cn.execute(
+        "SELECT d.datname AS db, current_user AS role, session_user AS session_role,"
+        "pg_get_userbyid(d.datdba) AS db_owner, d.datistemplate AS template "
+        "FROM pg_catalog.pg_database d WHERE d.datname=current_database()"
+    ).fetchone()
+    require(ident == {"db": DATABASE, "role": ROLE, "session_role": ROLE,
+                      "db_owner": ROLE, "template": False},
+            "SYNTHETIC_DB_ROLE_OWNER_MISMATCH")
     expected_system_id = os.getenv("TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER", "")
     require(re.fullmatch(r"[0-9]{16,20}", expected_system_id) is not None,
             "EXTERNAL_DB_SYSTEM_ID_ATTESTATION_REQUIRED")
@@ -301,28 +307,43 @@ def pinned_schema_statements():
 
 
 def setup(conn, genesis):
-    assert_fresh_disposable_catalog(conn)
-    require(conn.execute(
-        "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
-        (SCHEMA,)).fetchone()["n"] == 0, "DISPOSABLE_SCHEMA_ALREADY_EXISTS")
-    statements = pinned_schema_statements()
+    """One serializable transaction, with catalog/role/peer checks before DDL."""
+    statements = pinned_schema_statements()  # immutable Git blob before any SQL
+    require(conn.info.transaction_status.name == "IDLE", "SETUP_CONNECTION_NOT_IDLE")
     with conn.transaction():
+        conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE")
+        # A disposable PG16 must have no other application backends during DDL.
+        # This complements (does not replace) external Docker ownership admission.
+        peers = conn.execute(
+            "SELECT count(*) AS n FROM pg_catalog.pg_stat_activity "
+            "WHERE datname=current_database() AND pid <> pg_backend_pid()"
+        ).fetchone()
+        require(type(peers["n"]) is int and peers["n"] == 0,
+                "CONCURRENT_DATABASE_SESSION_PRESENT")
+        assert_fresh_disposable_catalog(conn)
+        require(conn.execute(
+            "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
+            (SCHEMA,)).fetchone()["n"] == 0, "DISPOSABLE_SCHEMA_ALREADY_EXISTS")
+        # Non-idempotent schema/genesis initialization is a single exact operation.
+        # A lost outer COMMIT acknowledgement is UNKNOWN; never dispatch again.
         for item in statements:
             conn.execute(item)
-    tables = conn.execute(
-        "SELECT tablename FROM pg_tables WHERE schemaname=%s ORDER BY tablename",
-        (SCHEMA,)).fetchall()
-    require([r["tablename"] for r in tables] == ["events", "head", "receipts"],
-            "DISPOSABLE_SCHEMA_SHAPE")
-    result = initialize(conn, SCOPE, genesis)
-    require(result.revision == 0, "INITIALIZED_REVISION")
-    state = read(conn, SCOPE)
-    require(state.revision == 0 and state.state_bytes == genesis and
-            len(state.event_bytes) == 0, "GENESIS_READBACK_MISMATCH")
+        tables = conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname=%s ORDER BY tablename",
+            (SCHEMA,)).fetchall()
+        require([r["tablename"] for r in tables] == ["events", "head", "receipts"],
+                "DISPOSABLE_SCHEMA_SHAPE")
+        state = initialize(conn, SCOPE, genesis)
+        require(state.revision == 0, "INITIALIZED_REVISION")
+        readback = read(conn, SCOPE)
+        require(readback.revision == 0 and readback.state_bytes == genesis and
+                len(readback.event_bytes) == 0, "GENESIS_READBACK_MISMATCH")
     print(json.dumps({
         "status":"A02_LAN_DISPOSABLE_GENESIS_CONFIRMED",
-        "revision":0,"physical_site":"NOTEBOOK","product_effect":"NONE",
+        "revision":0, "physical_site":"NOTEBOOK", "product_effect":"NONE",
         "neon":"NOT_RUN","schema":SCHEMA,
+        "atomic_schema_and_genesis":True,
+        "external_docker_exclusivity":"INDEPENDENT_CONTROL_EVIDENCE_REQUIRED",
     }, sort_keys=True), flush=True)
 
 
