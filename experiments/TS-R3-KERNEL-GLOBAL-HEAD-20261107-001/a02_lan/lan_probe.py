@@ -508,11 +508,21 @@ def writer(conn, command, site, side):
     host_id, attempt = asserted_host_identity()
     receipt_dir = private_receipt_dir()
     file_prefix = "writer-" + side
+    backend_start_row = conn.execute(
+        "SELECT backend_start::text AS started "
+        "FROM pg_catalog.pg_stat_activity WHERE pid=pg_backend_pid()"
+    ).fetchone()
+    require(backend_start_row is not None and
+            type(backend_start_row["started"]) is str and
+            len(backend_start_row["started"]) > 8,
+            "ORIGINAL_BACKEND_START_NOT_OBSERVED")
+    backend_start = backend_start_row["started"]
     common = {
         "execution_attempt": attempt, "host_sha256": host_id,
         "site_claim": site, "writer": side.upper(),
         "client_process_pid": os.getpid(),
         "backend_pid": conn.info.backend_pid,
+        "backend_start": backend_start,
         "mutation_id": command.mutation_id,
         "mutation_fingerprint": command.fingerprint(),
         "packet_sha256": os.environ[SHA_ENV],
@@ -537,6 +547,7 @@ def writer(conn, command, site, side):
         output = {"disposition":"NONE_STALE", "effect":"NONE"}
     output.update({"status":"A02_LAN_WRITER_RESULT","writer":side.upper(),
                    "site":site,"backend_pid":conn.info.backend_pid,
+                   "backend_start":backend_start,
                    "mutation_id":command.mutation_id,
                    "execution_attempt":attempt,
                    "host_sha256":host_id,
