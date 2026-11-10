@@ -1,0 +1,144 @@
+name: TS A02-LAN qualify exact git source transport, no source execution
+on:
+  push:
+    branches:
+      - ee/ts-r3-a02-git-transport-20261110-001
+    paths:
+      - .github/workflows/ts-r3-a02-git-frozen-transport-20261110-001.yml
+permissions:
+  contents: read
+concurrency:
+  group: ts-a02-git-source-transport-001-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.ref == 'refs/heads/ee/ts-r3-a02-git-transport-20261110-001' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GIT_CONFIG_NOSYSTEM: '1'
+      GIT_CONFIG_GLOBAL: /dev/null
+      GIT_TERMINAL_PROMPT: '0'
+      GIT_LFS_SKIP_SMUDGE: '1'
+      SOURCE_SHA: 96993b370ddb0e822d1d464bc3f08e31ab44dea5
+      SOURCE_TREE: 81d3b8c20cc57d658011e6a9566e2f7167055757
+      SOURCE_BRANCH: ee/ts-r3-a02-lan-physical-20261109-001
+      SOURCE_URL: https://github.com/mauedgar/ts-execution-lab.git
+    steps:
+      - name: Qualify Git mechanical original source transport and all blobs
+        id: transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'mauedgar/ts-execution-lab'
+          test "$GITHUB_EVENT_NAME" = 'push'
+          test "$GITHUB_REF_NAME" = 'ee/ts-r3-a02-git-transport-20261110-001'
+          export SOURCE_ROOT="$RUNNER_TEMP/ts-r3-a02-git-source-transport-20261110-001"
+          test ! -e "$SOURCE_ROOT"
+          git -c core.hooksPath=/dev/null -c credential.helper= -c protocol.file.allow=never clone --no-checkout --depth 1 --single-branch --branch "$SOURCE_BRANCH" -- "$SOURCE_URL" "$SOURCE_ROOT"
+          test "$(git -C "$SOURCE_ROOT" rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C "$SOURCE_ROOT" rev-parse 'HEAD^{tree}')" = "$SOURCE_TREE"
+          test "$(git -C "$SOURCE_ROOT" remote get-url origin)" = "$SOURCE_URL"
+          python3 - <<'PY'
+          import json, os, pathlib, stat, subprocess
+          root=pathlib.Path(os.environ['SOURCE_ROOT'])
+          pins=[
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/generate.cjs", "2abc3a2a0846a1acb8f778b7b8caebe784f8a7c6"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/lan_probe.py", "5d9563aa96e79558a9a86c2524988c3a3eaef5b4"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_source.py", "22254d022baf1faab76240a04a91b4d0fd6f5c3d"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/control_join.py", "3190240b3fc2e7f134f64e3de380605496abdaaf"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_control_join.py", "df4453a81bd297d81c7d655c87c94e2d38f82663"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_setup_protocol.py", "dca875e427f4ed08844481512efe074619e92b0d"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_producer_join.py", "d4422d13d004241a10ee8dab48cd500a0c62cb3b"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/CONTROL_JOIN_CONTRACT.md", "b7d07422d494796778b88e74beab9918d1f3bfc2"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/schema.sql", "3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a11_real_pg16_port/worker.py", "e02f2f9bff36071b26851a19234948224de3b26a"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/bridge.py", "61be5ce70662a31118f9ffe442d1a03a5e9f195d"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/ts_global/legacy_v0.py", "1e39566fdd8cfb0a8de2726c613fb99fd1faa808"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a10_lc_core_semantics/shadow_async_adapter.cjs", "4a9ee4f454dd28eddf8f863064e973f28e43341c"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-kernel-v0/index.js", "0219b92e5f546407a6060a6dc449865c14c7f144"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-kernel-v0/contracts.js", "5d2d3a8a24ebc17339675e0c801595956e0cd353"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/fixtures/product-kernel-v0/store.js", "f80d7cfe2bc9cd228cb6e3ca817c2e8802e74c8a"),
+          ("experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/differential/e1/package-lock.json", "ecf387f8f425598187f3a68b8eac5388376129ce"),
+          ]
+          assert len(pins)==17 and len(set(p for p,_ in pins))==17
+          assert root.is_dir() and not root.is_symlink()
+          assert (root/'.git').is_dir() and not (root/'.git').is_symlink()
+          source=os.environ['SOURCE_SHA']
+          def git(*args):
+              return subprocess.run(['git','-C',str(root),'-c','core.hooksPath=/dev/null',*args],
+                                    check=True,text=True,stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE).stdout.strip()
+          subprocess.run(['git','-C',str(root),'-c','core.hooksPath=/dev/null','checkout',
+                          source,'--',*[p for p,_ in pins]],check=True,
+                         stdout=subprocess.DEVNULL)
+          manifest={}
+          for relative, expected in pins:
+              assert relative.startswith('experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/')
+              f=root/relative
+              assert f.is_file() and not f.is_symlink()
+              ancestor=f.parent
+              while ancestor!=root:
+                  assert not ancestor.is_symlink()
+                  ancestor=ancestor.parent
+              assert git('hash-object','--',str(f))==expected,relative
+              assert (f.stat().st_mode & stat.S_IFMT(f.stat().st_mode))==stat.S_IFREG
+              manifest[relative]=expected
+          found=set()
+          for base,dirs,files in os.walk(root,followlinks=False):
+              dirs[:]=[d for d in dirs if d!='.git']
+              for n in files:
+                  found.add(str((pathlib.Path(base)/n).relative_to(root)))
+          assert found==set(manifest),(len(found),len(manifest))
+          obj={
+             'operation':'TS-R3-A02-GIT-FROZEN-SOURCE-TRANSPORT-20261110-001',
+             'execution_attempt':'TS-R3-A02-GIT-FROZEN-SOURCE-TRANSPORT-20261110-001-A001',
+             'source_sha':source,
+             'source_tree':os.environ['SOURCE_TREE'],
+             'source_branch':os.environ['SOURCE_BRANCH'],
+             'source_url':os.environ['SOURCE_URL'],
+             'verified_git_blobs':manifest,
+             'file_count':len(manifest),
+             'physical_host_transport':'NOT_RUN',
+             'original_packet_transport':'NOT_RUN',
+             'postgresql':'NOT_RUN',
+             'product_effect':'NONE'}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'a02-git-source-verified-manifest.json').write_text(
+              json.dumps(obj,sort_keys=True)+'\n',encoding='utf-8')
+          print('TS_A02_GIT_NATIVE_17_BLOBS_SOURCE_ONLY_PASS')
+          PY
+      - name: Emit original provider outcome-bound receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          ORIGINAL_STEP_OUTCOME: ${{ steps.transport.outcome }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,pathlib
+          out={
+             'operation':'TS-R3-A02-GIT-FROZEN-SOURCE-TRANSPORT-20261110-001',
+             'execution_attempt':'TS-R3-A02-GIT-FROZEN-SOURCE-TRANSPORT-20261110-001-A001',
+             'provider':'github-actions',
+             'run_id':os.environ['GITHUB_RUN_ID'],
+             'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],
+             'head_sha':os.environ['GITHUB_SHA'],
+             'source_sha':os.environ['SOURCE_SHA'],
+             'source_tree':os.environ['SOURCE_TREE'],
+             'source_step_outcome':os.environ['ORIGINAL_STEP_OUTCOME'],
+             'physical_host_transport':'NOT_RUN',
+             'postgresql':'NOT_RUN',
+             'product_effect':'NONE'}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'a02-git-transport-original-receipt.json').write_text(
+              json.dumps(out,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+      - name: Upload limited integrity evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ts-r3-a02-git-transport-001-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/a02-git-source-verified-manifest.json
+            ${{ runner.temp }}/a02-git-transport-original-receipt.json
+          if-no-files-found: error
+          retention-days: 7
