@@ -109,11 +109,11 @@ def check(report: dict) -> dict:
              raw_intent["product_effect"] == "NONE" and
              positive(raw_intent["created_ns"]), "INTENT_NOT_BOUND_TO_ORIGINAL")
         raw_result = exact(results[side],
-                           tuple(raw_intent) + ("status", "disposition",
-                                                "effect", "revision", "site",
-                                                "host_evidence",
-                                                "server_effect_only",
-                                                "phase", "recorded_ns"),
+                           tuple(key for key in raw_intent
+                                 if key not in ("phase", "effect", "created_ns")) +
+                           ("status", "disposition", "effect", "revision",
+                            "site", "host_evidence", "server_effect_only",
+                            "phase", "recorded_ns"),
                            "RESULT_RECEIPT_KEYS")
         for field in raw_intent:
             if field in ("phase", "effect", "created_ns"):
