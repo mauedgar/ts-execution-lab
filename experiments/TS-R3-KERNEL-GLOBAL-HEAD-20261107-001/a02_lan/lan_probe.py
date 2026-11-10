@@ -32,12 +32,16 @@ from psycopg.rows import dict_row
 SCHEMA = "ts_r3_global_head_20261107_001"
 PACKET_SCHEMA = "TS_R3_A02_LAN_PROPOSALS_V1"
 FROZEN_SCHEMA_GIT_BLOB = "3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0"
+SETUP_DDL_EFFECT = "TS-R3-A02-LAN-SETUP-DDL-20261109-001-A001"
+SETUP_GENESIS_EFFECT = "TS-R3-A02-LAN-SETUP-GENESIS-20261109-001-A001"
+FROZEN_SCHEMA_COMMENT = "A02-LAN-NONPRODUCT-" + SETUP_DDL_EFFECT + "-" + FROZEN_SCHEMA_GIT_BLOB
 DATABASE = "tsr3_a02_lab"
 ROLE = "tsr3_a02_lab"
 URI_ENV = "TS_R3_A02_LAN_PG_URI"
 SHA_ENV = "TS_R3_A02_PACKET_SHA256"
 MODE_NAMES = {"validate", "setup", "hold", "writer-a", "writer-b",
-              "witness", "verify", "reconcile-a", "reconcile-b"}
+              "witness", "verify", "reconcile-a", "reconcile-b",
+              "reconcile-ddl", "reconcile-genesis"}
 STAGE = "ENTRY"
 RECEIPT_DIR_ENV = "TS_R3_A02_PRIVATE_RECEIPT_DIR"
 
@@ -85,7 +89,9 @@ def private_receipt_dir() -> Path:
 def write_once_receipt(directory: Path, name: str, record: dict) -> None:
     """Create-only and fsync: intent survives a possible lost SQL ACK."""
     require(name in ("writer-a.intent.json", "writer-b.intent.json",
-                     "writer-a.result.json", "writer-b.result.json"),
+                     "writer-a.result.json", "writer-b.result.json",
+                     "setup-ddl.intent.json", "setup-ddl.result.json",
+                     "setup-genesis.intent.json", "setup-genesis.result.json"),
             "RECEIPT_UNEXPECTED_NAME")
     data = (json.dumps(record, sort_keys=True, separators=(",", ":")) +
             "\n").encode("utf-8")
@@ -306,14 +312,88 @@ def pinned_schema_statements():
     return statements
 
 
+def setup_effect_record(effect_id: str) -> dict:
+    """Original setup effect identity, no database password or arbitrary values."""
+    require(effect_id in (SETUP_DDL_EFFECT, SETUP_GENESIS_EFFECT),
+            "SETUP_EFFECT_ID_NOT_ALLOWED")
+    host, attempt = asserted_host_identity()
+    cluster = os.environ["TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER"]
+    require(re.fullmatch(r"[0-9]{16,20}", cluster) is not None,
+            "SETUP_CLUSTER_NOT_ATTESTED")
+    return {
+        "original_effect_id": effect_id,
+        "execution_attempt": attempt,
+        "schema_git_blob": FROZEN_SCHEMA_GIT_BLOB,
+        "packet_sha256": os.environ[SHA_ENV],
+        "host_sha256": host,
+        "cluster_id_sha256": sha256(cluster.encode("ascii")).hexdigest(),
+        "product_effect": "NONE",
+    }
+
+
+def read_original_setup_intent(folder: Path, phase: str) -> dict:
+    require(phase in ("ddl", "genesis"), "UNKNOWN_SETUP_PHASE")
+    path = folder / ("setup-" + phase + ".intent.json")
+    require(not path.is_symlink() and path.is_file() and
+            path.stat().st_size < 4096, "ORIGINAL_SETUP_INTENT_NOT_FOUND")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    target = SETUP_DDL_EFFECT if phase == "ddl" else SETUP_GENESIS_EFFECT
+    expected = setup_effect_record(target)
+    require(type(record) is dict and
+            set(record) == set(expected) | {"phase", "effect", "created_ns"} and
+            all(record[key] == val for key,val in expected.items()) and
+            record["phase"] == "BEFORE_FIRST_DISPATCH" and
+            record["effect"] == "UNKNOWN_PENDING" and
+            type(record["created_ns"]) is int and record["created_ns"] > 0,
+            "ORIGINAL_SETUP_INTENT_MISMATCH")
+    return record
+
+
+def ddl_comment_readonly(conn):
+    """Only original marker + exact object footprint can support DDL reconciliation."""
+    statements = pinned_schema_statements()
+    require(len(statements) == 4, "DDL_SOURCE_CHANGED")
+    with conn.transaction():
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        row = conn.execute(
+            "SELECT obj_description(n.oid, 'pg_namespace') AS marker "
+            "FROM pg_catalog.pg_namespace n WHERE n.nspname=%s",
+            (SCHEMA,)
+        ).fetchone()
+        if row is None:
+            return "UNKNOWN"
+        require(row["marker"] == FROZEN_SCHEMA_COMMENT,
+                "UNEXPECTED_DDL_MARKER")
+        tables = conn.execute(
+            "SELECT tablename, tableowner FROM pg_catalog.pg_tables "
+            "WHERE schemaname=%s ORDER BY tablename",
+            (SCHEMA,)
+        ).fetchall()
+        require([(t["tablename"], t["tableowner"]) for t in tables] ==
+                [(name, ROLE) for name in ("events", "head", "receipts")],
+                "ORIGINAL_DDL_TABLES_NOT_EXACT")
+        extras = conn.execute(
+            "SELECT count(*) AS n FROM pg_catalog.pg_class c "
+            "JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname=%s AND c.relkind IN ('v','m','f','p','S')",
+            (SCHEMA,)
+        ).fetchone()["n"]
+        require(extras == 0, "ORIGINAL_DDL_FOREIGN_OBJECTS")
+    return "DDL_METADATA_CONSISTENT_PENDING_NATIVE_CONTROL"
+
+
 def setup(conn, genesis):
-    """Pre-DDL serializable inventory and SQL; bridge genesis is separate."""
-    statements = pinned_schema_statements()  # immutable Git blob before any SQL
+    """Two distinctly recorded, never-replayed effects: DDL then A11 genesis."""
+    statements = pinned_schema_statements()
     require(conn.info.transaction_status.name == "IDLE", "SETUP_CONNECTION_NOT_IDLE")
+    folder = private_receipt_dir()  # Linux ext4 and private 0700 only
+    ddl_record = setup_effect_record(SETUP_DDL_EFFECT)
+    # NO permission to dispatch DDL without a durable original pre-dispatch intent.
+    write_once_receipt(folder, "setup-ddl.intent.json",
+                       {**ddl_record, "phase":"BEFORE_FIRST_DISPATCH",
+                        "effect":"UNKNOWN_PENDING", "created_ns":time.time_ns()})
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE")
-        # A disposable PG16 must have no other application backends during DDL.
-        # This complements (does not replace) external Docker ownership admission.
         peers = conn.execute(
             "SELECT count(*) AS n FROM pg_catalog.pg_stat_activity "
             "WHERE datname=current_database() AND pid <> pg_backend_pid()"
@@ -324,32 +404,76 @@ def setup(conn, genesis):
         require(conn.execute(
             "SELECT COUNT(*) AS n FROM pg_catalog.pg_namespace WHERE nspname=%s",
             (SCHEMA,)).fetchone()["n"] == 0, "DISPOSABLE_SCHEMA_ALREADY_EXISTS")
-        # Non-idempotent schema/genesis initialization is a single exact operation.
-        # A lost outer COMMIT acknowledgement is UNKNOWN; never dispatch again.
         for item in statements:
             conn.execute(item)
+        # Exact literal marker, no user-provided string/identifier or credentials.
+        conn.execute("COMMENT ON SCHEMA ts_r3_global_head_20261107_001 IS '" +
+                     FROZEN_SCHEMA_COMMENT + "'")
         tables = conn.execute(
             "SELECT tablename FROM pg_tables WHERE schemaname=%s ORDER BY tablename",
             (SCHEMA,)).fetchall()
         require([r["tablename"] for r in tables] == ["events", "head", "receipts"],
                 "DISPOSABLE_SCHEMA_SHAPE")
-    # A11's public bridge explicitly prohibits initialize/read inside an
-    # enclosing transaction (it requires autocommit+IDLE to prove durable ACK).
-    # The two non-idempotent effects remain separate and must be reconciled
-    # independently if the acknowledgement of either is lost.
+    # COMMIT ACK must have returned before this result is durable. If any
+    # exception/crash occurs, original intent remains and effect is UNKNOWN.
+    write_once_receipt(folder, "setup-ddl.result.json",
+                       {**ddl_record, "phase":"CLIENT_ACK_COMMITTED",
+                        "effect":"CONFIRMED", "recorded_ns":time.time_ns()})
+    require(ddl_comment_readonly(conn) ==
+            "DDL_METADATA_CONSISTENT_PENDING_NATIVE_CONTROL",
+            "DDL_MARKER_READBACK_NOT_PROVEN")
+    # Independent original effect: public A11 bridge.initialize needs IDLE.
+    genesis_record = setup_effect_record(SETUP_GENESIS_EFFECT)
+    write_once_receipt(folder, "setup-genesis.intent.json",
+                       {**genesis_record, "phase":"BEFORE_FIRST_DISPATCH",
+                        "effect":"UNKNOWN_PENDING", "created_ns":time.time_ns()})
     state = initialize(conn, SCOPE, genesis)
     require(state.revision == 0, "INITIALIZED_REVISION")
     readback = read(conn, SCOPE)
     require(readback.revision == 0 and readback.state_bytes == genesis and
             len(readback.event_bytes) == 0, "GENESIS_READBACK_MISMATCH")
+    write_once_receipt(folder, "setup-genesis.result.json",
+                       {**genesis_record, "phase":"CLIENT_ACK_COMMITTED",
+                        "effect":"CONFIRMED", "recorded_ns":time.time_ns()})
     print(json.dumps({
         "status":"A02_LAN_DISPOSABLE_GENESIS_CONFIRMED",
         "revision":0, "physical_site":"NOTEBOOK", "product_effect":"NONE",
-        "neon":"NOT_RUN","schema":SCHEMA,
-        "ddl_transaction":"SEPARATE_COMMITTED_EFFECT",
-        "bridge_initialize":"SEPARATE_COMMITTED_EFFECT",
+        "neon":"NOT_RUN", "schema":SCHEMA,
+        "ddl_original_effect_id":SETUP_DDL_EFFECT,
+        "genesis_original_effect_id":SETUP_GENESIS_EFFECT,
+        "ddl_and_genesis":"SEPARATE_DURABLE_EFFECTS",
         "external_docker_exclusivity":"INDEPENDENT_CONTROL_EVIDENCE_REQUIRED",
     }, sort_keys=True), flush=True)
+
+
+def reconcile_setup(conn, genesis: bytes, phase: str):
+    """Read-only reconciliation. Never redispatch DDL or bridge.initialize."""
+    folder = private_receipt_dir()
+    read_original_setup_intent(folder, phase)
+    if phase == "ddl":
+        status = ddl_comment_readonly(conn)
+        return {
+            "status":"A02_LAN_DDL_ORIGINAL_READONLY_RECONCILED",
+            "original_effect_id":SETUP_DDL_EFFECT,
+            "effect":"CONFIRMED_PENDING_PROVIDER_REVIEW" if
+                     status == "DDL_METADATA_CONSISTENT_PENDING_NATIVE_CONTROL"
+                     else "UNKNOWN",
+            "sql_mutation":"NONE","redispatched":False,"product_effect":"NONE",
+        }
+    require(phase == "genesis", "SETUP_PHASE_NOT_SUPPORTED")
+    try:
+        state = read(conn, SCOPE)  # bridge read-only original scope
+        require(state.revision == 0 and state.state_bytes == genesis and
+                len(state.event_bytes) == 0, "GENESIS_ORIGINAL_BYTES_MISMATCH")
+        disposition = "CONFIRMED_PENDING_PROVIDER_REVIEW"
+    except (EffectUnknown, StorageRejected):
+        disposition = "UNKNOWN"
+    return {
+        "status":"A02_LAN_GENESIS_ORIGINAL_READONLY_RECONCILED",
+        "original_effect_id":SETUP_GENESIS_EFFECT,
+        "effect":disposition,
+        "sql_mutation":"NONE","redispatched":False,"product_effect":"NONE",
+    }
 
 
 def holder(conn):
@@ -536,6 +660,10 @@ def main():
         if mode == "setup":
             require(site == "NOTEBOOK", "SETUP_NOTEBOOK_ONLY")
             setup(conn, genesis)
+        elif mode in ("reconcile-ddl", "reconcile-genesis"):
+            require(site == "NOTEBOOK", "SETUP_RECONCILIATION_NOTEBOOK_ONLY")
+            print(json.dumps(reconcile_setup(conn, genesis, mode.removeprefix("reconcile-")),
+                             sort_keys=True), flush=True)
         elif mode == "hold":
             require(site == "NOTEBOOK", "HOLDER_NOTEBOOK_ONLY")
             holder(conn)
