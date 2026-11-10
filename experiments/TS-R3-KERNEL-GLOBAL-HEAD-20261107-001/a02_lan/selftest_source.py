@@ -181,11 +181,29 @@ def main() -> None:
                 receipt_negatives += 1
             else:
                 raise AssertionError("DUPLICATE_WRITER_INTENT_ACCEPTED")
+            # DDL and GENESIS are distinct create-only original effects.
+            setup_intent = {"product_effect": "NONE", "phase": "SOURCE_ONLY_TEST"}
+            write_once_receipt(target, "setup-ddl.intent.json", setup_intent)
+            write_once_receipt(target, "setup-genesis.intent.json", setup_intent)
+            try:
+                write_once_receipt(target, "setup-ddl.intent.json", setup_intent)
+            except FileExistsError:
+                receipt_negatives += 1
+            else:
+                raise AssertionError("DUPLICATE_DDL_DISPATCH_ACCEPTED")
+            try:
+                write_once_receipt(target, "setup-foreign.intent.json", setup_intent)
+            except AssertionError as exc:
+                require(str(exc) == "RECEIPT_UNEXPECTED_NAME",
+                        "FOREIGN_SETUP_EFFECT_WRONG_GUARD")
+                receipt_negatives += 1
+            else:
+                raise AssertionError("FOREIGN_SETUP_EFFECT_ACCEPTED")
     finally:
         os.environ.pop("TS_R3_A02_PRIVATE_RECEIPT_DIR", None)
         if previous_dir is not None:
             os.environ["TS_R3_A02_PRIVATE_RECEIPT_DIR"] = previous_dir
-    require(receipt_negatives == 4, "CREATE_ONLY_RECEIPT_GUARDS_FAILED")
+    require(receipt_negatives == 6, "CREATE_ONLY_RECEIPT_GUARDS_FAILED")
     print(json.dumps({
         "status": "A02_LAN_SOURCE_ONLY_NEGATIVES_PASS",
         "original_js_pair": True,
