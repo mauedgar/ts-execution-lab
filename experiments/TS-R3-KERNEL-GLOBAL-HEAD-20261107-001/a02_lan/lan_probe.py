@@ -12,6 +12,8 @@ import json
 import os
 import platform
 from pathlib import Path
+import stat
+import tempfile
 import re
 import sys
 import time
@@ -37,6 +39,53 @@ SHA_ENV = "TS_R3_A02_PACKET_SHA256"
 MODE_NAMES = {"validate", "setup", "hold", "writer-a", "writer-b",
               "witness", "verify", "reconcile-a", "reconcile-b"}
 STAGE = "ENTRY"
+RECEIPT_DIR_ENV = "TS_R3_A02_PRIVATE_RECEIPT_DIR"
+
+
+def private_receipt_dir() -> Path:
+    """Native runner must create this single-purpose private directory."""
+    raw = os.getenv(RECEIPT_DIR_ENV, "")
+    require(raw and os.path.isabs(raw), "PRIVATE_RECEIPT_DIR_REQUIRED")
+    p = Path(raw)
+    root = Path(tempfile.gettempdir()).resolve(strict=True)
+    require(p.parent.resolve(strict=True) == root and
+            p.name.startswith("ts-r3-a02-lan-physical-race-"),
+            "RECEIPT_DIR_OUTSIDE_EXACT_TEMP_SCOPE")
+    st = p.lstat()
+    require(stat.S_ISDIR(st.st_mode) and not p.is_symlink(),
+            "RECEIPT_DIR_SYMLINK_OR_NOT_DIRECTORY")
+    if os.name == "posix":
+        require(st.st_uid == os.getuid() and st.st_mode & 0o077 == 0,
+                "RECEIPT_DIR_NOT_PRIVATE")
+    require(p.resolve(strict=True) == p, "RECEIPT_DIR_RESOLVED_PATH_DIFFERS")
+    return p
+
+
+def write_once_receipt(directory: Path, name: str, record: dict) -> None:
+    """Create-only and fsync: intent survives a possible lost SQL ACK."""
+    require(name in ("writer-a.intent.json", "writer-b.intent.json",
+                     "writer-a.result.json", "writer-b.result.json"),
+            "RECEIPT_UNEXPECTED_NAME")
+    data = (json.dumps(record, sort_keys=True, separators=(",", ":")) +
+            "\n").encode("utf-8")
+    require(len(data) < 4096 and record.get("product_effect") == "NONE",
+            "RECEIPT_DATA_BOUND")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(directory / name, flags, 0o600)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if os.name == "posix":
+        dir_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+
 
 
 def require(condition: bool, code: str) -> None:
@@ -285,6 +334,26 @@ def holder(conn):
 def writer(conn, command, site, side):
     require((site, side) in (("NOTEBOOK", "a"), ("DESKTOP", "b")),
             "PHYSICAL_SITE_WRITER_MISMATCH")
+    host_id, attempt = asserted_host_identity()
+    receipt_dir = private_receipt_dir()
+    file_prefix = "writer-" + side
+    common = {
+        "execution_attempt": attempt, "host_sha256": host_id,
+        "site_claim": site, "writer": side.upper(),
+        "client_process_pid": os.getpid(),
+        "backend_pid": conn.info.backend_pid,
+        "mutation_id": command.mutation_id,
+        "mutation_fingerprint": command.fingerprint(),
+        "packet_sha256": os.environ[SHA_ENV],
+        "expected_revision": command.expected_revision,
+        "scope": command.scope,
+        "product_effect": "NONE"
+    }
+    # Persist write-ahead intent BEFORE any mutation dispatch, create-only.
+    # Existing intent prevents replay even if prior result is unavailable.
+    write_once_receipt(receipt_dir, file_prefix + ".intent.json",
+                       {**common, "phase":"BEFORE_FIRST_DISPATCH",
+                        "effect":"UNKNOWN_PENDING", "created_ns":time.time_ns()})
     try:
         result = apply(conn, command)
         require(result.disposition == "CONFIRMED", "NOT_CONFIRMED")
@@ -298,12 +367,17 @@ def writer(conn, command, site, side):
     output.update({"status":"A02_LAN_WRITER_RESULT","writer":side.upper(),
                    "site":site,"backend_pid":conn.info.backend_pid,
                    "mutation_id":command.mutation_id,
-                   "execution_attempt":os.getenv("TS_R3_A02_EXECUTION_ATTEMPT"),
-                   "host_sha256":asserted_host_identity()[0],
+                   "execution_attempt":attempt,
+                   "host_sha256":host_id,
                    "client_process_pid":os.getpid(),
                    "host_evidence":"EXTERNAL_PROVIDER_JOIN_REQUIRED",
                    "server_effect_only":True,
                    "product_effect":"NONE"})
+    # Failure to record result leaves original intent and effect UNKNOWN.
+    write_once_receipt(receipt_dir, file_prefix + ".result.json",
+                       {**common, **output,
+                        "phase":"CLIENT_RESULT_DURABLE",
+                        "recorded_ns":time.time_ns()})
     print(json.dumps(output, sort_keys=True), flush=True)
 
 
