@@ -46,7 +46,11 @@ def zero_or_one(n) -> bool:
     return type(n) is int and n in (0, 1)
 
 
-def check(report: dict) -> dict:
+def check(report: dict, *, frozen_source_commit: str,
+          frozen_packet_sha256: str) -> dict:
+    need(type(frozen_source_commit) is str and
+         GIT.fullmatch(frozen_source_commit) is not None and
+         digest(frozen_packet_sha256), "CONTROL_FROZEN_INPUT_MISSING")
     exact(report, ("schema", "execution_attempt", "source_commit",
                    "packet_sha256", "provider", "intents", "results",
                    "holder", "witness", "database"), "JOIN_SCHEMA_EXACT")
@@ -55,7 +59,10 @@ def check(report: dict) -> dict:
          "WRONG_ORIGINAL_ATTEMPT")
     need(type(report["source_commit"]) is str and
          GIT.fullmatch(report["source_commit"]) is not None and
-         digest(report["packet_sha256"]), "SOURCE_OR_PACKET_HASH")
+         digest(report["packet_sha256"]) and
+         report["source_commit"] == frozen_source_commit and
+         report["packet_sha256"] == frozen_packet_sha256,
+         "CONTROL_FROZEN_SOURCE_OR_PACKET_MISMATCH")
     provider = exact(report["provider"], ("A", "B"), "PROVIDER_KEYS")
     intents = exact(report["intents"], ("A", "B"), "INTENT_KEYS")
     results = exact(report["results"], ("A", "B"), "RESULT_KEYS")
@@ -67,8 +74,10 @@ def check(report: dict) -> dict:
                         "native_original_pid", "native_run_start_ns",
                         "native_run_end_ns", "native_exit_code",
                         "native_original_output_sha256",
-                        "native_receipt_sha256", "native_backend_pid",
-                        "native_client_pid", "original_tool"),
+                        "native_receipt_sha256", "native_receipt_body",
+                        "native_original_output", "native_backend_pid",
+                        "native_backend_start", "native_client_pid",
+                        "original_tool"),
                        "NATIVE_RECEIPT_KEYS")
         need(native["device_id"] == device_id and native["site"] == expected_site
              and native["original_tool"] ==
@@ -76,8 +85,28 @@ def check(report: dict) -> dict:
              "WRONG_PROVIDER_OR_PHYSICAL_HOST")
         need(digest(native["host_sha256"]) and
              digest(native["native_original_output_sha256"]) and
-             digest(native["native_receipt_sha256"]),
+             digest(native["native_receipt_sha256"]) and
+             type(native["native_backend_start"]) is str and
+             len(native["native_backend_start"]) > 8,
              "ORIGINAL_PROVIDER_HASHES_MISSING")
+        raw_stdout = native["native_original_output"]
+        need(type(raw_stdout) is str and len(raw_stdout) < 2048 and
+             all(word not in raw_stdout.upper() for word in
+                 ("PASSWORD", "POSTGRESQL://", "_DSN", "PGPASSWORD")) and
+             sha256(raw_stdout.encode("utf-8")).hexdigest() ==
+             native["native_original_output_sha256"],
+             "PROVIDER_OUTPUT_BYTES_NOT_BOUND")
+        body = native["native_receipt_body"]
+        body_fields = tuple(key for key in native
+                            if key not in ("native_original_output",
+                                           "native_receipt_sha256",
+                                           "native_receipt_body"))
+        exact(body, body_fields, "PROVIDER_NATIVE_RECEIPT_BODY_KEYS")
+        need(all(body[k] == native[k] for k in body_fields) and
+             sha256(json.dumps(body, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")).hexdigest()
+             == native["native_receipt_sha256"],
+             "PROVIDER_NATIVE_RECEIPT_BYTES_MISMATCH")
         need(all(positive(native[key]) for key in
                  ("native_original_pid", "native_backend_pid",
                   "native_client_pid", "native_run_start_ns",
@@ -89,7 +118,7 @@ def check(report: dict) -> dict:
                            ("phase", "effect", "execution_attempt",
                             "writer", "site_claim", "host_sha256",
                             "client_process_pid", "backend_pid",
-                            "mutation_id", "mutation_fingerprint",
+                            "backend_start", "mutation_id", "mutation_fingerprint",
                             "packet_sha256", "expected_revision", "scope",
                             "product_effect", "created_ns"),
                            "INTENT_RECEIPT_KEYS")
@@ -101,6 +130,7 @@ def check(report: dict) -> dict:
              raw_intent["host_sha256"] == native["host_sha256"] and
              raw_intent["client_process_pid"] == native["native_client_pid"] and
              raw_intent["backend_pid"] == native["native_backend_pid"] and
+             raw_intent["backend_start"] == native["native_backend_start"] and
              raw_intent["mutation_id"] == "A10-A02-LAN-" + side and
              raw_intent["packet_sha256"] == report["packet_sha256"] and
              digest(raw_intent["mutation_fingerprint"]) and
@@ -183,8 +213,10 @@ def check(report: dict) -> dict:
              digest(w["client_addr_sha256"]), "INVALID_WAITER")
         observed[w["writer"]] = w
     need(set(observed) == {"A", "B"} and
-         all(observed[side]["pid"] == provider[side]["native_backend_pid"]
-             for side in ("A", "B")), "PROVIDER_BACKEND_BINDING_FAILED")
+         all(observed[side]["pid"] == provider[side]["native_backend_pid"] and
+             observed[side]["backend_start"] ==
+             provider[side]["native_backend_start"]
+             for side in ("A", "B")), "PROVIDER_BACKEND_START_BINDING_FAILED")
     need(all(provider[side]["native_run_start_ns"] <= witness["observed_epoch_ns"] <=
                  provider[side]["native_run_end_ns"] and
                  intents[side]["created_ns"] <= witness["observed_epoch_ns"] <=
@@ -235,12 +267,15 @@ def check(report: dict) -> dict:
 
 
 def main() -> None:
-    need(len(sys.argv) == 2, "ONE_INPUT_FILE_REQUIRED")
+    need(len(sys.argv) == 4, "INPUT_AND_TWO_INDEPENDENT_FROZEN_HASHES_REQUIRED")
     path = Path(sys.argv[1]).resolve(strict=True)
     need(path.is_file() and path.stat().st_size <= 48 * 1024,
          "JOIN_INPUT_FILE_LIMIT")
     obj = json.loads(path.read_text("utf-8"))
-    print(json.dumps(check(obj), sort_keys=True))
+    print(json.dumps(check(obj,
+                           frozen_source_commit=sys.argv[2],
+                           frozen_packet_sha256=sys.argv[3]),
+                     sort_keys=True))
 
 
 if __name__ == "__main__":
