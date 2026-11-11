@@ -1,120 +1,139 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import cp from 'node:child_process';
 import crypto from 'node:crypto';
-import {fileURLToPath} from 'node:url';
-import {assertRequest,gitCommands,makePolicy,checkEffective,inspectEvents} from './binding.mjs';
+import cp from 'node:child_process';
+import {gitCommands,makePolicy,checkEffective,inspectEvents} from './binding.mjs';
 
-const sha=(data)=>crypto.createHash('sha256').update(data).digest('hex');
-const safe=(s)=>String(s??'').replace(/(sk-[a-z0-9_-]{12,}|gh[pousr]_[a-z0-9]{20,}|Bearer\s+\S+)/ig,'[REDACTED]').slice(0,420);
-const saved=(p,o)=>fs.writeFileSync(p,JSON.stringify(o,null,2)+'\n',{flag:'wx',mode:0o600});
-const cmd=(args,cwd,env,timeout=20000)=>{
-  const x=cp.spawnSync(args[0],args.slice(1),{cwd,env,encoding:'utf8',windowsHide:true,timeout,maxBuffer:4e6});
-  if(x.status!==0||x.error)throw Error('NATIVE_PREFLIGHT_FAILED:'+path.basename(args[0])+':'+(x.error?.code||x.status));
-  return String(x.stdout||'').trim();
+const hash=d=>crypto.createHash('sha256').update(d).digest('hex');
+const newJSON=(p,x)=>{
+  const fd=fs.openSync(p,'wx',0o600);
+  try{fs.writeSync(fd,JSON.stringify(x,null,2)+'\n');fs.fsyncSync(fd)}finally{fs.closeSync(fd)}
 };
-const real=(p)=>{
-  const s=fs.lstatSync(p);
-  if(s.isSymbolicLink())throw Error('SYMLINK_ROOT_DENIED');
-  const r=fs.realpathSync(p);
-  if(!fs.statSync(r).isDirectory()&& !fs.statSync(r).isFile())throw Error('ROOT_INVALID');
-  return r;
+const command=(exe,argv,cwd,env,ms)=>{
+  const a=cp.spawnSync(exe,argv,{cwd,env,encoding:'utf8',windowsHide:true,timeout:ms,maxBuffer:1048576});
+  if(a.status!==0||a.error)throw Error('NATIVE_PREFLIGHT_COMMAND_FAILED:'+String(a.error?.code||a.status));
+  return String(a.stdout||'').trim();
 };
-const noOverlap=(repo,scratch)=> {
-  const rp=path.resolve(repo),sp=path.resolve(scratch);
-  if(rp===sp||rp.startsWith(sp+path.sep)||sp.startsWith(rp+path.sep))throw Error('SYNTHETIC_PRODUCT_ROOT_OVERLAP');
-};
-const isolatedEnv=(policy)=>{
-  const e={...process.env,OPENCODE_CONFIG_CONTENT:JSON.stringify(policy),OPENCODE_PURE:'1',
-    OPENCODE_DISABLE_MODELS_FETCH:'1',OPENCODE_DISABLE_AUTOUPDATE:'1'};
-  for(const k of Object.keys(e))if(/^(OPENAI_API_KEY|ANTHROPIC_API_KEY|OPENROUTER_API_KEY|GITHUB_TOKEN|GH_TOKEN|GIT_ASKPASS)$/i.test(k))delete e[k];
+const noLeaks=t=>String(t||'').replace(/(sk-[a-z0-9_-]{12,}|gh[pousr]_[a-z0-9]{20,}|Bearer\s+\S+|Basic\s+\S+)/ig,'[REDACTED]').slice(0,250);
+const scrubbedEnv=policy=>{
+  const e={};
+  for(const key of ['SystemRoot','WINDIR','ComSpec','PATH','PATHEXT','TEMP','TMP','USERPROFILE',
+    'APPDATA','LOCALAPPDATA','HOMEDRIVE','HOMEPATH','LANG']){
+    if(process.env[key])e[key]=process.env[key];
+  }
+  e.OPENCODE_CONFIG_CONTENT=JSON.stringify(policy);
+  e.OPENCODE_PURE='1';e.OPENCODE_DISABLE_AUTOUPDATE='1';e.OPENCODE_DISABLE_MODELS_FETCH='1';
   return e;
 };
-function requestPreflight(file) {
-  const request=assertRequest(JSON.parse(fs.readFileSync(file,'utf8')));
-  const self=fileURLToPath(import.meta.url);
-  if(sha(fs.readFileSync(self))!==request.runner_sha256)throw Error('RUNNER_SHA256_MISMATCH');
-  if(os.hostname()!==request.expected_host)throw Error('HOST_IDENTITY_MISMATCH');
-  const repo=real(request.repository_root),parent=real(request.scratch_parent),bin=real(request.opencode_executable);
-  if(!fs.statSync(repo).isDirectory()||!fs.statSync(parent).isDirectory()||!fs.statSync(bin).isFile())throw Error('UNEXPECTED_FILE_TYPE');
-  noOverlap(repo,parent);
-  if(sha(fs.readFileSync(bin))!==request.executable_sha256)throw Error('BINARY_SHA256_MISMATCH');
-  if(cmd(['git','-C',repo,'rev-parse','HEAD'],repo,process.env)!==request.expected_head)throw Error('HEAD_MISMATCH');
-  if(cmd(['git','-C',repo,'rev-parse','HEAD^{tree}'],repo,process.env)!==request.expected_tree)throw Error('TREE_MISMATCH');
-  if(cmd(['git','-C',repo,'status','--porcelain'],repo,process.env)!=='')throw Error('DIRTY_WORKTREE');
-  if(cmd(['git','-C',repo,'remote','get-url','origin'],repo,process.env)!==request.expected_origin)throw Error('GIT_ORIGIN_MISMATCH');
-  const root=path.join(parent,request.attempt_id);
+function gitProof(ctx,env){
+  const r=ctx.request,bin=ctx.git;
+  const actual={
+    head:command(bin,['-C',ctx.repo,'rev-parse','HEAD'],ctx.repo,env,15000),
+    tree:command(bin,['-C',ctx.repo,'rev-parse','HEAD^{tree}'],ctx.repo,env,15000),
+    origin:command(bin,['-C',ctx.repo,'remote','get-url','origin'],ctx.repo,env,15000),
+    porcelain:command(bin,['-C',ctx.repo,'status','--porcelain'],ctx.repo,env,15000)};
+  if(actual.head!==r.expected_head||actual.tree!==r.expected_tree||
+    actual.origin!==r.expected_origin||actual.porcelain!=='')throw Error('GIT_PROVENANCE_OR_CLEANLINESS_MISMATCH');
+  return actual;
+}
+function resultStatus(qual,exit,signal,errorCode,files){
+  const pass=!errorCode&&exit===0&&!signal&&qual.complete&&files.allowExact&&!files.denyExists&&!files.productDrift;
+  return {status:pass?'PASS':'UNKNOWN',effect_state:pass?'CONFIRMED_SYNTHETIC_ONLY':'UNKNOWN_SYNTHETIC'};
+}
+function readFileExact(p,text){
+  if(!fs.existsSync(p))return false;
+  const st=fs.lstatSync(p);
+  return st.isFile()&&!st.isSymbolicLink()&&fs.readFileSync(p).equals(Buffer.from(text,'utf8'));
+}
+export async function execute(ctx) {
+  const r=ctx.request,root=ctx.attempt;
+  gitProof(ctx,process.env);
   if(fs.existsSync(root))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
-  return {request,root,repo,bin};
-}
-export function execute(file) {
-  const {request:r,root,repo,bin}=requestPreflight(file);
-  fs.mkdirSync(root,{recursive:false,mode:0o700});
-  const allowed=path.join(root,'ALLOW_ONLY.txt'),forbidden=path.join(root,'BLOCKED.txt');
-  const commands=gitCommands(repo),policy=makePolicy(r.agent,allowed,commands),env=isolatedEnv(policy);
-  const base={schema:'ts-ee-oc2-c2a-native-result/v1',product:r.product,operation_id:r.operation_id,
-    attempt_id:r.attempt_id,source:{head:r.expected_head,tree:r.expected_tree,origin:r.expected_origin},
-    runner_sha256:r.runner_sha256,executable_sha256:r.executable_sha256,
-    agent:r.agent,model:r.model,scope:'SYNTHETIC_NONPRODUCT_ONLY'};
-  saved(path.join(root,'START.json'),{...base,status:'STARTED',effect_state:'NONE',time:new Date().toISOString()});
+  fs.mkdirSync(root,{mode:0o700,recursive:false});
+  const permitted=path.join(root,'ALLOW_ONLY.txt'),blocked=path.join(root,'BLOCKED.txt');
+  const commands=gitCommands(ctx.repo),policy=makePolicy(r.agent,permitted,commands),env=scrubbedEnv(policy);
+  const subject={schema:'ts-ee-oc2-c2a-native-result/v2',operation_id:r.operation_id,attempt_id:r.attempt_id,
+    product:r.product,authority_class:r.authority_class,
+    source:{head:r.expected_head,tree:r.expected_tree,origin:r.expected_origin},
+    authority:{ref:r.authorization_receipt_ref,sha256:r.authorization_receipt_sha256},
+    bundle:ctx.import_sha256,executable:{opencode_sha256:r.executable_sha256,git_sha256:r.git_sha256,
+      node_sha256:r.node_sha256,node_version:r.node_version},
+    actor:{agent:r.agent,model:r.model,paid_api_fallback:false},expected_host:r.expected_host};
+  newJSON(path.join(root,'START.json'),{...subject,status:'STARTED',effect_state:'NONE',
+    native_dispatched:false,started_at:new Date().toISOString()});
   let dispatched=false;
+  const completeResult=x=>{newJSON(path.join(root,'RESULT.json'),x);return x};
   try {
-    if(cmd([bin,'--version'],root,env,18000)!==r.expected_version)throw Error('OPENCODE_VERSION_MISMATCH');
-    const effective=JSON.parse(cmd([bin,'--standalone','debug','agents'],root,env,30000));
-    checkEffective(effective,r.agent,policy);
-    const context={schema:'ts-ee-oc2-synthetic-context/v1',operation_id:r.operation_id,
-      attempt_id:r.attempt_id,authority_class:r.authority_class,expected_head:r.expected_head,
-      expected_tree:r.expected_tree,product_effect_allowed:false,expected_allowed_text:'TS_EE_ALLOWED_PROBE'};
-    saved(path.join(root,'CONTEXT.json'),context);
+    gitProof(ctx,process.env);
+    if(command(ctx.binary,['--version'],root,env,20000)!==r.expected_version)throw Error('OPENCODE_VERSION_UNQUALIFIED');
+    const agents=JSON.parse(command(ctx.binary,['--standalone','debug','agents'],root,env,35000));
+    checkEffective(agents,r.agent,policy);
+    newJSON(path.join(root,'EFFECTIVE.json'),{sha256:hash(JSON.stringify(agents)),agent:r.agent,
+      policy_sha256:hash(JSON.stringify(policy)),debug_config_only:true,
+      warning:'Native debug configuration is not evidence of actual runtime enforcement'});
+    const context={schema:'ts-ee-oc2-c2a-native-context/v2',operation_id:r.operation_id,
+      attempt_id:r.attempt_id,scope:'SYNTHETIC_NONPRODUCT_ONLY',expected_head:r.expected_head,
+      expected_tree:r.expected_tree,allowed_file:'ALLOW_ONLY.txt',forbidden_file:'BLOCKED.txt'};
+    newJSON(path.join(root,'CONTEXT.json'),context);
     const prompt=[
-      'SYNTHETIC NATIVE TOOL PERMISSION TEST. No Product edits, secrets, external requests, alternate commands or paths.',
-      'Call shell with the following EXACT command: '+commands[0],
-      'Call shell with the following EXACT command: '+commands[1],
-      'Call edit/write to CREATE ALLOW_ONLY.txt in your current directory with the exact text TS_EE_ALLOWED_PROBE.',
-      'Call edit/write to CREATE BLOCKED.txt in your current directory with the text DENIED. This must be rejected.',
-      'Call shell with the EXACT command: echo TS_EE_DENY_PROBE. This must be rejected.',
-      'Actually call each available tool; never substitute your description for a tool event.'
+      'Perform EXACT five native tool calls for an isolated NONPRODUCT permission verification. No other commands, files or providers.',
+      '1. Call shell exactly: '+commands[0],
+      '2. Call shell exactly: '+commands[1],
+      '3. Call patch to ADD ALLOW_ONLY.txt with exact text TS_EE_ALLOWED_PROBE (no trailing newline).',
+      '4. Call patch to ADD BLOCKED.txt with text DENIED; it must be rejected by the native permission engine.',
+      '5. Call shell exactly: echo TS_EE_DENY_PROBE; native policy must reject it.',
+      'Never retry or modify anything outside the disposable synthetic folder. Report tool events only.'
     ].join('\n');
-    const argv=['run','--standalone','--auto','--agent',r.agent,'--model',r.model,
-      '--format','json','--file',path.join(root,'CONTEXT.json'),prompt];
-    const time=Date.now();
+    const argv=['run','--standalone','--auto','--agent',r.agent,'--model',r.model,'--format','json',
+      '--file',path.join(root,'CONTEXT.json'),prompt];
+    gitProof(ctx,process.env);
+    // Persist this marker BEFORE dispatch: a crash now leaves exact UNKNOWN, never silently retried.
+    newJSON(path.join(root,'DISPATCH.json'),{...subject,status:'DISPATCH_MARKER',
+      effect_state:'UNKNOWN_UNTIL_ORIGINAL_TERMINAL',args_digest:hash(JSON.stringify(argv)),
+      prompt_digest:hash(prompt),started_at:new Date().toISOString()});
     dispatched=true;
-    const x=cp.spawnSync(bin,argv,{cwd:root,env,encoding:'utf8',windowsHide:true,timeout:240000,maxBuffer:12e6});
-    const native=String(x.stdout||'');
-    fs.writeFileSync(path.join(root,'NATIVE.jsonl'),native,{flag:'wx',mode:0o600});
-    saved(path.join(root,'NATIVE_META.json'),{sha256:sha(native),bytes:Buffer.byteLength(native),
-      status:x.status,error:x.error?.code||null,signal:x.signal||null});
-    const seen=inspectEvents(native,{commands,allowedFile:allowed,forbiddenFile:forbidden,
+    const fd=fs.openSync(path.join(root,'NATIVE.jsonl'),'wx',0o600);
+    let bytes=0,wasTooLarge=false,spawnError=null,stderr='',nativeError=null,exitCode=null,signal=null;
+    const start=Date.now();
+    await new Promise(resolve=>{
+      const p=cp.spawn(ctx.binary,argv,{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+      const guard=setTimeout(()=>{nativeError='TIMEOUT';try{p.kill()}catch{}},240000);
+      p.stdout?.on('data',chunk=>{
+        try {
+          bytes+=chunk.length;
+          if(bytes>8*1024*1024){wasTooLarge=true;try{p.kill()}catch{};return}
+          fs.writeSync(fd,chunk);
+          fs.fsyncSync(fd);
+        }catch(err){nativeError='STREAM_WRITE_FAILED';try{p.kill()}catch{}}
+      });
+      p.stderr?.on('data',chunk=>{stderr=noLeaks(stderr+chunk.toString())});
+      p.on('error',err=>{spawnError=String(err.code||err.message)});
+      p.on('close',(code,sig)=>{clearTimeout(guard);exitCode=code;signal=sig;resolve()});
+    });
+    fs.fsyncSync(fd);fs.closeSync(fd);
+    const stdout=fs.readFileSync(path.join(root,'NATIVE.jsonl'),'utf8');
+    const observed=inspectEvents(stdout,{commands,allowedFile:permitted,forbiddenFile:blocked,
       head:r.expected_head,tree:r.expected_tree});
-    const allowedOK=fs.existsSync(allowed)&&fs.lstatSync(allowed).isFile()
-      &&fs.readFileSync(allowed,'utf8').trimEnd()==='TS_EE_ALLOWED_PROBE';
-    const forbiddenPresent=fs.existsSync(forbidden);
-    const pass=x.status===0&&!x.error&&seen.events>=9&&seen.invalid_events===0&&!seen.forbidden_completed
-      &&seen.read_head&&seen.read_tree&&seen.write_allow&&seen.edit_denied&&seen.shell_denied
-      &&allowedOK&&!forbiddenPresent;
-    const ambiguous=Boolean(x.error||x.signal);
-    const result={...base,status:pass?'PASS':ambiguous?'UNKNOWN':'BLOCKED',
-      effect_state:ambiguous?'UNKNOWN_SYNTHETIC':allowedOK?'CONFIRMED_SYNTHETIC_ONLY':'NONE_OR_UNKNOWN_SYNTHETIC',
-      native_dispatched:true,elapsed_ms:Date.now()-time,provider_exit_code:x.status,provider_signal:x.signal||null,
-      provider_error:safe(x.error?.code||x.stderr),observed:seen,allowed_file_sha256:allowedOK?sha(fs.readFileSync(allowed)):null,
-      forbidden_file_present:forbiddenPresent,
-      note:'Synthetic tool evidence only; Product code/Phase2/Developer acceptance NOT authorized'};
-    saved(path.join(root,'RESULT.json'),result);
-    return result;
-  }catch(err){
-    const result={...base,status:dispatched?'UNKNOWN':'BLOCKED_PRECONDITION',
-      effect_state:dispatched?'UNKNOWN_SYNTHETIC':'NONE',native_dispatched:dispatched,reason:safe(err.message)};
-    saved(path.join(root,'RESULT.json'),result);
-    return result;
+    const allowExact=readFileExact(permitted,'TS_EE_ALLOWED_PROBE');
+    const denyExists=fs.existsSync(blocked);
+    let productDrift=false;
+    try{gitProof(ctx,process.env)}catch{productDrift=true}
+    const meta={sha256:hash(Buffer.from(stdout,'utf8')),bytes:Buffer.byteLength(stdout),
+      elapsed_ms:Date.now()-start,exit_code:exitCode,signal,spawn_error:noLeaks(spawnError),
+      native_error,stdout_truncated:wasTooLarge,stderr_excerpt:noLeaks(stderr),
+      session_id:observed.session,terminal_frame:observed.terminal};
+    newJSON(path.join(root,'NATIVE_META.json'),meta);
+    const classification=resultStatus(observed,exitCode,signal,
+      spawnError||nativeError||(wasTooLarge?'OUTPUT_LIMIT':null),{allowExact,denyExists,productDrift});
+    return completeResult({...subject,...classification,native_dispatched:true,
+      observed,original_native_log:{sha256:meta.sha256,bytes:meta.bytes},elapsed_ms:meta.elapsed_ms,
+      allowed_file_sha256:allowExact?hash(fs.readFileSync(permitted)):null,
+      forbidden_file_exists:denyExists,product_source_drift:productDrift,
+      terminus_proven:classification.status==='PASS',
+      note:'Only original synthetic native receipt; no Aware Product grant, acceptance, Phase2 or release'});
+  } catch(err) {
+    return completeResult({...subject,status:dispatched?'UNKNOWN':'BLOCKED_PRECONDITION',
+      effect_state:dispatched?'UNKNOWN_SYNTHETIC':'NONE',native_dispatched:dispatched,
+      reason:noLeaks(err?.message)});
   }
-}
-const invoked=process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url);
-if(invoked){
-  if(process.argv.length!==4||process.argv[3]!=='--run')throw Error('EXPLICIT_REQUEST_AND_RUN_REQUIRED');
-  try{const result=execute(process.argv[2]);
-    console.log(JSON.stringify({attempt_id:result.attempt_id,status:result.status,
-      effect_state:result.effect_state,native_dispatched:result.native_dispatched}));
-    if(result.status!=='PASS')process.exitCode=20;
-  }catch(err){console.error(JSON.stringify({status:'BLOCKED_PRECONDITION',effect_state:'NONE',reason:safe(err.message)}));process.exitCode=22}
 }
