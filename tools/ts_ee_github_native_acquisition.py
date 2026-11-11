@@ -230,6 +230,12 @@ def git_tree(fetch, sha):
              HEX.fullmatch(row["sha"]) is not None and
              type(row.get("mode")) is str and type(row.get("type")) is str,
              "NATIVE_TREE_ENTRY_INVALID")
+        # Recursive Git tree lists both leaf blobs AND ancestor tree nodes.
+        # Adding a marker necessarily changes parent directory tree IDs;
+        # compare complete leaf objects, not directory SHA changes.
+        if row["type"] == "tree":
+            continue
+        need(row["type"] == "blob", "NATIVE_UNSUPPORTED_GIT_ENTRY")
         name = row["path"]
         need(name not in entries, "NATIVE_TREE_DUPLICATE_PATH")
         entries[name] = (row["mode"], row["type"], row["sha"])
