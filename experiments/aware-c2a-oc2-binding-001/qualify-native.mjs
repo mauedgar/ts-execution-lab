@@ -90,7 +90,7 @@ export function execute(file) {
     const allowedOK=fs.existsSync(allowed)&&fs.lstatSync(allowed).isFile()
       &&fs.readFileSync(allowed,'utf8').trimEnd()==='TS_EE_ALLOWED_PROBE';
     const forbiddenPresent=fs.existsSync(forbidden);
-    const pass=x.status===0&&!x.error&&seen.invalid_events===0&&!seen.forbidden_completed
+    const pass=x.status===0&&!x.error&&seen.events>=9&&seen.invalid_events===0&&!seen.forbidden_completed
       &&seen.read_head&&seen.read_tree&&seen.write_allow&&seen.edit_denied&&seen.shell_denied
       &&allowedOK&&!forbiddenPresent;
     const ambiguous=Boolean(x.error||x.signal);
