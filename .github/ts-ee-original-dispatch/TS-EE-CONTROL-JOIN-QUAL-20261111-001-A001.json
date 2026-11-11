@@ -1,0 +1,12 @@
+{
+  "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+  "execution_attempt": "TS-EE-CONTROL-JOIN-QUAL-20261111-001-A001",
+  "repository": "mauedgar/ts-execution-lab",
+  "ref": "refs/heads/ee/ts-ee-actions-original-binding-20261111-002",
+  "source_parent_commit": "acbe105f08b08ea098fd38641fe17470314cb8bc",
+  "source_parent_tree": "abff337a7b159a74ec178ec6891fddd87d3b9332",
+  "workflow_path": ".github/workflows/ts-ee-control-join-qual-20261111-001.yml",
+  "workflow_blob": "8909a8801ba0bc2ef6ac63381a7803e655c7a368",
+  "marker_path": ".github/ts-ee-original-dispatch/TS-EE-CONTROL-JOIN-QUAL-20261111-001-A001.json",
+  "control_request": "mauedgar/ts-execution-transport@6fa4cc8ce05ae1d16b87945704e20e6387f1dc23:requests/TS-EE-CONTROL-JOIN-QUAL-20261111-001/REQUEST.md"
+}
