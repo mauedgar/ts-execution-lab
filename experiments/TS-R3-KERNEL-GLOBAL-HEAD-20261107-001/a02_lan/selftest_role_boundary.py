@@ -126,7 +126,7 @@ def main():
             f.grants[table].add(privilege)
             negatives += rejects(f, "WRITER_TABLE_GRANT_INVALID_" +
                                  table.upper() + "_" + privilege)
-    assert negatives == 34, negatives
+    assert negatives == 36, negatives
     print(json.dumps({
         "status": "A02_LAN_SOURCE_ONLY_ROLE_BOUNDARY_PASS",
         "positive_profiles": 1, "negative_profiles": negatives,
