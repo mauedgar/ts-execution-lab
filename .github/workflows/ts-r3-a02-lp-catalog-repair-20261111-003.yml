@@ -1,0 +1,113 @@
+name: TS R3 A02-LAN IR002 catalog security repair 003
+on:
+  push:
+    branches:
+      - ee/ts-r3-a02-lp-ir002-repair-20261111-003
+    paths:
+      - .github/workflows/ts-r3-a02-lp-catalog-repair-20261111-003.yml
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/role_boundary.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/lan_probe.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_role_boundary.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/ROLE_POLICY_CANDIDATE.md
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a02-lp-catalog-repair-003-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source-only-security-repair:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.ref == 'refs/heads/ee/ts-r3-a02-lp-ir002-repair-20261111-003' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_NO_CONFIG: '1'
+    steps:
+      - name: Checkout source without credential persistence
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pin repaired blobs and reject credential environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+          test "$(git rev-parse "HEAD:$root/a02_lan/role_boundary.py")" = 0ab784c5db62623c6b542737a6ad79e736556f07
+          test "$(git rev-parse "HEAD:$root/a02_lan/lan_probe.py")" = 3ec51b5085713e5e810f98f6e9a49d465fe82420
+          test "$(git rev-parse "HEAD:$root/a02_lan/selftest_role_boundary.py")" = 157f3a54bc082f5fd90d52dd3a221aa2f26eeaaf
+          test "$(git rev-parse "HEAD:$root/a02_lan/ROLE_POLICY_CANDIDATE.md")" = 56f70e86a95ce93e788c5fe9070a358290281e52
+          test "$(git rev-parse "HEAD:$root/schema.sql")" = 3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0
+          test "$(git rev-parse "HEAD:$root/ts_global/bridge.py")" = 61be5ce70662a31118f9ffe442d1a03a5e9f195d
+          test -z "${TS_R3_NEON_CHILD_DSN-}"
+          test -z "${TS_R3_A02_LAN_PG_URI-}"
+          test -z "${DATABASE_URL-}"
+          test -z "${PGPASSWORD-}"
+      - name: Pin Node 22.16.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Pin uv 0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+          enable-cache: false
+      - name: Fresh Python3.15.2 90 catalog negatives and intercepted connector
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          root=experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+          uv run --no-project --python 3.15.2 --with 'psycopg[binary]==3.3.8' python -B "$root/a02_lan/selftest_role_boundary.py" > "$RUNNER_TEMP/ir002-catalog-repair.json"
+          python3 - "$RUNNER_TEMP/ir002-catalog-repair.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          x=json.loads(Path(sys.argv[1]).read_text())
+          assert x == {
+              'status':'A02_LAN_IR002_CATALOG_REPAIR_NEGATIVES_PASS',
+              'positive_profiles':1,'negative_profiles':90,
+              'mocked_lan_connect':'PASS',
+              'postgresql':'NOT_RUN','sql_mutation':'NONE',
+              'role_ddl':'NOT_RUN','neon':'NOT_RUN','product_effect':'NONE',
+          }, x
+          print('A02_LAN_IR002_REPAIR_90_NEGATIVES_PASS')
+          PY
+      - name: Requalify original JS packet and unchanged source negatives in new candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001
+          scratch="$(mktemp -d -p "$RUNNER_TEMP" ts-r3-a02-repair-XXXXXX)"
+          trap 'rm -rf "$scratch"' EXIT
+          mkdir "$scratch/product-v0" "$scratch/home" "$scratch/private"
+          cp "$root"/fixtures/product-kernel-v0/{contracts,index,store}.js "$scratch/product-v0/"
+          cp "$root"/differential/e1/{package.json,package-lock.json} "$scratch/product-v0/"
+          env -i PATH="$PATH" HOME="$scratch/home" npm_config_cache="$scratch/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null npm ci --prefix "$scratch/product-v0" --ignore-scripts --no-audit --no-fund
+          export TS_R3_A02_PRODUCT_FIXTURE_DIR="$scratch/product-v0"
+          node "$root/a02_lan/generate.cjs" "$scratch/private/a02-original-js-packet.json" > "$scratch/private/generate-result.json"
+          export TS_R3_A02_PACKET_SHA256="$(sha256sum "$scratch/private/a02-original-js-packet.json" | cut -d' ' -f1)"
+          uv run --no-project --python 3.15.2 --with 'psycopg[binary]==3.3.8' python -B "$root/a02_lan/selftest_source.py" "$scratch/private/a02-original-js-packet.json" > "$scratch/private/source-result.json"
+          uv run --no-project --python 3.15.2 --with 'psycopg[binary]==3.3.8' python -B "$root/a02_lan/selftest_setup_protocol.py" > "$scratch/private/setup-result.json"
+          python3 - "$scratch/private/source-result.json" "$scratch/private/setup-result.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          source,setup=[json.loads(Path(p).read_text()) for p in sys.argv[1:]]
+          assert source['status']=='A02_LAN_SOURCE_ONLY_NEGATIVES_PASS'
+          assert source['negative_cases']==17 and source['additional_receipt_negatives']==6
+          assert source['postgresql']=='NOT_RUN' and source['product_effect']=='NONE'
+          assert setup['status']=='A02_LAN_SETUP_SEPARATE_EFFECT_READONLY_SOURCE_PASS'
+          assert setup['negative_cases']==4 and setup['postgresql']=='NOT_RUN'
+          print('A02_LAN_ORIGINAL_PACKET_AND_SOURCE_NEGATIVES_PASS')
+          PY
+      - name: Parse all three changed Python files with no execution of original writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.15.2 python -B - <<'PY'
+          import ast
+          from pathlib import Path
+          root=Path('experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan')
+          for name in ('role_boundary.py','lan_probe.py','selftest_role_boundary.py'):
+              ast.parse((root/name).read_text('utf-8'),filename=name)
+          print('A02_LAN_REPAIR_THREE_SOURCES_PARSE_PASS')
+          PY
+          echo A02_LAN_NO_POSTGRESQL_NO_NEON_NO_PRODUCT_EFFECT
