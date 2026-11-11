@@ -5,7 +5,8 @@ import {assertRequest,gitCommands,makePolicy,checkEffective,inspectEvents} from 
 
 const repo=path.resolve('/tmp/c2a-synthetic-readonly'),scratch=path.resolve('/tmp/c2a-oc2-native/TS_EE_C2A_BIND_A001');
 const allowed=path.join(scratch,'ALLOW_ONLY.txt'),blocked=path.join(scratch,'BLOCKED.txt');
-const commands=gitCommands(repo),agent='aware-storefront-implementer';
+const qualifiedGit=path.resolve('/usr/bin/git');
+const commands=gitCommands(qualifiedGit,repo),agent='aware-storefront-implementer';
 const head='c'.repeat(40),tree='d'.repeat(40);
 const root={schema:'ts-ee-oc2-c2a-request/v2',product:'mauedgar/aware-commerce',
   authority_class:'SYNTHETIC_NONPRODUCT_ONLY',paid_api_fallback:false,
@@ -55,6 +56,8 @@ test('native exact syntax limited shell commands, only disposable file, deny-all
   assert.deepEqual(new Set(rules.filter(x=>x.action==='shell'&&x.effect==='allow').map(x=>x.resource)),new Set(commands));
   assert.equal(rules.some(x=>x.effect==='allow'&&x.resource==='*'),false);
   assert.equal(rules.some(x=>x.resource==='BLOCKED.txt'),false);
+  assert.deepEqual(new Set(rules.filter(x=>x.action==='patch'&&x.effect==='allow').map(x=>x.resource)),new Set([allowed,'ALLOW_ONLY.txt']));
+  assert.ok(commands.every(x=>x.startsWith('"'+qualifiedGit+'"')));
 });
 test('effective permissions reject any unexpected allow, aliases, missing deny and missing positive',()=>{
   const base=[...policy.agents[agent].permissions];
