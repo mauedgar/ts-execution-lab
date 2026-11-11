@@ -1,0 +1,12 @@
+{
+  "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+  "execution_attempt": "TS-EE-ACTIONS-IDENTITY-QUAL-20261111-001-A001",
+  "repository": "mauedgar/ts-execution-lab",
+  "ref": "refs/heads/ee/ts-ee-actions-original-binding-20261111-001",
+  "source_parent_commit": "bc8476c176c1e551017b371df3d6c32225cb4b32",
+  "source_parent_tree": "ef9bf32f0ddab405c78b6988b29e515f7acac115",
+  "workflow_path": ".github/workflows/ts-ee-original-binding-qual-20261111-001.yml",
+  "workflow_blob": "3fa0cf3e20079a44836b1e920dc810eea16e7c5d",
+  "marker_path": ".github/ts-ee-original-dispatch/TS-EE-ACTIONS-IDENTITY-QUAL-20261111-001-A001.json",
+  "control_request": "mauedgar/ts-execution-transport@be230d170a627d87cd2e4af79b60ffa1e492e1fc:requests/TS-EE-ACTIONS-IDENTITY-QUAL-20261111-001/REQUEST.md"
+}
