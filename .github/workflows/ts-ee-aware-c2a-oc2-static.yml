@@ -22,7 +22,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Parse native runner
-        run: node --check experiments/aware-c2a-oc2-binding-001/qualify-native.mjs
+      - name: Parse pinned bootstrap, binder and native runner
+        run: |
+          node --check experiments/aware-c2a-oc2-binding-001/bootstrap.mjs
+          node --check experiments/aware-c2a-oc2-binding-001/binding.mjs
+          node --check experiments/aware-c2a-oc2-binding-001/qualify-native.mjs
       - name: Run deterministic nonproduct negative tests
         run: node --test experiments/aware-c2a-oc2-binding-001/binding.test.mjs
