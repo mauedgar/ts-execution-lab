@@ -109,13 +109,18 @@ def fixture():
     old_path = OLD_REQUEST.split(":")[1]
     old_payload = old_source.encode()
     left = [
+        {"path": ".github", "mode": "040000", "type": "tree", "sha": "2"*40},
+        {"path": ".github/workflows", "mode": "040000", "type": "tree", "sha": "3"*40},
         {"path": OLD_WF, "mode": "100644", "type": "blob", "sha": wf_sha},
         {"path": "README.md", "mode": "100644", "type": "blob", "sha": "f"*40},
     ]
     right = deepcopy(left) + [
+        {"path": ".github/ts-ee-original-dispatch",
+         "mode": "040000", "type": "tree", "sha": "4"*40},
         {"path": OLD_MARKER, "mode": "100644", "type": "blob",
          "sha": marker_sha},
     ]
+    right[0]["sha"] = "5"*40  # expected parent-directory tree change
     old_run = {
         "id": RUN_ID, "event": "push", "status": "completed",
         "conclusion": "success", "run_attempt": 1,
@@ -258,6 +263,17 @@ def main():
                      x["workflow_runs"][0], x["workflow_runs"][0],
                  ])),
              "NATIVE_RUN_PAGE_DUPLICATES")
+    run_case("SPOOFED_NEXT_PAGE", lambda u, g:
+             u.__setitem__(RUNS_ENDPOINT, (u[RUNS_ENDPOINT][0], {
+                 "link": "<https://api.github.com/repos/" + REPO +
+                         "/actions/runs?branch=ee%2Funknown&per_page=100&page=2>; rel=\"next\""
+             })),
+             "NATIVE_NEXT_PAGE_NOT_CONTIGUOUS")
+    run_case("MALFORMED_NEXT_LINK", lambda u, g:
+             u.__setitem__(RUNS_ENDPOINT, (u[RUNS_ENDPOINT][0], {
+                 "link": "https://evil.invalid/run?page=2"
+             })),
+             "NATIVE_LINK_HEADER_AMBIGUOUS")
     run_case("FOREIGN_RUN_BRANCH", lambda u, g:
              modify(u, RUNS_ENDPOINT,
                     lambda x: x["workflow_runs"][0].update(
@@ -281,7 +297,7 @@ def main():
         print("NEGATIVE_PASS_MISSING_AUTHENTICATED_TOKEN")
     else:
         raise AssertionError("FALSE_ACCEPT_UNAUTHENTICATED_NATIVE_MODE")
-    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_15_NEGATIVES_PASS")
+    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_17_NEGATIVES_PASS")
 
 
 if __name__ == "__main__":
