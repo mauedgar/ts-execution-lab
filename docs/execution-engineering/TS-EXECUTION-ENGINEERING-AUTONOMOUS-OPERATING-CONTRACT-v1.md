@@ -571,6 +571,14 @@ MAT-XFORM creates no Product authority. Product-local adoption/binding remains s
 
 ## 14. Independent Review transport
 
+### Mandatory Scheduled WEB_INLINE ORIGINAL-to-Library dispatch and custody (2026-11-11)
+
+For every **new Scheduled WEB_INLINE** Independent Review, Execution Engineering Control SHALL instantiate and include the complete instructions of [`TS-WEB-INLINE-SCHEDULED-IR-LIBRARY-HANDOFF-TEMPLATE-v1.md`](TS-WEB-INLINE-SCHEDULED-IR-LIBRARY-HANDOFF-TEMPLATE-v1.md) in the provider's **actual scheduled task prompt**, with exact immutable Git handoff, Review_ID, ExecutionAttempt and expected result target. A shortened `consume handoff and execute review` prompt is **not compliant**, even when the separate frozen input contains Library terms. Control verifies the submitted prompt before a single dispatch. This changes execution transport mechanics only; it creates **no** Product authority, TaskCycle, independent reviewer verdict or new Product gate.
+
+The scheduled reviewer shall create **one immutable UTF-8 ORIGINAL**, attempt **actual personal ChatGPT Library upload**, and return a verified `library_file_id` / `file_id`, exact bytes, SHA-256 and observable upload result. A sandbox file, download link, scheduled task success, or task summary is not a Library publication receipt. Report provider transport states separately from semantic review: `LIBRARY_VERIFIED`, `LIBRARY_UPLOADED_UNVERIFIED`, `BLOCKED_TRANSPORT` or `UNKNOWN_EFFECT`. Unknown write effects require exact reconciliation and forbid blind retry; unavailable/failed Library must not cause a repeat of a completed semantic IR. Recover exact original bytes through an interactive bridge when needed and publish GitHub Transport **create-only** with hash/length/blob/readback correspondence. The original reviewer disposition and the bridge receipt remain distinct; neither constitutes Product acceptance.
+
+**Operational evidence ceiling:** Attendance scheduled IR002 on PR21 completed with `NO_RECOMMEND 0F/5A` but its launch prompt did not demand Library upload. Exact original (7,374 bytes; SHA-256 `fefd09b618f8e89d56dfce87a64e373259bc717e1188a91a1191c4566f0d04b2`) was recovered later by user attachment, uploaded to Library `libfile_24278c95b154819197167c45d83d86d8` and published unchanged as Git blob `20918b2d33db875773383497dea93ab183d74b8e` in `ts-execution-transport@00cf96b0c787e6fdba12cd5d7dc441d333abe53e`. This **proves interactive bridge recovery**, not that a scheduled task can successfully call Library. The WEB_INLINE binding remains experimental and unqualified for unattended Product-review transport until an independent empirical scheduled upload/run demonstrates that capability.
+
 Independent Review identity and review independence remain Product/LC concerns.
 
 Execution Engineering may qualify transport formats.
