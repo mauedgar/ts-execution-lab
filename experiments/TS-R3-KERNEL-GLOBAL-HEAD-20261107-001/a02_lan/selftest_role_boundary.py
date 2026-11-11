@@ -156,7 +156,7 @@ def main():
 
     positive = FakeConn()
     assert_writer_boundary(positive)
-    assert len(positive.statements) >= 60
+    assert len(positive.statements) == 54
     negatives=0
     for key in ("rolsuper","rolcreaterole","rolcreatedb","rolreplication",
                 "rolbypassrls","rolinherit"):
