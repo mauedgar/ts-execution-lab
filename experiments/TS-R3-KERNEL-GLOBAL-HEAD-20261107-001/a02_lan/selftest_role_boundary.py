@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 from a02_lan.role_boundary import (
     DATABASE, OWNER_ROLE, WRITER_ROLE, SCHEMA, role_for_mode,
     assert_writer_boundary,
