@@ -39,10 +39,12 @@ def role_for_mode(mode: str, site: str) -> str:
 
 
 def assert_synthetic_catalog(conn) -> None:
-    """Require a virgin synthetic-only database before accepting writer access.
+    """Check the exact declared current-DB namespace-scoped catalog footprint.
 
-    This is *current DB* catalog footprint only, not cross-database security,
-    authenticated remote host proof, owner role creation or runtime admission.
+    This is NOT a full cluster/database-object audit. Non-namespaced catalogs,
+    cross-database/public grants, user mappings and physical server identity
+    need independent native Control attestation before any real writer launch.
+    No source-only fake profile authorizes actual role/SQL provisioning.
     """
     schemas = conn.execute(
         "SELECT nspname FROM pg_catalog.pg_namespace "
