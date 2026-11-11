@@ -24,15 +24,15 @@ export function assertRequest(r){
   }
   return r;
 }
-export function gitCommands(root){
-  if(!path.isAbsolute(root)||BAD.test(root))throw Error('UNSAFE_GIT_COMMAND_PATH');
-  return ['git -C "'+root+'" rev-parse HEAD','git -C "'+root+'" rev-parse HEAD^{tree}'];
+export function gitCommands(gitExecutable,root){
+  if(!path.isAbsolute(root)||!path.isAbsolute(gitExecutable)||BAD.test(root)||BAD.test(gitExecutable))throw Error('UNSAFE_GIT_COMMAND_PATH');
+  return ['"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD','"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD^{tree}'];
 }
 export function makePolicy(agent,absoluteAllow,commands){
   if(!good(agent,ID)||path.basename(absoluteAllow)!=='ALLOW_ONLY.txt'||!Array.isArray(commands)||commands.length!==2)throw Error('UNSAFE_POLICY_INPUT');
   const rules=[{action:'*',resource:'*',effect:'deny'}];
   for(const resource of commands)rules.push({action:'shell',resource,effect:'allow'});
-  for(const a of ['edit','write'])for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])
+  for(const a of ['edit','write','patch'])for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])
     rules.push({action:a,resource,effect:'allow'});
   return {permissions:[{action:'*',resource:'*',effect:'deny'}],agents:{[agent]:{mode:'primary',permissions:rules}},plugin:[]};
 }
