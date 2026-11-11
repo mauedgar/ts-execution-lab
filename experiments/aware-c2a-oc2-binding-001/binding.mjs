@@ -9,7 +9,7 @@ export function assertRequest(r){
   if(r?.schema!==VERSION||r?.product!=='mauedgar/aware-commerce'||r?.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY'
     ||r?.paid_api_fallback!==false||!good(r.operation_id,ID)||!good(r.attempt_id,ID)
     ||!good(r.expected_head,HEX40)||!good(r.expected_tree,HEX40)
-    ||!good(r.executable_sha256,HEX64)||!good(r.bootstrap_sha256,HEX64)
+    ||!good(r.executable_sha256,HEX64)||!good(r.git_sha256,HEX64)||!good(r.bootstrap_sha256,HEX64)
     ||!good(r.runner_sha256,HEX64)||!good(r.binding_sha256,HEX64)
     ||!good(r.node_sha256,HEX64)||!/^v22\.[0-9]+\.[0-9]+$/.test(r.node_version||'')
     ||!/^opencode v2\.[0-9]+\.[0-9]+$/.test(r.expected_version||'')
@@ -19,7 +19,7 @@ export function assertRequest(r){
     ||typeof r.authorization_receipt_ref!=='string'||!/^https:\/\/github\.com\/mauedgar\/ts-execution-lab\/issues\/18#issuecomment-[0-9]+$/.test(r.authorization_receipt_ref))
     throw Error('REQUEST_IDENTITY_OR_AUTHORITY_INCOMPLETE');
   if(!['https://github.com/mauedgar/aware-commerce.git','git@github.com:mauedgar/aware-commerce.git'].includes(r.expected_origin))throw Error('WRONG_ORIGIN');
-  for(const k of ['repository_root','scratch_anchor','scratch_parent','opencode_executable']){
+  for(const k of ['repository_root','scratch_anchor','scratch_parent','opencode_executable','git_executable','node_executable']){
     if(typeof r[k]!=='string'||!path.isAbsolute(r[k])||BAD.test(r[k]))throw Error('UNSAFE_PATH:'+k);
   }
   return r;
