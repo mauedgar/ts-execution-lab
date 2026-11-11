@@ -26,7 +26,7 @@ function readOnlyRequest(file) {
   if(original.schema!=='ts-ee-oc2-c2a-request/v2'||original.product!=='mauedgar/aware-commerce'
     ||original.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY'||original.paid_api_fallback!==false)
     throw Error('BOOTSTRAP_REQUEST_CLASS_DENIED');
-  for(const k of ['bootstrap_sha256','runner_sha256','binding_sha256','node_sha256','executable_sha256'])
+  for(const k of ['bootstrap_sha256','runner_sha256','binding_sha256','node_sha256','executable_sha256','git_sha256'])
     if(!/^[0-9a-f]{64}$/.test(original[k]||''))throw Error(k+'_MISSING');
   return original;
 }
@@ -39,6 +39,7 @@ export async function bootstrap(file,mode) {
   exact(hash(fs.readFileSync(bindingFile)),r.binding_sha256,'BINDING_SOURCE');
   exact(process.version,r.node_version,'NODE_VERSION');
   exact(hash(fs.readFileSync(process.execPath)),r.node_sha256,'NODE_BINARY');
+  exact(fs.realpathSync.native(process.execPath).toLowerCase(),fs.realpathSync.native(r.node_executable).toLowerCase(),'NODE_EXECUTABLE');
   exact(os.hostname(),r.expected_host,'HOST_IDENTITY');
   if(process.platform!=='win32')throw Error('HOST_PLATFORM_NOT_WINDOWS');
   if(r.expected_host!=='DESKTOP-DJLBEQH')throw Error('HOST_NOT_QUALIFIED_IN_ORIGINAL_CONTEXT');
@@ -46,6 +47,7 @@ export async function bootstrap(file,mode) {
   const anchor=noLinks(r.scratch_anchor,'SCRATCH_ANCHOR');
   const parent=noLinks(r.scratch_parent,'SCRATCH_PARENT');
   const binary=noLinks(r.opencode_executable,'OPENCODE_BINARY');
+  const git=noLinks(r.git_executable,'GIT_BINARY');
   if(!inRoot(anchor,parent)||inRoot(repo,anchor)||inRoot(anchor,repo)
     ||inRoot(repo,parent)||inRoot(parent,repo)||repo.toLowerCase()===parent.toLowerCase())
     throw Error('SCRATCH_SCOPE_OR_PRODUCT_OVERLAP');
@@ -54,9 +56,10 @@ export async function bootstrap(file,mode) {
   if(path.basename(parent).toLowerCase()!=='ts-ee-oc2-c2a-synthetic')
     throw Error('SCRATCH_PARENT_NOT_QUALIFIED');
   if(!fs.statSync(repo).isDirectory()||!fs.statSync(parent).isDirectory()
-    ||!fs.statSync(anchor).isDirectory()||!fs.statSync(binary).isFile())
+    ||!fs.statSync(anchor).isDirectory()||!fs.statSync(binary).isFile()||!fs.statSync(git).isFile())
     throw Error('WRONG_FILE_TYPE');
   exact(hash(fs.readFileSync(binary)),r.executable_sha256,'OPENCODE_BINARY');
+  exact(hash(fs.readFileSync(git)),r.git_sha256,'GIT_BINARY');
   const attempt=path.join(parent,r.attempt_id);
   if(mode==='--observe'){
     if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
@@ -74,7 +77,7 @@ export async function bootstrap(file,mode) {
   const {assertRequest}=await import(pathToFileURL(bindingFile).href);
   assertRequest(r);
   const {execute}=await import(pathToFileURL(runnerFile).href);
-  return execute(Object.freeze({request:Object.freeze(r),repo,anchor,parent,binary,attempt,
+  return execute(Object.freeze({request:Object.freeze(r),repo,anchor,parent,binary,git,attempt,
     import_sha256:{bootstrap:r.bootstrap_sha256,runner:r.runner_sha256,binding:r.binding_sha256},
     node_sha256:r.node_sha256,platform:process.platform}));
 }
