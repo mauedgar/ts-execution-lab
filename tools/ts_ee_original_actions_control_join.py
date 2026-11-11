@@ -147,9 +147,11 @@ def reconcile(external: dict, marker_raw: bytes, provider_run: dict,
             guard.get("head_commit") == head and
             guard.get("head_tree") == tree,
             "ORIGINAL_GUARD_OBSERVATION_INVALID")
-    for key in expected_pairs:
-        require(guard.get(key) == external[key] if key != "marker_path"
-                else True, "GUARD_" + key.upper() + "_MISMATCH")
+    for key in ("execution_attempt", "repository", "ref",
+                "source_parent_commit", "source_parent_tree",
+                "workflow_blob", "control_request"):
+        require(guard.get(key) == external[key],
+                "GUARD_" + key.upper() + "_MISMATCH")
     require(guard.get("marker_blob") == external["marker_blob"] and
             guard.get("source_parent_commit") == external["source_parent_commit"] and
             guard.get("source_parent_tree") == external["source_parent_tree"] and
