@@ -41,7 +41,9 @@ def role_for_mode(mode: str, site: str) -> str:
 def assert_synthetic_catalog(conn) -> None:
     """Check the exact declared current-DB namespace-scoped catalog footprint.
 
-    This is NOT a full cluster/database-object audit. Non-namespaced catalogs,
+    This is NOT a complete frozen DDL definition/cluster audit. Constraint
+    expressions, column definitions and non-namespaced catalogs require
+    independent **native Control schema attestation** before physical entry;
     cross-database/public grants, user mappings and physical server identity
     need independent native Control attestation before any real writer launch.
     No source-only fake profile authorizes actual role/SQL provisioning.
@@ -57,7 +59,12 @@ def assert_synthetic_catalog(conn) -> None:
 
     objects = conn.execute(
         "SELECT n.nspname AS schema, c.relname AS name, c.relkind AS kind, "
-        "pg_catalog.pg_get_userbyid(c.relowner) AS owner "
+        "pg_catalog.pg_get_userbyid(c.relowner) AS owner, "
+        "c.relrowsecurity AS row_security, "
+        "c.relforcerowsecurity AS force_row_security, "
+        "c.relpersistence AS persistence, "
+        "c.relispartition AS is_partition, "
+        "c.reloptions AS options "
         "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
         "ON n.oid=c.relnamespace "
         "WHERE n.nspname IN ('public',%s) "
@@ -66,7 +73,9 @@ def assert_synthetic_catalog(conn) -> None:
     ).fetchall()
     expected = [
         {"schema": SCHEMA, "name": name, "kind": kind,
-         "owner": OWNER_ROLE}
+         "owner": OWNER_ROLE, "row_security": False,
+         "force_row_security": False, "persistence": "p",
+         "is_partition": False, "options": None}
         for name, kind in (
             ("events", "r"),
             ("events_pkey", "i"),
@@ -79,6 +88,31 @@ def assert_synthetic_catalog(conn) -> None:
         )
     ]
     require(objects == expected, "WRITER_FOREIGN_OBJECT_OR_OWNER")
+
+    # Named index presence is insufficient: an invalid, not-ready or
+    # non-live index does not enforce the same constraint semantics.
+    index_rows = conn.execute(
+        "SELECT c.relname AS name,i.indisvalid AS valid,"
+        "i.indisready AS ready,i.indislive AS live,"
+        "i.indisunique AS unique_index,i.indisprimary AS primary_index,"
+        "i.indisexclusion AS exclusion "
+        "FROM pg_catalog.pg_index i "
+        "JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid "
+        "JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace "
+        "WHERE n.nspname=%s ORDER BY c.relname", (SCHEMA,)
+    ).fetchall()
+    expected_indexes = [
+        {"name": name, "valid": True, "ready": True, "live": True,
+         "unique_index": True, "primary_index": primary, "exclusion": False}
+        for name, primary in (
+            ("events_pkey", True),
+            ("events_scope_event_hash_key", False),
+            ("head_pkey", True),
+            ("receipts_pkey", True),
+            ("receipts_scope_result_revision_key", False),
+        )
+    ]
+    require(index_rows == expected_indexes, "WRITER_INDEX_STATUS_NOT_EXACT")
 
     funcs = conn.execute(
         "SELECT n.nspname AS schema, p.proname AS name FROM pg_catalog.pg_proc p "

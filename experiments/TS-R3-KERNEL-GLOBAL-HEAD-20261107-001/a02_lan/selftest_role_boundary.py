@@ -1,4 +1,4 @@
-"""IR002 F01 + IR001 security regressions, source-only catalog/connect tests.
+"""IR003 SA01 + IR002 F01 + IR001 source-only security regressions.
 
 Includes fake psycopg dict_row-shaped queries and real lan_probe.connect()
 boundary, with psycopg.connect intercepted. NO real DB, role, SQL or network.
@@ -29,13 +29,26 @@ TABLE_REQUIRED = {
 ALL_ACTIONS = {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE",
                "REFERENCES", "TRIGGER"}
 EXPECTED_OBJECTS = [
-    {"schema":SCHEMA,"name":name,"kind":kind,"owner":OWNER_ROLE}
+    {"schema":SCHEMA,"name":name,"kind":kind,"owner":OWNER_ROLE,
+     "row_security":False,"force_row_security":False,
+     "persistence":"p","is_partition":False,"options":None}
     for name,kind in (
         ("events","r"),("events_pkey","i"),
         ("events_scope_event_hash_key","i"),
         ("head","r"),("head_pkey","i"),
         ("receipts","r"),("receipts_pkey","i"),
         ("receipts_scope_result_revision_key","i"),
+    )
+]
+EXPECTED_INDEXES = [
+    {"name":name,"valid":True,"ready":True,"live":True,
+     "unique_index":True,"primary_index":primary,"exclusion":False}
+    for name,primary in (
+        ("events_pkey",True),
+        ("events_scope_event_hash_key",False),
+        ("head_pkey",True),
+        ("receipts_pkey",True),
+        ("receipts_scope_result_revision_key",False),
     )
 ]
 EXPECTED_TYPES = [
@@ -83,6 +96,7 @@ class FakeConn:
         self.grant_options = {t:set() for t in TABLE_REQUIRED}
         self.schemas = [{"nspname":"public"},{"nspname":SCHEMA}]
         self.objects = [dict(v) for v in EXPECTED_OBJECTS]
+        self.indexes = [dict(v) for v in EXPECTED_INDEXES]
         self.functions = []
         self.column_acl = []
         self.types = [dict(v) for v in EXPECTED_TYPES]
@@ -127,6 +141,9 @@ class FakeConn:
         if "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n" in sql:
             assert params == (SCHEMA,)
             return Result(self.objects)
+        if "FROM pg_catalog.pg_index i" in sql:
+            assert params == (SCHEMA,)
+            return Result(self.indexes)
         if "FROM pg_catalog.pg_proc p" in sql:
             assert params == (SCHEMA,)
             return Result(self.functions)
@@ -198,7 +215,7 @@ def main():
 
     positive = FakeConn()
     assert_writer_boundary(positive)
-    assert len(positive.statements) == 67
+    assert len(positive.statements) == 68
     negatives=0
     for key in ("rolsuper","rolcreaterole","rolcreatedb","rolreplication",
                 "rolbypassrls","rolinherit"):
@@ -276,6 +293,23 @@ def main():
         f=FakeConn();setattr(f,field,1)
         negatives+=rejects(f,"WRITER_FOREIGN_"+label)
 
+    # IR003 SA01: unchanged object names must not conceal RLS, force-RLS,
+    # nonpermanent storage, partitioning or customized relation options.
+    for field,bad in (
+        ("row_security",True),("force_row_security",True),
+        ("persistence","u"),("is_partition",True),
+        ("options",["fillfactor=50"]),
+    ):
+        f=FakeConn();f.objects[0][field]=bad
+        negatives+=rejects(f,"WRITER_FOREIGN_OBJECT_OR_OWNER")
+    for field,bad in (
+        ("valid",False),("ready",False),("live",False),
+        ("unique_index",False),("primary_index",False),
+        ("exclusion",True),
+    ):
+        f=FakeConn();f.indexes[0][field]=bad
+        negatives+=rejects(f,"WRITER_INDEX_STATUS_NOT_EXACT")
+
     for table,required in TABLE_REQUIRED.items():
         for privilege in required:
             f=FakeConn();f.grants[table].remove(privilege)
@@ -294,7 +328,7 @@ def main():
     negatives+=rejects(f,"CONTROL_SYSTEM_FUNCTION_ACCESS_NOT_ATTESTED")
     f=FakeConn();f.control["grant_option"]=True
     negatives+=rejects(f,"CONTROL_SYSTEM_FUNCTION_ACCESS_NOT_ATTESTED")
-    assert negatives == 90, negatives
+    assert negatives == 101, negatives
 
     # Integration boundary: real lan_probe.site_uri + connect + runtime preflight
     # under patched psycopg.connect. No network/SQL beyond FakeConn.execute.
@@ -348,7 +382,7 @@ def main():
             else:
                 os.environ[key]=val
     print(json.dumps({
-        "status":"A02_LAN_IR002_CATALOG_REPAIR_NEGATIVES_PASS",
+        "status":"A02_LAN_IR003_RELATION_REPAIR_NEGATIVES_PASS",
         "positive_profiles":1,"negative_profiles":negatives,
         "mocked_lan_connect":"PASS",
         "postgresql":"NOT_RUN","sql_mutation":"NONE",
