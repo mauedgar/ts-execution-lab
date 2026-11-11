@@ -1,0 +1,79 @@
+name: TS R3 A02-LAN least-privilege source-only candidate 001
+on:
+  push:
+    branches:
+      - ee/ts-r3-a02-lan-lp-source-20261111-001
+    paths:
+      - .github/workflows/ts-r3-a02-lp-source-20261111-001.yml
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/role_boundary.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/lan_probe.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/selftest_role_boundary.py
+      - experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan/ROLE_POLICY_CANDIDATE.md
+permissions:
+  contents: read
+concurrency:
+  group: ts-r3-a02-lp-source-001-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source-only-role-boundary:
+    if: ${{ github.repository == 'mauedgar/ts-execution-lab' && github.event_name == 'push' && github.ref == 'refs/heads/ee/ts-r3-a02-lan-lp-source-20261111-001' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_NO_CONFIG: '1'
+    steps:
+      - name: Checkout frozen candidate without credential persistence
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pin four source blobs and enforce no credential environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan
+          test "$(git rev-parse "HEAD:$root/role_boundary.py")" = 81f868847e64ca3daa68662924459a856993b8e4
+          test "$(git rev-parse "HEAD:$root/lan_probe.py")" = 26e60009c33f2a6cb395559e9225f0f8eaf1b1c4
+          test "$(git rev-parse "HEAD:$root/selftest_role_boundary.py")" = 5223ad6a3957e030d04c663cac99fc0a516d5264
+          test "$(git rev-parse "HEAD:$root/ROLE_POLICY_CANDIDATE.md")" = 062a1cb7e6bc630829120c91a6275257d0be69b9
+          test -z "${TS_R3_NEON_CHILD_DSN-}"
+          test -z "${TS_R3_A02_LAN_PG_URI-}"
+          test -z "${DATABASE_URL-}"
+          test -z "${PGPASSWORD-}"
+      - name: Pin uv 0.13.7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+          enable-cache: false
+      - name: Isolated Python 3.15.2 source-only positive/negative qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          root=experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan
+          uv run --no-project --python 3.15.2 python -B "$root/selftest_role_boundary.py" > "$RUNNER_TEMP/role-source-only.json"
+          python3 - "$RUNNER_TEMP/role-source-only.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          x=json.loads(Path(sys.argv[1]).read_text())
+          assert x == {
+              'status':'A02_LAN_SOURCE_ONLY_ROLE_BOUNDARY_PASS',
+              'positive_profiles':1,'negative_profiles':36,
+              'postgresql':'NOT_RUN','writer_effect':'NONE',
+              'product_effect':'NONE','role_ddl':'NOT_RUN',
+          }, x
+          print('A02_LAN_ROLE_BOUNDARY_36_NEGATIVES_PASS')
+          PY
+      - name: Parse changed Python without executing original LAN writer
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.15.2 python -B - <<'PY'
+          import ast
+          from pathlib import Path
+          root=Path('experiments/TS-R3-KERNEL-GLOBAL-HEAD-20261107-001/a02_lan')
+          for name in ('role_boundary.py','lan_probe.py','selftest_role_boundary.py'):
+              ast.parse((root/name).read_text(encoding='utf-8'), filename=name)
+          print('A02_LAN_THREE_PYTHON_SOURCES_PARSE_PASS')
+          PY
+          echo A02_LAN_NO_POSTGRESQL_NO_NEON_NO_PRODUCT_EFFECT
