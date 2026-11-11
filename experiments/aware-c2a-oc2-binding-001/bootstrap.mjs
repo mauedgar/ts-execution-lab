@@ -48,7 +48,7 @@ export async function bootstrap(file,mode) {
   const parent=noLinks(r.scratch_parent,'SCRATCH_PARENT');
   const binary=noLinks(r.opencode_executable,'OPENCODE_BINARY');
   const git=noLinks(r.git_executable,'GIT_BINARY');
-  if(!inRoot(anchor,parent)||inRoot(repo,anchor)||inRoot(anchor,repo)
+  if(!inRoot(anchor,parent)||inRoot(repo,anchor)
     ||inRoot(repo,parent)||inRoot(parent,repo)||repo.toLowerCase()===parent.toLowerCase())
     throw Error('SCRATCH_SCOPE_OR_PRODUCT_OVERLAP');
   if(path.parse(anchor).root.toLowerCase()!==path.parse(parent).root.toLowerCase())
