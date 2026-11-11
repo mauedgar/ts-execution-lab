@@ -39,7 +39,7 @@ export async function bootstrap(file,mode) {
   exact(hash(fs.readFileSync(bindingFile)),r.binding_sha256,'BINDING_SOURCE');
   exact(process.version,r.node_version,'NODE_VERSION');
   exact(hash(fs.readFileSync(process.execPath)),r.node_sha256,'NODE_BINARY');
-  exact(fs.realpathSync.native(process.execPath).toLowerCase(),fs.realpathSync.native(r.node_executable).toLowerCase(),'NODE_EXECUTABLE');
+  exact(noLinks(process.execPath,'ACTIVE_NODE_EXECUTABLE').toLowerCase(),noLinks(r.node_executable,'REQUESTED_NODE_EXECUTABLE').toLowerCase(),'NODE_EXECUTABLE');
   exact(os.hostname(),r.expected_host,'HOST_IDENTITY');
   if(process.platform!=='win32')throw Error('HOST_PLATFORM_NOT_WINDOWS');
   if(r.expected_host!=='DESKTOP-DJLBEQH')throw Error('HOST_NOT_QUALIFIED_IN_ORIGINAL_CONTEXT');
@@ -63,15 +63,24 @@ export async function bootstrap(file,mode) {
   const attempt=path.join(parent,r.attempt_id);
   if(mode==='--observe'){
     if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
-    const results={};
+    const results={};const corrupt=[];
     for(const key of ['START.json','DISPATCH.json','NATIVE_META.json','RESULT.json']){
       const p=path.join(attempt,key);
-      results[key]=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):null;
+      if(!fs.existsSync(p)){results[key]=null;continue}
+      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('REPARSE');results[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
+      catch{results[key]=null;corrupt.push(key)}
     }
-    return {mode:'OBSERVE_ONLY',attempt_id:r.attempt_id,
-      status:results['RESULT.json']?.status??(results['DISPATCH.json']?'UNKNOWN':'BLOCKED_PRECONDITION'),
-      effect_state:results['RESULT.json']?.effect_state??(results['DISPATCH.json']?'UNKNOWN':'NONE'),
-      receipt_exists:Boolean(results['RESULT.json']),dispatched:Boolean(results['DISPATCH.json'])};
+    const start=results['START.json'],end=results['RESULT.json'];
+    const same=(x)=>x&&x.attempt_id===r.attempt_id&&x.operation_id===r.operation_id
+      &&x.product===r.product&&x.source?.head===r.expected_head&&x.source?.tree===r.expected_tree
+      &&x.bundle?.binding===r.binding_sha256&&x.bundle?.runner===r.runner_sha256;
+    const valid=start&&same(start)&&end&&same(end)&&end.native_dispatched===Boolean(results['DISPATCH.json']);
+    const uncertain=corrupt.length>0||!start||!valid;
+    return {mode:'OBSERVE_ONLY',attempt_id:r.attempt_id,operation_id:r.operation_id,
+      status:uncertain?'UNKNOWN':end.status,effect_state:uncertain?'UNKNOWN':end.effect_state,
+      receipt_exists:Boolean(end),dispatched:Boolean(results['DISPATCH.json']),
+      corrupt_files:corrupt,original_start_verified:Boolean(start&&same(start)),
+      original_result_verified:Boolean(valid)};
   }
   if(fs.existsSync(attempt))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
   const {assertRequest}=await import(pathToFileURL(bindingFile).href);
