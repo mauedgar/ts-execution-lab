@@ -223,27 +223,31 @@ def connect(mode: str):
         uri, autocommit=True, row_factory=dict_row, connect_timeout=5,
         application_name="ts-a02-lan-" + mode,
     )
-    require(cn.execute("SHOW server_version").fetchone()["server_version"].startswith("16."),
-            "PG16_REQUIRED")
-    ident = cn.execute(
-        "SELECT d.datname AS db, current_user AS role, session_user AS session_role,"
-        "pg_get_userbyid(d.datdba) AS db_owner, d.datistemplate AS template "
-        "FROM pg_catalog.pg_database d WHERE d.datname=current_database()"
-    ).fetchone()
-    require(ident == {"db": DATABASE, "role": role, "session_role": role,
-                      "db_owner": OWNER_ROLE, "template": False},
-            "SYNTHETIC_DB_ROLE_OWNER_MISMATCH")
-    if role == WRITER_ROLE:
-        assert_writer_boundary(cn)  # fail closed before any writer action
-    expected_system_id = os.getenv("TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER", "")
-    require(re.fullmatch(r"[0-9]{16,20}", expected_system_id) is not None,
-            "EXTERNAL_DB_SYSTEM_ID_ATTESTATION_REQUIRED")
-    system = cn.execute(
-        "SELECT system_identifier::text AS id FROM pg_catalog.pg_control_system()"
-    ).fetchone()
-    require(system is not None and system["id"] == expected_system_id,
-            "DISPOSABLE_SERVER_ID_MISMATCH")
-    return cn, site
+    try:
+        require(cn.execute("SHOW server_version").fetchone()["server_version"].startswith("16."),
+                "PG16_REQUIRED")
+        ident = cn.execute(
+            "SELECT d.datname AS db, current_user AS role, session_user AS session_role,"
+            "pg_get_userbyid(d.datdba) AS db_owner, d.datistemplate AS template "
+            "FROM pg_catalog.pg_database d WHERE d.datname=current_database()"
+        ).fetchone()
+        require(ident == {"db": DATABASE, "role": role, "session_role": role,
+                          "db_owner": OWNER_ROLE, "template": False},
+                "SYNTHETIC_DB_ROLE_OWNER_MISMATCH")
+        if role == WRITER_ROLE:
+            assert_writer_boundary(cn)  # fail closed before any writer action
+        expected_system_id = os.getenv("TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER", "")
+        require(re.fullmatch(r"[0-9]{16,20}", expected_system_id) is not None,
+                "EXTERNAL_DB_SYSTEM_ID_ATTESTATION_REQUIRED")
+        system = cn.execute(
+            "SELECT system_identifier::text AS id FROM pg_catalog.pg_control_system()"
+        ).fetchone()
+        require(system is not None and system["id"] == expected_system_id,
+                "DISPOSABLE_SERVER_ID_MISMATCH")
+        return cn, site
+    except BaseException:
+        cn.close()  # fail-closed preflight must not leak an opened connection
+        raise
 
 
 def user_schemas(conn):
