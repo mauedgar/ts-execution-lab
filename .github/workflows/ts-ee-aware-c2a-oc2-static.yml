@@ -1,0 +1,28 @@
+name: ts-ee-aware-c2a-oc2-static
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/aware-c2a-oc2-binding-001/**'
+      - '.github/workflows/ts-ee-aware-c2a-oc2-static.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  static-native-binder-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Use Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Parse native runner
+        run: node --check experiments/aware-c2a-oc2-binding-001/qualify-native.mjs
+      - name: Run deterministic nonproduct negative tests
+        run: node --test experiments/aware-c2a-oc2-binding-001/binding.test.mjs
