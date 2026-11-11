@@ -22,6 +22,8 @@ from urllib.parse import urlsplit, parse_qs
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from a11_real_pg16_port.worker import SCOPE, parse_proposal  # exact original A11 parser
+from a02_lan.role_boundary import (OWNER_ROLE, WRITER_ROLE, role_for_mode,
+                                   assert_writer_boundary)
 from ts_global.bridge import (
     EffectUnknown, StorageRejected, initialize, read, apply, reconcile,
 )
@@ -192,7 +194,7 @@ def asserted_host_identity():
     return observed, attempt
 
 
-def site_uri():
+def site_uri(mode: str):
     side = os.getenv("TS_R3_A02_SITE")
     require(side in ("NOTEBOOK", "DESKTOP"), "EXACT_PHYSICAL_SITE_REQUIRED")
     asserted_host_identity()
@@ -200,7 +202,9 @@ def site_uri():
     require(uri.startswith("postgresql://") and len(uri) < 400,
             "EXACT_SYNTHETIC_URI_REQUIRED")
     p = urlsplit(uri)
-    require(p.scheme == "postgresql" and p.username == ROLE and
+    expected_role = role_for_mode(mode, side)
+    require(ROLE == OWNER_ROLE, "BOOTSTRAP_ROLE_SOURCE_MISMATCH")
+    require(p.scheme == "postgresql" and p.username == expected_role and
             p.password is not None and len(p.password) >= 24 and
             p.path == "/" + DATABASE and p.fragment == "",
             "SYNTHETIC_ROLE_DB_REQUIRED")
@@ -213,7 +217,8 @@ def site_uri():
 
 def connect(mode: str):
     preflight_runtime()
-    uri, site = site_uri()
+    uri, site = site_uri(mode)
+    role = role_for_mode(mode, site)
     cn = psycopg.connect(
         uri, autocommit=True, row_factory=dict_row, connect_timeout=5,
         application_name="ts-a02-lan-" + mode,
@@ -225,9 +230,11 @@ def connect(mode: str):
         "pg_get_userbyid(d.datdba) AS db_owner, d.datistemplate AS template "
         "FROM pg_catalog.pg_database d WHERE d.datname=current_database()"
     ).fetchone()
-    require(ident == {"db": DATABASE, "role": ROLE, "session_role": ROLE,
-                      "db_owner": ROLE, "template": False},
+    require(ident == {"db": DATABASE, "role": role, "session_role": role,
+                      "db_owner": OWNER_ROLE, "template": False},
             "SYNTHETIC_DB_ROLE_OWNER_MISMATCH")
+    if role == WRITER_ROLE:
+        assert_writer_boundary(cn)  # fail closed before any writer action
     expected_system_id = os.getenv("TS_R3_A02_EXPECTED_SYSTEM_IDENTIFIER", "")
     require(re.fullmatch(r"[0-9]{16,20}", expected_system_id) is not None,
             "EXTERNAL_DB_SYSTEM_ID_ATTESTATION_REQUIRED")
@@ -283,7 +290,8 @@ def assert_fresh_disposable_catalog(conn):
     roles = [r["rolname"] for r in conn.execute(
         "SELECT rolname FROM pg_catalog.pg_roles "
         "WHERE rolname NOT LIKE 'pg\\_%' ESCAPE '\\' ORDER BY rolname").fetchall()]
-    require(set(roles) in ({ROLE}, {ROLE, "postgres"}) and
+    require(set(roles) in ({OWNER_ROLE, WRITER_ROLE},
+                           {OWNER_ROLE, WRITER_ROLE, "postgres"}) and
             len(roles) == len(set(roles)), "FOREIGN_DATABASE_ROLE_PRESENT")
     databases = [r["datname"] for r in conn.execute(
         "SELECT datname FROM pg_catalog.pg_database "
