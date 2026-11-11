@@ -31,7 +31,6 @@ CONTROL = re.compile(
 )
 LIMIT = 2_500_000
 PAGE = 100
-MAX_PAGES = 8
 REQUEST_FIELDS = frozenset({
     "version", "scope", "qualification_attempt", "source_parent_commit",
     "source_parent_tree", "workflow_path", "workflow_blob",
@@ -223,23 +222,36 @@ def git_tree(fetch, sha):
     need(obj.get("sha") == sha and obj.get("truncated") is False and
          type(obj.get("tree")) is list and len(obj["tree"]) <= 4000,
          "NATIVE_TREE_TRUNCATED")
-    entries = {}
+    complete = {}
     for row in obj["tree"]:
         need(type(row) is dict and safe_path(row.get("path")) and
              type(row.get("sha")) is str and
              HEX.fullmatch(row["sha"]) is not None and
              type(row.get("mode")) is str and type(row.get("type")) is str,
              "NATIVE_TREE_ENTRY_INVALID")
-        # Recursive Git tree lists both leaf blobs AND ancestor tree nodes.
-        # Adding a marker necessarily changes parent directory tree IDs;
-        # compare complete leaf objects, not directory SHA changes.
-        if row["type"] == "tree":
-            continue
-        need(row["type"] == "blob", "NATIVE_UNSUPPORTED_GIT_ENTRY")
         name = row["path"]
-        need(name not in entries, "NATIVE_TREE_DUPLICATE_PATH")
-        entries[name] = (row["mode"], row["type"], row["sha"])
-    return entries
+        need(name not in complete, "NATIVE_TREE_DUPLICATE_PATH")
+        kind, mode = row["type"], row["mode"]
+        need((kind == "tree" and mode == "040000") or
+             (kind == "blob" and mode in ("100644", "100755", "120000")) or
+             (kind == "commit" and mode == "160000"),
+             "NATIVE_TREE_TYPE_MODE_INVALID")
+        complete[name] = (mode, kind, row["sha"])
+    # Native recursive trees must not contain a blob-directory collision,
+    # a path with missing ancestry, or an entry under a non-tree parent.
+    for name, (_, kind, _) in complete.items():
+        ancestors = name.split("/")[:-1]
+        for i in range(1, len(ancestors) + 1):
+            parent = "/".join(ancestors[:i])
+            need(parent in complete and complete[parent][1] == "tree",
+                 "NATIVE_TREE_NONCANONICAL_HIERARCHY")
+        if kind == "tree":
+            need(any(other.startswith(name + "/") for other in complete),
+                 "NATIVE_EMPTY_OR_ORPHAN_TREE")
+    # Ancestor tree Git SHAs legitimately change when a marker is added.
+    # Compare the complete non-tree leaf set; no leaf/edge ambiguity remains.
+    return {name: entry for name, entry in complete.items()
+            if entry[1] != "tree"}
 
 
 def exact_marker_delta(old, new, target):
@@ -255,75 +267,33 @@ def exact_marker_delta(old, new, target):
          "NATIVE_WORKFLOW_NOT_FROZEN")
 
 
-def has_next(link, page, branch):
-    need(type(link) is str and len(link) < 8192,
-         "NATIVE_LINK_HEADER_INVALID")
-    if not link:
-        return False
-    found = {}
-    for chunk in link.split(","):
-        m = re.fullmatch(
-            r'\s*<([^>]+)>;\s*rel="(next|prev|first|last)"\s*', chunk
-        )
-        need(m is not None and m.group(2) not in found,
-             "NATIVE_LINK_HEADER_AMBIGUOUS")
-        found[m.group(2)] = m.group(1)
-    if "next" not in found:
-        return False
-    p = urlparse(found["next"])
-    args = parse_qs(p.query)
-    need(p.scheme == "https" and p.netloc == "api.github.com" and
-         p.path == f"/repos/{REPO}/actions/runs" and
-         args.get("branch") == [branch] and
-         args.get("per_page") == [str(PAGE)] and
-         args.get("page") == [str(page + 1)],
-         "NATIVE_NEXT_PAGE_NOT_CONTIGUOUS")
-    return True
-
-
 def all_branch_runs(fetch, branch):
+    """Original-identity contract supports ONE run per isolated branch only.
+
+    A second run requires a NEW branch/request/ExecutionAttempt. We do not
+    pretend to qualify 101+ GitHub run pagination or general branch history.
+    """
     need(REF.fullmatch("refs/heads/" + branch) is not None,
          "NATIVE_BRANCH_INVALID")
-    ids, total, first_ids, page = [], None, None, 1
-    while True:
-        need(page <= MAX_PAGES, "NATIVE_RUNS_PAGES_EXCEED_BOUND")
-        path = (f"/repos/{REPO}/actions/runs?branch={quote(branch, safe='')}"
-                f"&per_page={PAGE}&page={page}")
-        data, header = get(fetch, path)
-        count, runs = data.get("total_count"), data.get("workflow_runs")
-        need(type(count) is int and 0 <= count <= PAGE * MAX_PAGES
-             and type(runs) is list and len(runs) <= PAGE,
-             "NATIVE_RUN_PAGE_SHAPE_INVALID")
-        if total is None:
-            total = count
-        need(total == count, "NATIVE_RUN_PAGES_INCONSISTENT_TOTAL")
-        page_ids = []
-        for run in runs:
-            need(type(run) is dict and type(run.get("id")) is int
-                 and run["id"] > 0 and run.get("head_branch") == branch,
-                 "NATIVE_RUN_PAGE_FOREIGN_ENTRY")
-            page_ids.append(run["id"])
-        need(len(set(page_ids)) == len(page_ids) and
-             not set(page_ids) & set(ids),
-             "NATIVE_RUN_PAGE_DUPLICATES")
-        if page == 1:
-            first_ids = page_ids
-        ids.extend(page_ids)
-        following = has_next(header.get("link", ""), page, branch)
-        if following:
-            need(len(page_ids) == PAGE and len(ids) < total,
-                 "NATIVE_RUN_PAGE_INCONSISTENT_NEXT")
-            page += 1
-        else:
-            need(len(ids) == total, "NATIVE_RUN_PAGE_INCOMPLETE")
-            break
-    first, _ = get(fetch, f"/repos/{REPO}/actions/runs?"
-                   f"branch={quote(branch, safe='')}&per_page={PAGE}&page=1")
-    need(first.get("total_count") == total and
-         type(first.get("workflow_runs")) is list and
-         [x.get("id") for x in first["workflow_runs"]] == first_ids,
+    path = (f"/repos/{REPO}/actions/runs?branch={quote(branch, safe='')}"
+            f"&per_page={PAGE}&page=1")
+    first, headers = get(fetch, path)
+    count, records = first.get("total_count"), first.get("workflow_runs")
+    need(type(count) is int and type(records) is list,
+         "NATIVE_RUN_PAGE_SHAPE_INVALID")
+    need(count == 1 and len(records) == 1,
+         "NATIVE_BRANCH_NOT_SINGLE_RUN")
+    need(headers.get("link", "") == "",
+         "NATIVE_UNEXPECTED_PAGINATION_LINK")
+    run = records[0]
+    need(type(run) is dict and type(run.get("id")) is int and
+         run["id"] > 0 and run.get("head_branch") == branch,
+         "NATIVE_RUN_PAGE_FOREIGN_ENTRY")
+    # Observe the SAME provider page again and compare all fields.
+    again, new_headers = get(fetch, path)
+    need(again == first and new_headers.get("link", "") == "",
          "NATIVE_RUN_LIST_CHANGED_DURING_READ")
-    return ids
+    return [run["id"]]
 
 
 def acquire(fetch, req):

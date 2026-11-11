@@ -230,6 +230,42 @@ def main():
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
                     lambda x: x.update(truncated=True)),
              "NATIVE_TREE_TRUNCATED")
+    run_case("DUPLICATE_TREE_DIRECTORY", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"].append(deepcopy(x["tree"][0]))),
+             "NATIVE_TREE_DUPLICATE_PATH")
+    run_case("MALFORMED_TREE_MODE", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"][0].update(mode="100644")),
+             "NATIVE_TREE_TYPE_MODE_INVALID")
+    run_case("ORPHAN_EMPTY_TREE", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"].append({
+                        "path": "orphan", "mode": "040000",
+                        "type": "tree", "sha": "1"*40
+                    })),
+             "NATIVE_EMPTY_OR_ORPHAN_TREE")
+    run_case("BLOB_DIRECTORY_COLLISION", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"].append({
+                        "path": "README.md/child", "mode": "100644",
+                        "type": "blob", "sha": "1"*40
+                    })),
+             "NATIVE_TREE_NONCANONICAL_HIERARCHY")
+    run_case("UNEXPECTED_SYMLINK", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"].append({
+                        "path": "new-symlink", "mode": "120000",
+                        "type": "blob", "sha": "1"*40
+                    })),
+             "NATIVE_GIT_DELTA_NOT_MARKER_ONLY")
+    run_case("UNEXPECTED_SUBMODULE", lambda u, g:
+             modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
+                    lambda x: x["tree"].append({
+                        "path": "new-submodule", "mode": "160000",
+                        "type": "commit", "sha": "1"*40
+                    })),
+             "NATIVE_GIT_DELTA_NOT_MARKER_ONLY")
     run_case("HIDDEN_EXTRA_MODIFIED", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
                     lambda x: x["tree"][3].update(sha="1"*40)),
@@ -244,10 +280,10 @@ def main():
     run_case("MARKER_DELETED", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
                     lambda x: x["tree"].pop()),
-             "NATIVE_GIT_DELTA_NOT_MARKER_ONLY")
+             "NATIVE_EMPTY_OR_ORPHAN_TREE")
     run_case("MARKER_RENAMED", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
-                    lambda x: x["tree"][-1].update(path="renamed.json")),
+                    lambda x: x["tree"][-1].update(path=".github/ts-ee-original-dispatch/renamed.json")),
              "NATIVE_GIT_DELTA_NOT_MARKER_ONLY")
     run_case("MARKER_WRONG_MODE", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
@@ -256,24 +292,24 @@ def main():
     run_case("INCOMPLETE_RUN_PAGE", lambda u, g:
              modify(u, RUNS_ENDPOINT,
                     lambda x: x.update(total_count=2)),
-             "NATIVE_RUN_PAGE_INCOMPLETE")
+             "NATIVE_BRANCH_NOT_SINGLE_RUN")
     run_case("DUPLICATE_RUN_IDS", lambda u, g:
              modify(u, RUNS_ENDPOINT, lambda x: x.update(
                  total_count=2, workflow_runs=[
                      x["workflow_runs"][0], x["workflow_runs"][0],
                  ])),
-             "NATIVE_RUN_PAGE_DUPLICATES")
+             "NATIVE_BRANCH_NOT_SINGLE_RUN")
     run_case("SPOOFED_NEXT_PAGE", lambda u, g:
              u.__setitem__(RUNS_ENDPOINT, (u[RUNS_ENDPOINT][0], {
                  "link": "<https://api.github.com/repos/" + REPO +
                          "/actions/runs?branch=ee%2Funknown&per_page=100&page=2>; rel=\"next\""
              })),
-             "NATIVE_NEXT_PAGE_NOT_CONTIGUOUS")
+             "NATIVE_UNEXPECTED_PAGINATION_LINK")
     run_case("MALFORMED_NEXT_LINK", lambda u, g:
              u.__setitem__(RUNS_ENDPOINT, (u[RUNS_ENDPOINT][0], {
                  "link": "https://evil.invalid/run?page=2"
              })),
-             "NATIVE_LINK_HEADER_AMBIGUOUS")
+             "NATIVE_UNEXPECTED_PAGINATION_LINK")
     run_case("FOREIGN_RUN_BRANCH", lambda u, g:
              modify(u, RUNS_ENDPOINT,
                     lambda x: x["workflow_runs"][0].update(
@@ -297,7 +333,7 @@ def main():
         print("NEGATIVE_PASS_MISSING_AUTHENTICATED_TOKEN")
     else:
         raise AssertionError("FALSE_ACCEPT_UNAUTHENTICATED_NATIVE_MODE")
-    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_17_NEGATIVES_PASS")
+    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_23_NEGATIVES_PASS")
 
 
 if __name__ == "__main__":
