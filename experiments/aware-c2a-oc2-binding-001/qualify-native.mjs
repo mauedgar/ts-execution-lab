@@ -51,7 +51,7 @@ export async function execute(ctx) {
   if(fs.existsSync(root))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
   fs.mkdirSync(root,{mode:0o700,recursive:false});
   const permitted=path.join(root,'ALLOW_ONLY.txt'),blocked=path.join(root,'BLOCKED.txt');
-  const commands=gitCommands(ctx.repo),policy=makePolicy(r.agent,permitted,commands),env=scrubbedEnv(policy);
+  const commands=gitCommands(ctx.git,ctx.repo),policy=makePolicy(r.agent,permitted,commands),env=scrubbedEnv(policy);
   const subject={schema:'ts-ee-oc2-c2a-native-result/v2',operation_id:r.operation_id,attempt_id:r.attempt_id,
     product:r.product,authority_class:r.authority_class,
     source:{head:r.expected_head,tree:r.expected_tree,origin:r.expected_origin},
