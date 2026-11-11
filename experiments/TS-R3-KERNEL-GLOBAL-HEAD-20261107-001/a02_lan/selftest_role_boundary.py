@@ -1,4 +1,4 @@
-"""IR001 F01-F03/A01-A02 source-only role/catalog/connect negative tests.
+"""IR002 F01 + IR001 security regressions, source-only catalog/connect tests.
 
 Includes fake psycopg dict_row-shaped queries and real lan_probe.connect()
 boundary, with psycopg.connect intercepted. NO real DB, role, SQL or network.
@@ -28,8 +28,33 @@ TABLE_REQUIRED = {
 }
 ALL_ACTIONS = {"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE",
                "REFERENCES", "TRIGGER"}
-EXPECTED_OBJECTS = [{"schema": SCHEMA, "name": n, "kind": "r",
-                     "owner": OWNER_ROLE} for n in ("events", "head", "receipts")]
+EXPECTED_OBJECTS = [
+    {"schema":SCHEMA,"name":name,"kind":kind,"owner":OWNER_ROLE}
+    for name,kind in (
+        ("events","r"),("events_pkey","i"),
+        ("events_scope_event_hash_key","i"),
+        ("head","r"),("head_pkey","i"),
+        ("receipts","r"),("receipts_pkey","i"),
+        ("receipts_scope_result_revision_key","i"),
+    )
+]
+EXPECTED_TYPES = [
+    {"schema":SCHEMA,"name":"_"+name,"kind":"b","category":"A",
+     "relation":None,"element":name,"defined":True}
+    for name in ("events","head","receipts")
+] + [
+    {"schema":SCHEMA,"name":name,"kind":"c","category":"C",
+     "relation":name,"element":None,"defined":True}
+    for name in ("events","head","receipts")
+]
+CATALOG_FIELDS = {
+    "pg_operator":"OPERATOR","pg_collation":"COLLATION",
+    "pg_conversion":"CONVERSION","pg_opclass":"OPCLASS",
+    "pg_opfamily":"OPFAMILY","pg_ts_config":"TS_CONFIG",
+    "pg_ts_dict":"TS_DICTIONARY","pg_ts_parser":"TS_PARSER",
+    "pg_ts_template":"TS_TEMPLATE","pg_statistic_ext":"STATISTICS",
+}
+
 
 
 class Result:
@@ -60,6 +85,10 @@ class FakeConn:
         self.objects = [dict(v) for v in EXPECTED_OBJECTS]
         self.functions = []
         self.column_acl = []
+        self.types = [dict(v) for v in EXPECTED_TYPES]
+        self.catalog_counts = {key:0 for key in CATALOG_FIELDS}
+        self.trigger_count = 0
+        self.policy_count = 0
         self.roles = [{"rolname":OWNER_ROLE},{"rolname":WRITER_ROLE},
                       {"rolname":"postgres"}]
         self.databases = [{"datname":"postgres"},{"datname":DATABASE}]
@@ -104,6 +133,19 @@ class FakeConn:
         if "FROM pg_catalog.pg_attribute a" in sql:
             assert params == (SCHEMA,)
             return Result(self.column_acl)
+        if "FROM pg_catalog.pg_type t" in sql:
+            assert params == (SCHEMA,)
+            return Result(self.types)
+        for catalog in CATALOG_FIELDS:
+            if "FROM pg_catalog." + catalog + " WHERE " in sql:
+                assert params == (SCHEMA,)
+                return Result({"n":self.catalog_counts[catalog]})
+        if "FROM pg_catalog.pg_trigger t " in sql:
+            assert params == (SCHEMA,)
+            return Result({"n":self.trigger_count})
+        if "FROM pg_catalog.pg_policy p " in sql:
+            assert params == (SCHEMA,)
+            return Result({"n":self.policy_count})
         if "SELECT rolname FROM pg_catalog.pg_roles" in sql:
             return Result(self.roles)
         if "SELECT datname FROM pg_catalog.pg_database" in sql:
@@ -156,7 +198,7 @@ def main():
 
     positive = FakeConn()
     assert_writer_boundary(positive)
-    assert len(positive.statements) == 54
+    assert len(positive.statements) == 67
     negatives=0
     for key in ("rolsuper","rolcreaterole","rolcreatedb","rolreplication",
                 "rolbypassrls","rolinherit"):
@@ -197,6 +239,43 @@ def main():
         f=FakeConn();mutator(f)
         negatives+=rejects(f,code)
 
+    # IR002 F01: reject implicit-object footprint deviations and all catalog
+    # families previously invisible to the source security guard.
+    new_object_cases = (
+        ("WRITER_FOREIGN_OBJECT_OR_OWNER",
+         lambda f: f.objects.append({"schema":SCHEMA,"name":"rogue_composite",
+                                     "kind":"c","owner":OWNER_ROLE})),
+        ("WRITER_FOREIGN_OBJECT_OR_OWNER",
+         lambda f: f.objects.append({"schema":SCHEMA,"name":"rogue_index",
+                                     "kind":"i","owner":OWNER_ROLE})),
+        ("WRITER_FOREIGN_OBJECT_OR_OWNER",
+         lambda f: f.objects[1].update(owner=WRITER_ROLE)),
+    )
+    for code,mutator in new_object_cases:
+        f=FakeConn();mutator(f)
+        negatives+=rejects(f,code)
+    for name,kind,category in (
+        ("bad_enum","e","E"),("bad_domain","d","U"),
+        ("bad_range","r","R"),("bad_base","b","U"),
+        ("bad_pseudo","p","P"),
+    ):
+        f=FakeConn()
+        f.types.append({"schema":"public","name":name,"kind":kind,
+                        "category":category,"relation":None,"element":None,
+                        "defined":True})
+        negatives+=rejects(f,"WRITER_FOREIGN_USER_TYPE")
+    f=FakeConn();f.types.pop(1)
+    negatives+=rejects(f,"WRITER_FOREIGN_USER_TYPE")
+    for catalog,label in CATALOG_FIELDS.items():
+        f=FakeConn();f.catalog_counts[catalog]=1
+        negatives+=rejects(f,"WRITER_FOREIGN_"+label)
+    for field,label in (
+        ("trigger_count","USER_TRIGGER"),
+        ("policy_count","ROW_POLICY"),
+    ):
+        f=FakeConn();setattr(f,field,1)
+        negatives+=rejects(f,"WRITER_FOREIGN_"+label)
+
     for table,required in TABLE_REQUIRED.items():
         for privilege in required:
             f=FakeConn();f.grants[table].remove(privilege)
@@ -215,7 +294,7 @@ def main():
     negatives+=rejects(f,"CONTROL_SYSTEM_FUNCTION_ACCESS_NOT_ATTESTED")
     f=FakeConn();f.control["grant_option"]=True
     negatives+=rejects(f,"CONTROL_SYSTEM_FUNCTION_ACCESS_NOT_ATTESTED")
-    assert negatives == 69, negatives
+    assert negatives == 90, negatives
 
     # Integration boundary: real lan_probe.site_uri + connect + runtime preflight
     # under patched psycopg.connect. No network/SQL beyond FakeConn.execute.
@@ -269,7 +348,7 @@ def main():
             else:
                 os.environ[key]=val
     print(json.dumps({
-        "status":"A02_LAN_IR001_SOURCE_REPAIR_NEGATIVES_PASS",
+        "status":"A02_LAN_IR002_CATALOG_REPAIR_NEGATIVES_PASS",
         "positive_profiles":1,"negative_profiles":negatives,
         "mocked_lan_connect":"PASS",
         "postgresql":"NOT_RUN","sql_mutation":"NONE",

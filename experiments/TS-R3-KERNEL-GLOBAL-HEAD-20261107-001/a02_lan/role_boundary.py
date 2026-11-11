@@ -1,7 +1,7 @@
 """NONPRODUCT source-only PG16 security boundary, no SQL/role/host mutations.
 
 Post-IR001 repair: separate Control witness from A/B writers, fail closed on
-unexpected user objects, explicit column ACLs, grant options, and pg_control
+unexpected user types/operators/collations/objects, column ACLs, grant options, and pg_control
 EXECUTE privilege. This cannot replace independently verified physical
 PostgreSQL roles, cluster identity, ACL/Tailnet, original effects or IR.
 """
@@ -39,10 +39,12 @@ def role_for_mode(mode: str, site: str) -> str:
 
 
 def assert_synthetic_catalog(conn) -> None:
-    """Require a virgin synthetic-only database before accepting writer access.
+    """Check the exact declared current-DB namespace-scoped catalog footprint.
 
-    This is *current DB* catalog footprint only, not cross-database security,
-    authenticated remote host proof, owner role creation or runtime admission.
+    This is NOT a full cluster/database-object audit. Non-namespaced catalogs,
+    cross-database/public grants, user mappings and physical server identity
+    need independent native Control attestation before any real writer launch.
+    No source-only fake profile authorizes actual role/SQL provisioning.
     """
     schemas = conn.execute(
         "SELECT nspname FROM pg_catalog.pg_namespace "
@@ -59,11 +61,23 @@ def assert_synthetic_catalog(conn) -> None:
         "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
         "ON n.oid=c.relnamespace "
         "WHERE n.nspname IN ('public',%s) "
-        "AND c.relkind IN ('r','p','v','m','f','S') "
+        "AND c.relkind IN ('r','p','v','m','f','S','i','I','c') "
         "ORDER BY n.nspname,c.relname", (SCHEMA,)
     ).fetchall()
-    expected = [{"schema": SCHEMA, "name": n, "kind": "r",
-                 "owner": OWNER_ROLE} for n in ("events", "head", "receipts")]
+    expected = [
+        {"schema": SCHEMA, "name": name, "kind": kind,
+         "owner": OWNER_ROLE}
+        for name, kind in (
+            ("events", "r"),
+            ("events_pkey", "i"),
+            ("events_scope_event_hash_key", "i"),
+            ("head", "r"),
+            ("head_pkey", "i"),
+            ("receipts", "r"),
+            ("receipts_pkey", "i"),
+            ("receipts_scope_result_revision_key", "i"),
+        )
+    ]
     require(objects == expected, "WRITER_FOREIGN_OBJECT_OR_OWNER")
 
     funcs = conn.execute(
@@ -83,6 +97,80 @@ def assert_synthetic_catalog(conn) -> None:
         (SCHEMA,)
     ).fetchall()
     require(column_acl == [], "WRITER_COLUMN_LEVEL_GRANT_PRESENT")
+
+    # PostgreSQL implicitly generates a composite row type and its array
+    # type for each admitted table. Freeze their exact expected footprint;
+    # reject standalone enum/domain/range/base/composite types, including any
+    # user-defined type in public. Built-in types live in pg_catalog.
+    types = conn.execute(
+        "SELECT n.nspname AS schema,t.typname AS name,"
+        "t.typtype AS kind,t.typcategory AS category,"
+        "r.relname AS relation,elem.typname AS element,"
+        "t.typisdefined AS defined "
+        "FROM pg_catalog.pg_type t "
+        "JOIN pg_catalog.pg_namespace n ON n.oid=t.typnamespace "
+        "LEFT JOIN pg_catalog.pg_class r ON r.oid=t.typrelid "
+        "LEFT JOIN pg_catalog.pg_type elem ON elem.oid=t.typelem "
+        "WHERE n.nspname IN ('public',%s) "
+        "ORDER BY n.nspname,t.typname", (SCHEMA,)
+    ).fetchall()
+    expected_types = []
+    for table in ("events", "head", "receipts"):
+        expected_types.append({
+            "schema": SCHEMA, "name": "_" + table, "kind": "b",
+            "category": "A", "relation": None, "element": table,
+            "defined": True,
+        })
+    for table in ("events", "head", "receipts"):
+        expected_types.append({
+            "schema": SCHEMA, "name": table, "kind": "c",
+            "category": "C", "relation": table, "element": None,
+            "defined": True,
+        })
+    require(types == expected_types, "WRITER_FOREIGN_USER_TYPE")
+
+    # Fixed catalog identifiers from the code allowlist, not user input.
+    # Every one of these namespace-scoped object categories must be empty
+    # in public and in the synthetic schema; a foreign operator or collation
+    # cannot hide behind an otherwise exact table/row-type footprint.
+    catalog_allowlist = (
+        ("pg_operator", "oprnamespace", "OPERATOR"),
+        ("pg_collation", "collnamespace", "COLLATION"),
+        ("pg_conversion", "connamespace", "CONVERSION"),
+        ("pg_opclass", "opcnamespace", "OPCLASS"),
+        ("pg_opfamily", "opfnamespace", "OPFAMILY"),
+        ("pg_ts_config", "cfgnamespace", "TS_CONFIG"),
+        ("pg_ts_dict", "dictnamespace", "TS_DICTIONARY"),
+        ("pg_ts_parser", "prsnamespace", "TS_PARSER"),
+        ("pg_ts_template", "tmplnamespace", "TS_TEMPLATE"),
+        ("pg_statistic_ext", "stxnamespace", "STATISTICS"),
+    )
+    for catalog, ns_column, label in catalog_allowlist:
+        observed = conn.execute(
+            "SELECT count(*) AS n FROM pg_catalog." + catalog +
+            " WHERE " + ns_column + " IN ("
+            "SELECT oid FROM pg_catalog.pg_namespace "
+            "WHERE nspname IN ('public',%s))",
+            (SCHEMA,),
+        ).fetchone()
+        require(observed == {"n": 0}, "WRITER_FOREIGN_" + label)
+
+    # Local triggers/policies are outside the namespace-scoped catalogs.
+    # Internal FK triggers generated by the three schema tables are allowed.
+    for label, sql in (
+        ("USER_TRIGGER",
+         "SELECT count(*) AS n FROM pg_catalog.pg_trigger t "
+         "JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid "
+         "JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace "
+         "WHERE n.nspname IN ('public',%s) AND NOT t.tgisinternal"),
+        ("ROW_POLICY",
+         "SELECT count(*) AS n FROM pg_catalog.pg_policy p "
+         "JOIN pg_catalog.pg_class c ON c.oid=p.polrelid "
+         "JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace "
+         "WHERE n.nspname IN ('public',%s)"),
+    ):
+        observed = conn.execute(sql, (SCHEMA,)).fetchone()
+        require(observed == {"n": 0}, "WRITER_FOREIGN_" + label)
 
     roles = conn.execute(
         "SELECT rolname FROM pg_catalog.pg_roles "
