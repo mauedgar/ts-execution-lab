@@ -232,7 +232,7 @@ def main():
              "NATIVE_TREE_TRUNCATED")
     run_case("HIDDEN_EXTRA_MODIFIED", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
-                    lambda x: x["tree"][1].update(sha="1"*40)),
+                    lambda x: x["tree"][3].update(sha="1"*40)),
              "NATIVE_GIT_DELTA_NOT_MARKER_ONLY")
     run_case("HIDDEN_EXTRA_ADDED", lambda u, g:
              modify(u, f"/repos/{REPO}/git/trees/{OLD_TREE}?recursive=1",
