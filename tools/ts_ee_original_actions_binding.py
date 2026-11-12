@@ -47,6 +47,9 @@ def safe_path(value: object, prefix: str) -> bool:
             and len(value) <= 250 and
             re.fullmatch(r"[a-zA-Z0-9/_.-]+", value) is not None
             and all(p not in ("", ".", "..") for p in value.split("/"))
+            and not value.endswith("/"))
+
+
 # Strictly bounded Linux-only guard for disposable GitHub-hosted runner jobs.
 # No inherited GIT_CONFIG_*, GIT_EXEC_PATH, GIT_TRACE, HOME or arbitrary PATH.
 GIT_BINARY = "/usr/bin/git"
