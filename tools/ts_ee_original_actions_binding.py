@@ -159,8 +159,6 @@ def git(root: Path, *args: str) -> str:
 def git_bytes(root: Path, *args: str) -> bytes:
     return _bounded_git(root, args, MAX_MARKER_BYTES)
 
-OB_READ_FAILED")
-    return result.stdout
 
 
 def validate(root: Path, marker_path: str, attempt: str,
