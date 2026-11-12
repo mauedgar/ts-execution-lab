@@ -21,7 +21,7 @@ const root={schema:'ts-ee-oc2-c2a-request/v2',product:'mauedgar/aware-commerce',
   repository_root:repo,scratch_anchor:path.resolve('/tmp'),scratch_parent:path.resolve('/tmp/c2a-oc2-native'),
   node_executable:path.resolve('/usr/bin/node'),git_executable:path.resolve('/usr/bin/git'),
   opencode_executable:path.resolve('/tmp/opencode.exe')};
-const policy=makePolicy(agent,allowed,commands);
+const policy=makePolicy(agent,allowed,commands,repo);
 const mk=(type,p,id)=>JSON.stringify({type,sessionID:'ses_ABC123',part:{...p,id}});
 let index=0;
 const frame=(type,part)=>mk(type,part,'prt_'+(++index));
@@ -56,7 +56,9 @@ test('native exact syntax limited shell commands, only disposable file, deny-all
   assert.deepEqual(new Set(rules.filter(x=>x.action==='shell'&&x.effect==='allow').map(x=>x.resource)),new Set(commands));
   assert.equal(rules.some(x=>x.effect==='allow'&&x.resource==='*'),false);
   assert.equal(rules.some(x=>x.resource==='BLOCKED.txt'),false);
-  assert.deepEqual(new Set(rules.filter(x=>x.action==='patch'&&x.effect==='allow').map(x=>x.resource)),new Set([allowed,'ALLOW_ONLY.txt']));
+  assert.deepEqual(new Set(rules.filter(x=>x.action==='edit'&&x.effect==='allow').map(x=>x.resource)),new Set([allowed,'ALLOW_ONLY.txt']));
+  assert.equal(rules.some(x=>x.action==='patch'&&x.effect==='allow'),false);
+  assert.deepEqual(rules.filter(x=>x.action==='external_directory'&&x.effect==='allow').map(x=>x.resource),[repo+'/*']);
   assert.ok(commands.every(x=>x.startsWith('"'+qualifiedGit+'"')));
 });
 test('effective permissions reject any unexpected allow, aliases, missing deny and missing positive',()=>{
