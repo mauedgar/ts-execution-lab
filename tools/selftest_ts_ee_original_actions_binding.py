@@ -29,7 +29,9 @@ REQUEST = ("mauedgar/ts-execution-transport@" + ("a" * 40) +
 
 
 def git(root: Path, *argv: str) -> str:
-    return subprocess.check_output(["git", "-C", str(root), *argv],
+    return subprocess.check_output(["git", "-c", "user.email=synthetic@example.invalid",
+                                    "-c", "user.name=Synthetic EE Test",
+                                    "-C", str(root), *argv],
                                    stderr=subprocess.DEVNULL).decode().strip()
 
 
@@ -38,8 +40,7 @@ def fixture():
     root = Path(parent.name) / "repo"
     root.mkdir()
     git(root, "init", "-q")
-    git(root, "config", "user.email", "synthetic@example.invalid")
-    git(root, "config", "user.name", "Synthetic EE Test")
+    # Commit identity stays invocation-local; no untrusted local [user] config.
     wf = root / WORKFLOW
     wf.parent.mkdir(parents=True)
     wf.write_text("name: identity unit test\non: push\n", encoding="utf-8")
