@@ -1,0 +1,61 @@
+name: TS EE native observer source-only original A001 20261112
+on:
+  push:
+    branches:
+      - ee/ts-rs002-native-observer-qual-20261112-001
+    paths:
+      - .github/workflows/ts-ee-rs002-native-observer-qual-20261112-001.yml
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-rs002-native-observer-original-20261112-001
+  cancel-in-progress: false
+jobs:
+  one-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      UV_NO_CONFIG: '1'
+    steps:
+      - name: Checkout bounded source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Frozen source preflight and AST
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_EVENT_NAME}" = "push"
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          test "${GITHUB_REF}" = "refs/heads/ee/ts-rs002-native-observer-qual-20261112-001"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD^)" = "a626099c8fc6196d9bd8e5e141a11de10e34b753"
+          test "$(git rev-parse HEAD^^{tree})" = "e34a863350717a75a0fa10ab3d001150b85de7d0"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)" = ".github/workflows/ts-ee-rs002-native-observer-qual-20261112-001.yml"
+          test "$(git rev-parse HEAD:tools/ts_ee_github_native_acquisition.py)" = "b72110dbf2cec6cca01be49af152073090fff28e"
+          test "$(git rev-parse HEAD:tools/selftest_ts_ee_github_native_acquisition.py)" = "43e914596d6a9d26d2550c737c5e46268437d5fa"
+          python3 -B - <<'PY'
+          import ast
+          for path in ["tools/ts_ee_github_native_acquisition.py", "tools/selftest_ts_ee_github_native_acquisition.py"]:
+              with open(path, encoding="utf-8") as src:
+                  ast.parse(src.read(), filename=path)
+          print("TS_EE_NATIVE_OBSERVER_SOURCE_SYNTAX_PASS")
+          PY
+      - name: Pin uv runner
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: CPython 3.15.2 synthetic authority-negative suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B tools/selftest_ts_ee_github_native_acquisition.py
+          echo TS_EE_NATIVE_OBSERVER_A001_SYNTHETIC_ONLY
+      - name: Read-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo TS_EE_NATIVE_OBSERVER_A001_NO_TOKEN_NO_SQL_NO_NEON_NO_HOST_NO_PRODUCT
