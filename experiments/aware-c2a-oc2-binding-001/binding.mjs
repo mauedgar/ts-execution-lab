@@ -28,12 +28,16 @@ export function gitCommands(gitExecutable,root){
   if(!path.isAbsolute(root)||!path.isAbsolute(gitExecutable)||BAD.test(root)||BAD.test(gitExecutable))throw Error('UNSAFE_GIT_COMMAND_PATH');
   return ['"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD','"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD^{tree}'];
 }
-export function makePolicy(agent,absoluteAllow,commands){
-  if(!good(agent,ID)||path.basename(absoluteAllow)!=='ALLOW_ONLY.txt'||!Array.isArray(commands)||commands.length!==2)throw Error('UNSAFE_POLICY_INPUT');
+export function makePolicy(agent,absoluteAllow,commands,repositoryRoot){
+  if(!good(agent,ID)||path.basename(absoluteAllow)!=='ALLOW_ONLY.txt'
+    ||!Array.isArray(commands)||commands.length!==2
+    ||!path.isAbsolute(repositoryRoot)||BAD.test(repositoryRoot))throw Error('UNSAFE_POLICY_INPUT');
+  // In OpenCode V2, write/edit/patch share the 'edit' permission action.
+  // External Git reads require a separately scoped external_directory grant.
   const rules=[{action:'*',resource:'*',effect:'deny'}];
   for(const resource of commands)rules.push({action:'shell',resource,effect:'allow'});
-  for(const a of ['edit','write','patch'])for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])
-    rules.push({action:a,resource,effect:'allow'});
+  for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])rules.push({action:'edit',resource,effect:'allow'});
+  rules.push({action:'external_directory',resource:repositoryRoot.replace(/[\\/]+$/,'')+'/*',effect:'allow'});
   return {permissions:[{action:'*',resource:'*',effect:'deny'}],agents:{[agent]:{mode:'primary',permissions:rules}},plugin:[]};
 }
 export function checkEffective(agents,agent,policy){
