@@ -233,7 +233,7 @@ def additional_git_metadata_checks() -> None:
         alt.parent.mkdir(parents=True, exist_ok=True)
         alt.write_text("/tmp/untrusted-git-objects\n", encoding="utf-8")
     rejected("GIT_OBJECT_ALTERNATES", alternate_object_store,
-             "UNTRUSTED_GIT_OBJECT_REDIRECTION")
+             "UNTRUSTED_GIT_OBJECT_REDIRECTION_ALTERNATES")
 
     def symlinked_config(root):
         original = root / ".git" / "config"

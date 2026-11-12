@@ -1,17 +1,17 @@
-name: TS EE A03 hardened Git subprocess original A003 metadata qualification
+name: TS EE A03 metadata diagnostic successor original A004 qualification
 
 on:
   push:
     branches:
-      - ee/ts-ee-a03-git-metadata-repair-20261112-001
+      - ee/ts-ee-a03-metadata-diagnostic-20261112-002
     paths:
-      - .github/ts-ee-original-dispatch/TS-EE-A03-GIT-METADATA-QUAL-20261112-001-A003.json
+      - .github/ts-ee-original-dispatch/TS-EE-A03-GIT-METADATA-QUAL-20261112-002-A004.json
 
 permissions:
   contents: read
 
 concurrency:
-  group: ts-ee-a03-metadata-original-20261112-001
+  group: ts-ee-a03-metadata-diagnostic-original-20261112-002
   cancel-in-progress: false
 
 jobs:
@@ -43,14 +43,39 @@ jobs:
           print("TS_EE_A03_SOURCE_SYNTAX_PRECHECK_PASS")
           PY
 
+      - name: Observe local Git metadata shape (names and booleans only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY'
+          from pathlib import Path
+          d = Path(".git")
+          targets = ("objects/info/alternates", "info/grafts", "commondir", "config.worktree")
+          for name in targets:
+              print("TS_EE_META_PRESENT_" + name.upper().replace("/", "_").replace(".", "_")
+                    + "=" + str((d / name).exists() or (d / name).is_symlink()))
+          # NEVER print configuration values, URLs, credentials or raw lines.
+          config = d / "config"
+          if config.is_file():
+              allowed = ("core", "gc", "remote ", "branch ", "http ", "extensions")
+              tags = []
+              for line in config.read_text(encoding="utf-8").splitlines():
+                  line = line.strip()
+                  if line.startswith("[") and line.endswith("]"):
+                      name = line[1:-1].lower()
+                      tags.append(next((tag.rstrip() for tag in allowed
+                                        if name.startswith(tag)), "other"))
+              print("TS_EE_META_SECTION_CATEGORIES=" + ",".join(tags))
+          PY
+
       - name: Original hardened Git guard
         shell: bash
         run: |
           set -euo pipefail
           python3 -B tools/ts_ee_original_actions_binding.py \
             --root . \
-            --marker .github/ts-ee-original-dispatch/TS-EE-A03-GIT-METADATA-QUAL-20261112-001-A003.json \
-            --attempt TS-EE-A03-GIT-METADATA-QUAL-20261112-001-A003 \
+            --marker .github/ts-ee-original-dispatch/TS-EE-A03-GIT-METADATA-QUAL-20261112-002-A004.json \
+            --attempt TS-EE-A03-GIT-METADATA-QUAL-20261112-002-A004 \
             | tee "$RUNNER_TEMP/ts-ee-a03-metadata-guard-a003.json"
           python3 - "$RUNNER_TEMP/ts-ee-a03-metadata-guard-a003.json" <<'PY'
           import json,sys
@@ -58,9 +83,9 @@ jobs:
           assert len(lines)==1
           receipt=json.loads(lines[0])
           assert receipt["status"]=="TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
-          assert receipt["execution_attempt"]=="TS-EE-A03-GIT-METADATA-QUAL-20261112-001-A003"
+          assert receipt["execution_attempt"]=="TS-EE-A03-GIT-METADATA-QUAL-20261112-002-A004"
           assert receipt["run_attempt"]==1 and receipt["product_effect"]=="NONE"
-          print("TS_EE_A03_HARDENED_GIT_GUARD_ORIGINAL_A003_PASS")
+          print("TS_EE_A03_HARDENED_GIT_GUARD_ORIGINAL_A004_PASS")
           PY
 
       - name: Pin uv
@@ -81,4 +106,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "TS_EE_A03_A003_NO_SQL_NO_NEON_NO_HOST_NO_PRODUCT"
+          echo "TS_EE_A03_A004_NO_SQL_NO_NEON_NO_HOST_NO_PRODUCT"
