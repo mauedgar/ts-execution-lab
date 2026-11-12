@@ -30,6 +30,61 @@ function readOnlyRequest(file) {
     if(!/^[0-9a-f]{64}$/.test(original[k]||''))throw Error(k+'_MISSING');
   return original;
 }
+
+const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
+export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,denied=false,corrupt=[]}={}){
+  const start=records['START.json'],dispatch=records['DISPATCH.json'],
+    meta=records['NATIVE_META.json'],result=records['RESULT.json'];
+  const same=x=>Boolean(x&&x.attempt_id===r.attempt_id&&x.operation_id===r.operation_id
+    &&x.product===r.product&&x.source?.head===r.expected_head
+    &&x.source?.tree===r.expected_tree&&x.source?.origin===r.expected_origin
+    &&x.bundle?.bootstrap===r.bootstrap_sha256
+    &&x.bundle?.binding===r.binding_sha256&&x.bundle?.runner===r.runner_sha256
+    &&x.executable?.node_sha256===r.node_sha256
+    &&x.executable?.git_sha256===r.git_sha256
+    &&x.executable?.opencode_sha256===r.executable_sha256
+    &&x.authority?.sha256===r.authorization_receipt_sha256
+    &&x.authority?.ref===r.authorization_receipt_ref);
+  const consistent=Boolean(!corrupt.length&&same(start)&&same(result)
+    &&Boolean(dispatch)===Boolean(result?.native_dispatched));
+  const base={mode:'OBSERVE_ONLY',attempt_id:r.attempt_id,operation_id:r.operation_id,
+    dispatched:Boolean(dispatch),receipt_exists:Boolean(result),
+    corrupt_files:[...corrupt],original_start_verified:same(start)};
+  const unknown=reason=>({...base,status:'UNKNOWN',effect_state:'UNKNOWN',
+    original_result_verified:false,receipt_consistency:reason,
+    native_provider_authenticated:false});
+  if(!consistent)return unknown('MISSING_OR_INVALID_ORIGINAL_IDENTITY');
+  if(!dispatch){
+    if(result.status!=='BLOCKED_PRECONDITION'||result.effect_state!=='NONE'
+      ||meta!==null||native!==null||allowed!==null||denied)
+      return unknown('IMPOSSIBLE_PREDISPATCH_STATE');
+    return {...base,status:'BLOCKED_PRECONDITION',effect_state:'NONE',
+      original_result_verified:true,receipt_consistency:'PREDISPATCH_ONLY',
+      native_provider_authenticated:false};
+  }
+  if(!same(dispatch)||meta===null||native===null
+    ||typeof meta.sha256!=='string'||meta.sha256!==digest(native)
+    ||meta.bytes!==native.length
+    ||result.original_native_log?.sha256!==meta.sha256
+    ||result.original_native_log?.bytes!==meta.bytes
+    ||result.observed?.session!==meta.session_id
+    ||!records['CONTEXT.json']||!records['EFFECTIVE.json'])
+    return unknown('NATIVE_LOG_OR_RECEIPT_MISMATCH');
+  if(result.status!=='PASS')return unknown('NONPASS_POSTDISPATCH_ORIGINAL');
+  if(result.effect_state!=='CONFIRMED_SYNTHETIC_ONLY'||!result.terminus_proven
+    ||!result.observed?.complete||meta.exit_code!==0||meta.signal
+    ||meta.spawn_error||meta.native_error||meta.stdout_truncated
+    ||result.forbidden_file_exists||denied||allowed===null
+    ||!allowed.equals(Buffer.from('TS_EE_ALLOWED_PROBE','utf8'))
+    ||result.allowed_file_sha256!==digest(allowed)
+    ||result.product_source_drift)
+    return unknown('NATIVE_PASS_POSTCONDITION_UNVERIFIED');
+  return {...base,status:'PASS',effect_state:'CONFIRMED_SYNTHETIC_ONLY',
+    original_result_verified:true,receipt_consistency:'LOCAL_HASH_AND_BYTE_MATCH',
+    native_provider_authenticated:false,
+    note:'Local integrity is NOT independent native provider attestation or Product authorization'};
+}
+
 export async function bootstrap(file,mode) {
   if(!['--run','--observe'].includes(mode))throw Error('COMMAND_MODE_NOT_AUTHORIZED');
   const r=readOnlyRequest(file);
@@ -63,24 +118,26 @@ export async function bootstrap(file,mode) {
   const attempt=path.join(parent,r.attempt_id);
   if(mode==='--observe'){
     if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
-    const results={};const corrupt=[];
-    for(const key of ['START.json','DISPATCH.json','NATIVE_META.json','RESULT.json']){
+    const records={},corrupt=[];
+    // No local receipt can authenticate the native provider on its own. This
+    // readback only checks immutable-file *consistency* before Control review.
+    for(const key of ['START.json','DISPATCH.json','CONTEXT.json','EFFECTIVE.json','NATIVE_META.json','RESULT.json']){
       const p=path.join(attempt,key);
-      if(!fs.existsSync(p)){results[key]=null;continue}
-      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('REPARSE');results[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
-      catch{results[key]=null;corrupt.push(key)}
+      if(!fs.existsSync(p)){records[key]=null;continue}
+      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('SYMLINK');
+        records[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
+      catch{records[key]=null;corrupt.push(key)}
     }
-    const start=results['START.json'],end=results['RESULT.json'];
-    const same=(x)=>x&&x.attempt_id===r.attempt_id&&x.operation_id===r.operation_id
-      &&x.product===r.product&&x.source?.head===r.expected_head&&x.source?.tree===r.expected_tree
-      &&x.bundle?.binding===r.binding_sha256&&x.bundle?.runner===r.runner_sha256;
-    const valid=start&&same(start)&&end&&same(end)&&end.native_dispatched===Boolean(results['DISPATCH.json']);
-    const uncertain=corrupt.length>0||!start||!valid;
-    return {mode:'OBSERVE_ONLY',attempt_id:r.attempt_id,operation_id:r.operation_id,
-      status:uncertain?'UNKNOWN':end.status,effect_state:uncertain?'UNKNOWN':end.effect_state,
-      receipt_exists:Boolean(end),dispatched:Boolean(results['DISPATCH.json']),
-      corrupt_files:corrupt,original_start_verified:Boolean(start&&same(start)),
-      original_result_verified:Boolean(valid)};
+    const readBytes=filename=>{
+      const p=path.join(attempt,filename);
+      if(!fs.existsSync(p))return null;
+      try{if(!fs.lstatSync(p).isFile()||fs.lstatSync(p).isSymbolicLink())throw Error('NOT_REGULAR');
+        return fs.readFileSync(p)}
+      catch{corrupt.push(filename);return null}
+    };
+    const native=readBytes('NATIVE.jsonl'),allowed=readBytes('ALLOW_ONLY.txt');
+    const denied=fs.existsSync(path.join(attempt,'BLOCKED.txt'));
+    return reconcileOriginalReceipt(r,records,{native,allowed,denied,corrupt});
   }
   if(fs.existsSync(attempt))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
   const {assertRequest}=await import(pathToFileURL(bindingFile).href);
