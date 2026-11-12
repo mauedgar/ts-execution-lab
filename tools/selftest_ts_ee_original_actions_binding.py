@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 
 import ts_ee_original_actions_binding as guard
@@ -285,25 +287,81 @@ def additional_git_metadata_checks() -> None:
 
     tmp, root, info, env = fixture()
     try:
-        with patch.object(guard.os, "killpg", wraps=os.killpg) as killed:
-            original_popen = subprocess.Popen
+        # A01 IR001: inspect the actual grandchild, not merely killpg calls.
+        # The test is confined to disposable same-process-group children on
+        # Linux, and the finally clause kills only sessions created here.
+        original_popen = subprocess.Popen
+        actual_killpg = os.killpg
+
+        def descendant_live(pid: int) -> bool:
+            proc_stat = Path("/proc") / str(pid) / "stat"
+            try:
+                raw = proc_stat.read_text(encoding="ascii")
+            except FileNotFoundError:
+                return False
+            state = raw.rsplit(")", 1)[-1].strip().split()[0]
+            # A zombie has terminated and awaits the unrelated system reaper.
+            return state not in ("Z", "X", "x")
+
+        def exercise_descendant(label: str, neutralize_kill: bool) -> None:
+            pid_path = root.parent / ("descendant-" + label + ".pid")
+            created_groups: list[int] = []
+            program = (
+                "import pathlib,subprocess,sys;"
+                "grandchild=subprocess.Popen([sys.executable,'-B','-c',"
+                "'import time;time.sleep(10)']);"
+                f"pathlib.Path({str(pid_path)!r}).write_text("
+                "str(grandchild.pid),encoding='ascii')"
+            )
+
             def launch(_argv, **kwargs):
-                return original_popen([
-                    sys.executable, "-B", "-c",
-                    "import subprocess,sys;"
-                    "subprocess.Popen([sys.executable,'-B','-c',"
-                    "'import time;time.sleep(2)'])"
-                ], **kwargs)
-            with patch.object(guard.subprocess, "Popen", side_effect=launch):
-                with patch.object(guard, "GIT_DEADLINE_SECONDS", 0.15):
+                assert kwargs["start_new_session"] is True
+                proc = original_popen([sys.executable, "-B", "-c", program],
+                                      **kwargs)
+                created_groups.append(proc.pid)
+                return proc
+
+            try:
+                with patch.object(guard.subprocess, "Popen", side_effect=launch):
+                    with patch.object(guard, "GIT_DEADLINE_SECONDS", 0.35):
+                        if neutralize_kill:
+                            group_kill = patch.object(
+                                guard.os, "killpg", side_effect=lambda *_: None)
+                        else:
+                            group_kill = patch.object(
+                                guard.os, "killpg", wraps=actual_killpg)
+                        with group_kill as invoked:
+                            try:
+                                guard.git(root, "rev-parse", "HEAD")
+                            except BlockedPrecondition as exc:
+                                assert str(exc) == "GIT_DEADLINE_EXCEEDED", str(exc)
+                            else:
+                                raise AssertionError("FALSE_ACCEPT_DESCENDANT_" + label)
+                            assert invoked.called, "DESCENDANT_GROUP_KILL_NOT_ATTEMPTED"
+                assert pid_path.is_file(), "GRANDCHILD_PID_NOT_OBSERVED"
+                pid = int(pid_path.read_text(encoding="ascii"))
+                assert pid > 0, "INVALID_SYNTHETIC_DESCENDANT_PID"
+                if neutralize_kill:
+                    # Sensitivity control: a no-op group killer must NOT be
+                    # mistaken for successful cleanup.
+                    assert descendant_live(pid), "DESCENDANT_SENSITIVITY_FALSE_NEGATIVE"
+                    print("NEGATIVE_CONTROL_PASS_NOOP_KILL_LEAVES_LIVE_CHILD")
+                else:
+                    for _ in range(100):
+                        if not descendant_live(pid):
+                            break
+                        time.sleep(0.01)
+                    assert not descendant_live(pid), "DESCENDANT_SURVIVED_GROUP_KILL"
+                    print("NEGATIVE_PASS_DESCENDANT_ACTUALLY_TERMINATED")
+            finally:
+                for group_id in created_groups:
                     try:
-                        guard.git(root, "rev-parse", "HEAD")
-                    except BlockedPrecondition as exc:
-                        assert str(exc) == "GIT_DEADLINE_EXCEEDED", str(exc)
-                    else:
-                        raise AssertionError("FALSE_ACCEPT_DESCENDANT_PIPES")
-            assert killed.called, "DESCENDANT_GROUP_NOT_KILLED"
-            print("NEGATIVE_PASS_DESCENDANT_PIPES_GROUP_KILLED")
+                        actual_killpg(group_id, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+        exercise_descendant("no-op", neutralize_kill=True)
+        exercise_descendant("real-kill", neutralize_kill=False)
         with patch.object(guard.selectors, "DefaultSelector",
                           side_effect=OSError("synthetic selector failure")):
             try:

@@ -1,0 +1,12 @@
+{
+  "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+  "execution_attempt": "TS-EE-A03-DESCENDANT-QUAL-20261112-004-A006",
+  "repository": "mauedgar/ts-execution-lab",
+  "ref": "refs/heads/ee/ts-ee-a03-descendant-reap-20261112-004",
+  "source_parent_commit": "5f3b107a20a44554be348161585123a03eb8303f",
+  "source_parent_tree": "5e851e126fd5a0051b36bd6f7bd2695b8620e63d",
+  "workflow_path": ".github/workflows/ts-ee-original-git-a03-descendant-20261112-004.yml",
+  "workflow_blob": "dec37e3bc6af0fae7d44cb92e8cbbaab6aa718ae",
+  "marker_path": ".github/ts-ee-original-dispatch/TS-EE-A03-DESCENDANT-QUAL-20261112-004-A006.json",
+  "control_request": "mauedgar/ts-execution-transport@a24237c0fafaa10da7d2f7cf4f7292e8199ae90d:requests/TS-EE-A03-DESCENDANT-QUAL-20261112-004-A006/REQUEST.md"
+}
