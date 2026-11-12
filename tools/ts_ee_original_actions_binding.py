@@ -89,12 +89,14 @@ def _trusted_checkout_metadata(root: Path) -> None:
             "UNTRUSTED_GIT_DIRECTORY")
     for entry in (gitdir / "config", gitdir / "objects", gitdir / "refs"):
         require(not entry.is_symlink(), "UNTRUSTED_GIT_METADATA_LINK")
-    for entry in (gitdir / "objects" / "info" / "alternates",
-                  gitdir / "info" / "grafts",
-                  gitdir / "commondir",
-                  gitdir / "config.worktree"):
+    for relative, label in (
+            ("objects/info/alternates", "ALTERNATES"),
+            ("info/grafts", "GRAFTS"),
+            ("commondir", "COMMONDIR"),
+            ("config.worktree", "WORKTREE_CONFIG")):
+        entry = gitdir / relative
         require(not entry.exists() and not entry.is_symlink(),
-                "UNTRUSTED_GIT_OBJECT_REDIRECTION")
+                "UNTRUSTED_GIT_OBJECT_REDIRECTION_" + label)
     config = gitdir / "config"
     require(config.is_file(), "UNTRUSTED_GIT_LOCAL_CONFIG")
     data = config.read_bytes()
