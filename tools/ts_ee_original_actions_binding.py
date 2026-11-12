@@ -14,8 +14,11 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
+import signal
 import subprocess
 import sys
+import time
 
 VERSION = "TS-EE-ACTIONS-ORIGINAL-BINDING-v1"
 MAX_MARKER_BYTES = 4096
@@ -47,27 +50,205 @@ def safe_path(value: object, prefix: str) -> bool:
             and not value.endswith("/"))
 
 
-def git(root: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        check=False, timeout=15,
-    )
-    require(result.returncode == 0, "GIT_IDENTITY_READ_FAILED")
+# Strictly bounded Linux-only guard for disposable GitHub-hosted runner jobs.
+# No inherited GIT_CONFIG_*, GIT_EXEC_PATH, GIT_TRACE, HOME or arbitrary PATH.
+GIT_BINARY = "/usr/bin/git"
+MAX_GIT_STDOUT = 65536
+MAX_GIT_STDERR = 16384
+GIT_DEADLINE_SECONDS = 15.0
+
+
+def _git_env() -> dict[str, str]:
+    return {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/nonexistent-ts-ee-git-guard",
+        "XDG_CONFIG_HOME": "/nonexistent-ts-ee-git-guard",
+        "LC_ALL": "C",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_ATTR_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_NO_LAZY_FETCH": "1",
+    }
+
+
+
+def _trusted_checkout_metadata(root: Path) -> None:
+    """Fail closed on Git metadata outside the bounded checkout profile.
+
+    This does not authenticate an arbitrary repository: Control must bind a
+    trusted, isolated actions/checkout source before dispatch. The local config
+    is deliberately restricted to inert checkout bookkeeping, not interpreted
+    by a general Git-config parser with include/escape precedence ambiguity.
+    """
+    gitdir = root / ".git"
+    require(gitdir.is_dir() and not gitdir.is_symlink(),
+            "UNTRUSTED_GIT_DIRECTORY")
+    for entry in (gitdir / "config", gitdir / "objects", gitdir / "refs"):
+        require(not entry.is_symlink(), "UNTRUSTED_GIT_METADATA_LINK")
+    for relative, label in (
+            ("objects/info/alternates", "ALTERNATES"),
+            ("info/grafts", "GRAFTS"),
+            ("commondir", "COMMONDIR")):
+        entry = gitdir / relative
+        require(not entry.exists() and not entry.is_symlink(),
+                "UNTRUSTED_GIT_OBJECT_REDIRECTION_" + label)
+    config = gitdir / "config"
+    require(config.is_file(), "UNTRUSTED_GIT_LOCAL_CONFIG")
+    data = config.read_bytes()
+    require(0 < len(data) <= 16384 and b"\x00" not in data,
+            "UNTRUSTED_GIT_LOCAL_CONFIG")
     try:
-        return result.stdout.decode("utf-8", "strict").strip()
+        lines = data.decode("utf-8", "strict").splitlines()
+    except UnicodeDecodeError as exc:
+        raise BlockedPrecondition("UNTRUSTED_GIT_LOCAL_CONFIG") from exc
+    section = ""
+    observed: set[tuple[str, str]] = set()
+    for line in lines:
+        entry = line.strip()
+        if not entry:
+            continue
+        if entry in ('[core]', '[gc]', '[remote "origin"]') or re.fullmatch(
+                r'\[branch "[A-Za-z0-9._/-]+"\]', entry):
+            section = entry
+            continue
+        key, separator, value = entry.partition("=")
+        require(separator == "=" and section != "",
+                "UNTRUSTED_GIT_LOCAL_CONFIG")
+        key, value = key.strip(), value.strip()
+        require((section, key) not in observed,
+                "UNTRUSTED_GIT_LOCAL_CONFIG")
+        observed.add((section, key))
+        core = {
+            "repositoryformatversion": {"0"},
+            "filemode": {"true", "false"},
+            "bare": {"false"},
+            "logallrefupdates": {"true", "false"},
+            "ignorecase": {"true", "false"},
+            "precomposeunicode": {"true", "false"},
+        }
+        remote = {
+            "url": {"https://github.com/mauedgar/ts-execution-lab",
+                    "https://github.com/mauedgar/ts-execution-lab.git"},
+            "fetch": {"+refs/heads/*:refs/remotes/origin/*"},
+        }
+        if section == "[core]":
+            allowed = key in core and value in core[key]
+        elif section == "[gc]":
+            allowed = key == "auto" and value == "0"
+        elif section == '[remote "origin"]':
+            allowed = key in remote and value in remote[key]
+        else:
+            allowed = ((key == "remote" and value == "origin") or
+                       (key == "merge" and re.fullmatch(
+                           r"refs/heads/[A-Za-z0-9._/-]+", value) is not None))
+        require(allowed, "UNTRUSTED_GIT_LOCAL_CONFIG")
+    require(("[core]", "repositoryformatversion") in observed and
+            ("[core]", "bare") in observed,
+            "UNTRUSTED_GIT_LOCAL_CONFIG")
+    # Git only reads config.worktree if extensions.worktreeConfig is enabled.
+    # The strict local-config section allowlist above rejects ALL extensions,
+    # making this checkout-created file inert. Still reject symlinks and
+    # unbounded files rather than broadening trusted local metadata.
+    worktree_config = gitdir / "config.worktree"
+    if worktree_config.exists() or worktree_config.is_symlink():
+        require(worktree_config.is_file() and not worktree_config.is_symlink(),
+                "UNTRUSTED_GIT_WORKTREE_CONFIG")
+        require(worktree_config.stat().st_size <= 4096,
+                "UNTRUSTED_GIT_WORKTREE_CONFIG")
+
+
+def _bounded_git(root: Path, args: tuple[str, ...], max_output: int) -> bytes:
+    """Trusted Git executable + minimal environment + bounded stdout/stderr.
+
+    The subprocess is always in a new process group. On timeout or excess
+    output the whole group is killed; its bytes are never streamed to logs.
+    This is intentionally Linux-only and fails closed on other platforms.
+    """
+    require(sys.platform.startswith("linux"), "GIT_GUARD_REQUIRES_LINUX")
+    require(Path(GIT_BINARY).is_file(), "TRUSTED_GIT_NOT_FOUND")
+    require(root.is_dir(), "GIT_REPOSITORY_ROOT_NOT_FOUND")
+    _trusted_checkout_metadata(root)
+    require(type(max_output) is int and 1 <= max_output <= MAX_GIT_STDOUT,
+            "GIT_OUTPUT_LIMIT_INVALID")
+    argv = [
+        GIT_BINARY, "--no-pager", "--no-optional-locks",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-C", str(root), *args,
+    ]
+    proc = subprocess.Popen(
+        argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, env=_git_env(), shell=False,
+        close_fds=True, start_new_session=True,
+    )
+    output = bytearray()
+    stderr_size = 0
+    deadline = time.monotonic() + GIT_DEADLINE_SECONDS
+    try:
+        with selectors.DefaultSelector() as selector:
+            require(proc.stdout is not None and proc.stderr is not None,
+                    "GIT_PIPES_UNAVAILABLE")
+            selector.register(proc.stdout, selectors.EVENT_READ, "out")
+            selector.register(proc.stderr, selectors.EVENT_READ, "err")
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                require(remaining > 0.0, "GIT_DEADLINE_EXCEEDED")
+                ready = selector.select(timeout=remaining)
+                for key, _ in ready:
+                    chunk = os.read(key.fileobj.fileno(), 8192)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        key.fileobj.close()
+                    elif key.data == "out":
+                        require(len(output) + len(chunk) <= max_output,
+                                "GIT_STDOUT_LIMIT_EXCEEDED")
+                        output.extend(chunk)
+                    else:
+                        stderr_size += len(chunk)
+                        require(stderr_size <= MAX_GIT_STDERR,
+                                "GIT_STDERR_LIMIT_EXCEEDED")
+        remaining = deadline - time.monotonic()
+        require(remaining > 0.0, "GIT_DEADLINE_EXCEEDED")
+        try:
+            status = proc.wait(timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise BlockedPrecondition("GIT_DEADLINE_EXCEEDED") from exc
+        require(status == 0, "GIT_IDENTITY_READ_FAILED")
+        return bytes(output)
+    except BaseException:
+        # Even when the direct Git child exited, another member of its
+        # session may still hold an inherited pipe or remain active.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    finally:
+        if proc.stdout is not None:
+            proc.stdout.close()
+        if proc.stderr is not None:
+            proc.stderr.close()
+
+
+def git(root: Path, *args: str) -> str:
+    raw = _bounded_git(root, args, MAX_GIT_STDOUT)
+    try:
+        return raw.decode("utf-8", "strict").strip()
     except UnicodeDecodeError as exc:
         raise BlockedPrecondition("NON_UTF8_GIT_RESPONSE") from exc
 
 
 def git_bytes(root: Path, *args: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        check=False, timeout=15,
-    )
-    require(result.returncode == 0, "GIT_BLOB_READ_FAILED")
-    return result.stdout
+    return _bounded_git(root, args, MAX_MARKER_BYTES)
+
 
 
 def validate(root: Path, marker_path: str, attempt: str,

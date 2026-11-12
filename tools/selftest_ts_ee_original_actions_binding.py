@@ -6,9 +6,16 @@ It never uses a Product repo, remote credential, network, or GitHub run.
 from __future__ import annotations
 
 import json
+import os
+import signal
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+import time
+from unittest.mock import patch
+
+import ts_ee_original_actions_binding as guard
 
 from ts_ee_original_actions_binding import (
     VERSION, BlockedPrecondition, validate,
@@ -24,7 +31,9 @@ REQUEST = ("mauedgar/ts-execution-transport@" + ("a" * 40) +
 
 
 def git(root: Path, *argv: str) -> str:
-    return subprocess.check_output(["git", "-C", str(root), *argv],
+    return subprocess.check_output(["git", "-c", "user.email=synthetic@example.invalid",
+                                    "-c", "user.name=Synthetic EE Test",
+                                    "-C", str(root), *argv],
                                    stderr=subprocess.DEVNULL).decode().strip()
 
 
@@ -33,8 +42,7 @@ def fixture():
     root = Path(parent.name) / "repo"
     root.mkdir()
     git(root, "init", "-q")
-    git(root, "config", "user.email", "synthetic@example.invalid")
-    git(root, "config", "user.name", "Synthetic EE Test")
+    # Commit identity stays invocation-local; no untrusted local [user] config.
     wf = root / WORKFLOW
     wf.parent.mkdir(parents=True)
     wf.write_text("name: identity unit test\non: push\n", encoding="utf-8")
@@ -83,6 +91,285 @@ def rejection(label: str, work) -> None:
             print("NEGATIVE_PASS_" + label)
         else:
             raise AssertionError("FALSE_ACCEPT_" + label)
+    finally:
+        tmp.cleanup()
+
+
+def hardening_checks() -> None:
+    """Deterministic fail-closed tests, never an external GitHub/host action."""
+    tmp, root, info, env = fixture()
+    try:
+        # Git's inherited config/alias/executable/prompt/tracing knobs are
+        # ignored regardless of the caller process environment.
+        with patch.dict(os.environ, {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.fsmonitor",
+            "GIT_CONFIG_VALUE_0": "malicious-command",
+            "GIT_EXEC_PATH": "/nonexistent/evil",
+            "GIT_TRACE": "/tmp/ts-ee-untrusted-trace",
+            "GIT_OPTIONAL_LOCKS": "1",
+        }):
+            safe = guard._git_env()
+            assert not any(k in safe for k in (
+                "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0",
+                "GIT_CONFIG_VALUE_0", "GIT_EXEC_PATH", "GIT_TRACE",
+            ))
+            assert safe["GIT_CONFIG_NOSYSTEM"] == "1"
+            assert safe["GIT_TERMINAL_PROMPT"] == "0"
+            assert validate(root, MARKER, ATTEMPT, env)[
+                "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("HARDENING_PASS_INHERITED_GIT_ENV_STRIPPED")
+
+        giant = root / "oversize.txt"
+        giant.write_bytes(b"X" * (guard.MAX_MARKER_BYTES + 8192))
+        git(root, "add", "oversize.txt")
+        git(root, "commit", "-qm", "oversize synthetic read object")
+        try:
+            guard.git_bytes(root, "show", "HEAD:oversize.txt")
+        except BlockedPrecondition as exc:
+            assert str(exc) == "GIT_STDOUT_LIMIT_EXCEEDED"
+        else:
+            raise AssertionError("FALSE_ACCEPT_OVERSIZED_MARKER")
+        print("NEGATIVE_PASS_REAL_GIT_OVERSIZED_OBJECT_BOUNDED")
+
+        original_popen = subprocess.Popen
+
+        def expect_program(label, command, expected, *, timeout=None):
+            def launch(_argv, **kwargs):
+                assert kwargs["shell"] is False
+                assert kwargs["start_new_session"] is True
+                assert kwargs["stdin"] == subprocess.DEVNULL
+                assert kwargs["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+                assert "GIT_CONFIG_COUNT" not in kwargs["env"]
+                return original_popen(
+                    [sys.executable, "-B", "-c", command], **kwargs
+                )
+            with patch.object(guard.subprocess, "Popen", side_effect=launch):
+                if timeout is not None:
+                    with patch.object(guard, "GIT_DEADLINE_SECONDS", timeout):
+                        try:
+                            guard.git(root, "rev-parse", "HEAD")
+                        except BlockedPrecondition as exc:
+                            assert str(exc) == expected, (label, str(exc))
+                        else:
+                            raise AssertionError("FALSE_ACCEPT_" + label)
+                else:
+                    try:
+                        guard.git(root, "rev-parse", "HEAD")
+                    except BlockedPrecondition as exc:
+                        assert str(exc) == expected, (label, str(exc))
+                    else:
+                        raise AssertionError("FALSE_ACCEPT_" + label)
+            print("NEGATIVE_PASS_" + label + "_" + expected)
+
+        expect_program(
+            "OVERSIZED_STDOUT",
+            "import sys;sys.stdout.write('X'*70000)",
+            "GIT_STDOUT_LIMIT_EXCEEDED",
+        )
+        expect_program(
+            "OVERSIZED_STDERR",
+            "import sys;sys.stderr.write('Y'*25000)",
+            "GIT_STDERR_LIMIT_EXCEEDED",
+        )
+        expect_program(
+            "NONZERO_CHILD_STATUS",
+            "import sys;sys.exit(7)",
+            "GIT_IDENTITY_READ_FAILED",
+        )
+        expect_program(
+            "NON_UTF8_CHILD_OUTPUT",
+            "import sys;sys.stdout.buffer.write(bytes([255]))",
+            "NON_UTF8_GIT_RESPONSE",
+        )
+        expect_program(
+            "CHILD_PROCESS_TIMEOUT",
+            "import time;time.sleep(2)",
+            "GIT_DEADLINE_EXCEEDED",
+            timeout=0.10,
+        )
+
+        with patch.object(guard, "GIT_BINARY", "/no/such/trusted/git"):
+            try:
+                guard.git(root, "rev-parse", "HEAD")
+            except BlockedPrecondition as exc:
+                assert str(exc) == "TRUSTED_GIT_NOT_FOUND"
+            else:
+                raise AssertionError("FALSE_ACCEPT_UNTRUSTED_BINARY")
+        print("NEGATIVE_PASS_TRUSTED_GIT_BINARY_UNAVAILABLE")
+    finally:
+        tmp.cleanup()
+
+
+
+def additional_git_metadata_checks() -> None:
+    """Adversarial local config, replacement refs, and process cleanup."""
+    def rejected(label, mutate, code):
+        tmp, root, info, env = fixture()
+        try:
+            mutate(root)
+            try:
+                validate(root, MARKER, ATTEMPT, env)
+            except BlockedPrecondition as exc:
+                assert str(exc) == code, (label, str(exc))
+            else:
+                raise AssertionError("FALSE_ACCEPT_" + label)
+            print("NEGATIVE_PASS_" + label + "_" + code)
+        finally:
+            tmp.cleanup()
+
+    def malicious_local_config(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write('\n[include]\n    path = /tmp/attacker.gitconfig\n')
+    rejected("LOCAL_GIT_INCLUDE", malicious_local_config,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def local_config_shell_command(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write('\n[core]\n    fsmonitor = arbitrary-command\n')
+    rejected("LOCAL_GIT_EXECUTABLE_SETTING", local_config_shell_command,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def alternate_object_store(root):
+        alt = root / ".git" / "objects" / "info" / "alternates"
+        alt.parent.mkdir(parents=True, exist_ok=True)
+        alt.write_text("/tmp/untrusted-git-objects\n", encoding="utf-8")
+    rejected("GIT_OBJECT_ALTERNATES", alternate_object_store,
+             "UNTRUSTED_GIT_OBJECT_REDIRECTION_ALTERNATES")
+
+    def symlinked_config(root):
+        original = root / ".git" / "config"
+        original.rename(original.with_name("config.saved"))
+        original.symlink_to(original.with_name("config.saved"))
+    rejected("SYMLINKED_GIT_CONFIG", symlinked_config,
+             "UNTRUSTED_GIT_METADATA_LINK")
+
+    tmp, root, info, env = fixture()
+    try:
+        worktree_config = root / ".git" / "config.worktree"
+        worktree_config.write_text(
+            "[core]\n    sparseCheckout = true\n", encoding="utf-8")
+        # Inert when no [extensions] worktreeConfig appears in .git/config.
+        assert validate(root, MARKER, ATTEMPT, env)[
+            "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("POSITIVE_PASS_INERT_WORKTREE_CONFIG")
+    finally:
+        tmp.cleanup()
+
+    def active_worktree_config(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write("\n[extensions]\n    worktreeConfig = true\n")
+        (root / ".git" / "config.worktree").write_text(
+            "[core]\n    fsmonitor = arbitrary-command\n", encoding="utf-8")
+    rejected("ENABLED_WORKTREE_EXTENSION", active_worktree_config,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def linked_worktree_config(root):
+        p = root / ".git" / "config.worktree"
+        p.symlink_to(root / ".git" / "config")
+    rejected("SYMLINKED_WORKTREE_CONFIG", linked_worktree_config,
+             "UNTRUSTED_GIT_WORKTREE_CONFIG")
+
+    def oversized_worktree_config(root):
+        (root / ".git" / "config.worktree").write_bytes(b"X" * 10000)
+    rejected("OVERSIZED_WORKTREE_CONFIG", oversized_worktree_config,
+             "UNTRUSTED_GIT_WORKTREE_CONFIG")
+
+    tmp, root, info, env = fixture()
+    try:
+        git(root, "replace", "HEAD", "HEAD^")
+        assert guard._git_env()["GIT_NO_REPLACE_OBJECTS"] == "1"
+        assert validate(root, MARKER, ATTEMPT, env)[
+            "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("POSITIVE_PASS_REPLACEMENT_REFS_DISABLED")
+    finally:
+        tmp.cleanup()
+
+    tmp, root, info, env = fixture()
+    try:
+        # A01 IR001: inspect the actual grandchild, not merely killpg calls.
+        # The test is confined to disposable same-process-group children on
+        # Linux, and the finally clause kills only sessions created here.
+        original_popen = subprocess.Popen
+        actual_killpg = os.killpg
+
+        def descendant_live(pid: int) -> bool:
+            proc_stat = Path("/proc") / str(pid) / "stat"
+            try:
+                raw = proc_stat.read_text(encoding="ascii")
+            except FileNotFoundError:
+                return False
+            state = raw.rsplit(")", 1)[-1].strip().split()[0]
+            # A zombie has terminated and awaits the unrelated system reaper.
+            return state not in ("Z", "X", "x")
+
+        def exercise_descendant(label: str, neutralize_kill: bool) -> None:
+            pid_path = root.parent / ("descendant-" + label + ".pid")
+            created_groups: list[int] = []
+            program = (
+                "import pathlib,subprocess,sys;"
+                "grandchild=subprocess.Popen([sys.executable,'-B','-c',"
+                "'import time;time.sleep(10)']);"
+                f"pathlib.Path({str(pid_path)!r}).write_text("
+                "str(grandchild.pid),encoding='ascii')"
+            )
+
+            def launch(_argv, **kwargs):
+                assert kwargs["start_new_session"] is True
+                proc = original_popen([sys.executable, "-B", "-c", program],
+                                      **kwargs)
+                created_groups.append(proc.pid)
+                return proc
+
+            try:
+                with patch.object(guard.subprocess, "Popen", side_effect=launch):
+                    with patch.object(guard, "GIT_DEADLINE_SECONDS", 0.35):
+                        if neutralize_kill:
+                            group_kill = patch.object(
+                                guard.os, "killpg", side_effect=lambda *_: None)
+                        else:
+                            group_kill = patch.object(
+                                guard.os, "killpg", wraps=actual_killpg)
+                        with group_kill as invoked:
+                            try:
+                                guard.git(root, "rev-parse", "HEAD")
+                            except BlockedPrecondition as exc:
+                                assert str(exc) == "GIT_DEADLINE_EXCEEDED", str(exc)
+                            else:
+                                raise AssertionError("FALSE_ACCEPT_DESCENDANT_" + label)
+                            assert invoked.called, "DESCENDANT_GROUP_KILL_NOT_ATTEMPTED"
+                assert pid_path.is_file(), "GRANDCHILD_PID_NOT_OBSERVED"
+                pid = int(pid_path.read_text(encoding="ascii"))
+                assert pid > 0, "INVALID_SYNTHETIC_DESCENDANT_PID"
+                if neutralize_kill:
+                    # Sensitivity control: a no-op group killer must NOT be
+                    # mistaken for successful cleanup.
+                    assert descendant_live(pid), "DESCENDANT_SENSITIVITY_FALSE_NEGATIVE"
+                    print("NEGATIVE_CONTROL_PASS_NOOP_KILL_LEAVES_LIVE_CHILD")
+                else:
+                    for _ in range(100):
+                        if not descendant_live(pid):
+                            break
+                        time.sleep(0.01)
+                    assert not descendant_live(pid), "DESCENDANT_SURVIVED_GROUP_KILL"
+                    print("NEGATIVE_PASS_DESCENDANT_ACTUALLY_TERMINATED")
+            finally:
+                for group_id in created_groups:
+                    try:
+                        actual_killpg(group_id, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+        exercise_descendant("no-op", neutralize_kill=True)
+        exercise_descendant("real-kill", neutralize_kill=False)
+        with patch.object(guard.selectors, "DefaultSelector",
+                          side_effect=OSError("synthetic selector failure")):
+            try:
+                guard.git(root, "rev-parse", "HEAD")
+            except OSError:
+                print("NEGATIVE_PASS_SELECTOR_FAILURE_CLOSED")
+            else:
+                raise AssertionError("FALSE_ACCEPT_SELECTOR_FAILURE")
     finally:
         tmp.cleanup()
 
@@ -140,7 +427,9 @@ def main() -> None:
         env["GITHUB_SHA"] = git(root, "rev-parse", "HEAD")
     rejection("WRONG_FROZEN_PARENT", wrong_parent)
 
-    print("TS_EE_ACTIONS_IDENTITY_SYNTHETIC_1_POSITIVE_9_NEGATIVES_PASS")
+    hardening_checks()
+    additional_git_metadata_checks()
+    print("TS_EE_ACTIONS_IDENTITY_A03_METADATA_SUCCESSOR_SYNTHETIC_PASS")
 
 
 if __name__ == "__main__":
