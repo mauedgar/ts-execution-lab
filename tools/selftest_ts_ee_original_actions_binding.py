@@ -6,9 +6,14 @@ It never uses a Product repo, remote credential, network, or GitHub run.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+from unittest.mock import patch
+
+import ts_ee_original_actions_binding as guard
 
 from ts_ee_original_actions_binding import (
     VERSION, BlockedPrecondition, validate,
@@ -87,6 +92,112 @@ def rejection(label: str, work) -> None:
         tmp.cleanup()
 
 
+def hardening_checks() -> None:
+    """Deterministic fail-closed tests, never an external GitHub/host action."""
+    tmp, root, info, env = fixture()
+    try:
+        # Git's inherited config/alias/executable/prompt/tracing knobs are
+        # ignored regardless of the caller process environment.
+        with patch.dict(os.environ, {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.fsmonitor",
+            "GIT_CONFIG_VALUE_0": "malicious-command",
+            "GIT_EXEC_PATH": "/nonexistent/evil",
+            "GIT_TRACE": "/tmp/ts-ee-untrusted-trace",
+            "GIT_OPTIONAL_LOCKS": "1",
+        }):
+            safe = guard._git_env()
+            assert not any(k in safe for k in (
+                "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0",
+                "GIT_CONFIG_VALUE_0", "GIT_EXEC_PATH", "GIT_TRACE",
+            ))
+            assert safe["GIT_CONFIG_NOSYSTEM"] == "1"
+            assert safe["GIT_TERMINAL_PROMPT"] == "0"
+            assert validate(root, MARKER, ATTEMPT, env)[
+                "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("HARDENING_PASS_INHERITED_GIT_ENV_STRIPPED")
+
+        giant = root / "oversize.txt"
+        giant.write_bytes(b"X" * (guard.MAX_MARKER_BYTES + 8192))
+        git(root, "add", "oversize.txt")
+        git(root, "commit", "-qm", "oversize synthetic read object")
+        try:
+            guard.git_bytes(root, "show", "HEAD:oversize.txt")
+        except BlockedPrecondition as exc:
+            assert str(exc) == "GIT_STDOUT_LIMIT_EXCEEDED"
+        else:
+            raise AssertionError("FALSE_ACCEPT_OVERSIZED_MARKER")
+        print("NEGATIVE_PASS_REAL_GIT_OVERSIZED_OBJECT_BOUNDED")
+
+        original_popen = subprocess.Popen
+
+        def expect_program(label, command, expected, *, timeout=None):
+            def launch(_argv, **kwargs):
+                assert kwargs["shell"] is False
+                assert kwargs["start_new_session"] is True
+                assert kwargs["stdin"] == subprocess.DEVNULL
+                assert kwargs["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+                assert "GIT_CONFIG_COUNT" not in kwargs["env"]
+                return original_popen(
+                    [sys.executable, "-B", "-c", command], **kwargs
+                )
+            with patch.object(guard.subprocess, "Popen", side_effect=launch):
+                if timeout is not None:
+                    with patch.object(guard, "GIT_DEADLINE_SECONDS", timeout):
+                        try:
+                            guard.git(root, "rev-parse", "HEAD")
+                        except BlockedPrecondition as exc:
+                            assert str(exc) == expected, (label, str(exc))
+                        else:
+                            raise AssertionError("FALSE_ACCEPT_" + label)
+                else:
+                    try:
+                        guard.git(root, "rev-parse", "HEAD")
+                    except BlockedPrecondition as exc:
+                        assert str(exc) == expected, (label, str(exc))
+                    else:
+                        raise AssertionError("FALSE_ACCEPT_" + label)
+            print("NEGATIVE_PASS_" + label + "_" + expected)
+
+        expect_program(
+            "OVERSIZED_STDOUT",
+            "import sys;sys.stdout.write('X'*70000)",
+            "GIT_STDOUT_LIMIT_EXCEEDED",
+        )
+        expect_program(
+            "OVERSIZED_STDERR",
+            "import sys;sys.stderr.write('Y'*25000)",
+            "GIT_STDERR_LIMIT_EXCEEDED",
+        )
+        expect_program(
+            "NONZERO_CHILD_STATUS",
+            "import sys;sys.exit(7)",
+            "GIT_IDENTITY_READ_FAILED",
+        )
+        expect_program(
+            "NON_UTF8_CHILD_OUTPUT",
+            "import sys;sys.stdout.buffer.write(bytes([255]))",
+            "NON_UTF8_GIT_RESPONSE",
+        )
+        expect_program(
+            "CHILD_PROCESS_TIMEOUT",
+            "import time;time.sleep(2)",
+            "GIT_DEADLINE_EXCEEDED",
+            timeout=0.10,
+        )
+
+        with patch.object(guard, "GIT_BINARY", "/no/such/trusted/git"):
+            try:
+                guard.git(root, "rev-parse", "HEAD")
+            except BlockedPrecondition as exc:
+                assert str(exc) == "TRUSTED_GIT_NOT_FOUND"
+            else:
+                raise AssertionError("FALSE_ACCEPT_UNTRUSTED_BINARY")
+        print("NEGATIVE_PASS_TRUSTED_GIT_BINARY_UNAVAILABLE")
+    finally:
+        tmp.cleanup()
+
+
 def main() -> None:
     tmp, root, info, env = fixture()
     try:
@@ -140,7 +251,8 @@ def main() -> None:
         env["GITHUB_SHA"] = git(root, "rev-parse", "HEAD")
     rejection("WRONG_FROZEN_PARENT", wrong_parent)
 
-    print("TS_EE_ACTIONS_IDENTITY_SYNTHETIC_1_POSITIVE_9_NEGATIVES_PASS")
+    hardening_checks()
+    print("TS_EE_ACTIONS_IDENTITY_A03_HARDENED_1_POSITIVE_9_BASE_NEGATIVE_7_HARDENING_PASS")
 
 
 if __name__ == "__main__":
