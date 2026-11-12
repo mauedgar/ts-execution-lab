@@ -14,8 +14,11 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
+import signal
 import subprocess
 import sys
+import time
 
 VERSION = "TS-EE-ACTIONS-ORIGINAL-BINDING-v1"
 MAX_MARKER_BYTES = 4096
@@ -47,27 +50,115 @@ def safe_path(value: object, prefix: str) -> bool:
             and not value.endswith("/"))
 
 
-def git(root: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        check=False, timeout=15,
+# Strictly bounded Linux-only guard for disposable GitHub-hosted runner jobs.
+# No inherited GIT_CONFIG_*, GIT_EXEC_PATH, GIT_TRACE, HOME or arbitrary PATH.
+GIT_BINARY = "/usr/bin/git"
+MAX_GIT_STDOUT = 65536
+MAX_GIT_STDERR = 16384
+GIT_DEADLINE_SECONDS = 15.0
+
+
+def _git_env() -> dict[str, str]:
+    return {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/nonexistent-ts-ee-git-guard",
+        "XDG_CONFIG_HOME": "/nonexistent-ts-ee-git-guard",
+        "LC_ALL": "C",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_ATTR_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_OPTIONAL_LOCKS": "0",
+    }
+
+
+def _bounded_git(root: Path, args: tuple[str, ...], max_output: int) -> bytes:
+    """Trusted Git executable + minimal environment + bounded stdout/stderr.
+
+    The subprocess is always in a new process group. On timeout or excess
+    output the whole group is killed; its bytes are never streamed to logs.
+    This is intentionally Linux-only and fails closed on other platforms.
+    """
+    require(sys.platform.startswith("linux"), "GIT_GUARD_REQUIRES_LINUX")
+    require(Path(GIT_BINARY).is_file(), "TRUSTED_GIT_NOT_FOUND")
+    require(root.is_dir(), "GIT_REPOSITORY_ROOT_NOT_FOUND")
+    require(type(max_output) is int and 1 <= max_output <= MAX_GIT_STDOUT,
+            "GIT_OUTPUT_LIMIT_INVALID")
+    argv = [
+        GIT_BINARY, "--no-pager", "--no-optional-locks",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-C", str(root), *args,
+    ]
+    proc = subprocess.Popen(
+        argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, env=_git_env(), shell=False,
+        close_fds=True, start_new_session=True,
     )
-    require(result.returncode == 0, "GIT_IDENTITY_READ_FAILED")
+    output = bytearray()
+    stderr_size = 0
+    deadline = time.monotonic() + GIT_DEADLINE_SECONDS
     try:
-        return result.stdout.decode("utf-8", "strict").strip()
+        with selectors.DefaultSelector() as selector:
+            require(proc.stdout is not None and proc.stderr is not None,
+                    "GIT_PIPES_UNAVAILABLE")
+            selector.register(proc.stdout, selectors.EVENT_READ, "out")
+            selector.register(proc.stderr, selectors.EVENT_READ, "err")
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                require(remaining > 0.0, "GIT_DEADLINE_EXCEEDED")
+                ready = selector.select(timeout=remaining)
+                for key, _ in ready:
+                    chunk = os.read(key.fileobj.fileno(), 8192)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        key.fileobj.close()
+                    elif key.data == "out":
+                        require(len(output) + len(chunk) <= max_output,
+                                "GIT_STDOUT_LIMIT_EXCEEDED")
+                        output.extend(chunk)
+                    else:
+                        stderr_size += len(chunk)
+                        require(stderr_size <= MAX_GIT_STDERR,
+                                "GIT_STDERR_LIMIT_EXCEEDED")
+        remaining = deadline - time.monotonic()
+        require(remaining > 0.0, "GIT_DEADLINE_EXCEEDED")
+        try:
+            status = proc.wait(timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise BlockedPrecondition("GIT_DEADLINE_EXCEEDED") from exc
+        require(status == 0, "GIT_IDENTITY_READ_FAILED")
+        return bytes(output)
+    except BaseException:
+        if proc.poll() is None:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    finally:
+        if proc.stdout is not None:
+            proc.stdout.close()
+        if proc.stderr is not None:
+            proc.stderr.close()
+
+
+def git(root: Path, *args: str) -> str:
+    raw = _bounded_git(root, args, MAX_GIT_STDOUT)
+    try:
+        return raw.decode("utf-8", "strict").strip()
     except UnicodeDecodeError as exc:
         raise BlockedPrecondition("NON_UTF8_GIT_RESPONSE") from exc
 
 
 def git_bytes(root: Path, *args: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        check=False, timeout=15,
-    )
-    require(result.returncode == 0, "GIT_BLOB_READ_FAILED")
-    return result.stdout
+    return _bounded_git(root, args, MAX_MARKER_BYTES)
+
 
 
 def validate(root: Path, marker_path: str, attempt: str,
