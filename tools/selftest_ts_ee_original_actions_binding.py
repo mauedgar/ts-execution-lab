@@ -252,7 +252,7 @@ def main() -> None:
     rejection("WRONG_FROZEN_PARENT", wrong_parent)
 
     hardening_checks()
-    print("TS_EE_ACTIONS_IDENTITY_A03_HARDENED_1_POSITIVE_9_BASE_NEGATIVE_7_HARDENING_PASS")
+    print("TS_EE_ACTIONS_IDENTITY_A03_HARDENED_2_POSITIVE_16_NEGATIVES_PASS")
 
 
 if __name__ == "__main__":
