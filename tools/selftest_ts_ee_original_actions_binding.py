@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 
 import ts_ee_original_actions_binding as guard
@@ -198,6 +199,124 @@ def hardening_checks() -> None:
         tmp.cleanup()
 
 
+def metadata_adversarial_checks() -> None:
+    """Explicit local .git metadata trust and process-lifecycle negatives."""
+    def reject(name, mutate, expected):
+        temp, root, info, env = fixture()
+        try:
+            mutate(root)
+            try:
+                validate(root, MARKER, ATTEMPT, env)
+            except BlockedPrecondition as exc:
+                assert str(exc) == expected, (name, str(exc), expected)
+                print("NEGATIVE_PASS_" + name + "_" + expected)
+            else:
+                raise AssertionError("FALSE_ACCEPT_" + name)
+        finally:
+            temp.cleanup()
+
+    def inject_include(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write("\n[include]\npath = /tmp/untrusted.ini\n")
+    reject("INJECT_LOCAL_INCLUDE", inject_include,
+           "GIT_LOCAL_CONFIG_UNTRUSTED")
+
+    def inject_fsmonitor(root):
+        git(root, "config", "core.fsmonitor", "!unsafe-helper")
+    reject("INJECT_LOCAL_FS_MONITOR", inject_fsmonitor,
+           "GIT_LOCAL_CONFIG_UNTRUSTED")
+
+    def inject_replace(root):
+        git(root, "replace", "HEAD", "HEAD^")
+    reject("GIT_OBJECT_REPLACE_REF", inject_replace,
+           "GIT_REPLACE_REFS_PRESENT")
+
+    def inject_grafts(root):
+        file = root / ".git" / "info" / "grafts"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("forged parent history\n", encoding="utf-8")
+    reject("GIT_GRAFT_FILE", inject_grafts,
+           "GIT_GRAFTS_OR_ALTERNATES_PRESENT")
+
+    def inject_alternate_objects(root):
+        file = root / ".git" / "objects" / "info" / "alternates"
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("/tmp/untrusted-objects\n", encoding="utf-8")
+    reject("GIT_ALTERNATE_OBJECT_DB", inject_alternate_objects,
+           "GIT_GRAFTS_OR_ALTERNATES_PRESENT")
+
+    def symlink_config(root):
+        config = root / ".git" / "config"
+        saved = root / ".git" / "config_saved"
+        config.rename(saved)
+        config.symlink_to(saved)
+    reject("GIT_LOCAL_CONFIG_SYMLINK", symlink_config,
+           "GIT_LOCAL_METADATA_UNTRUSTED")
+
+    def group_writable_config(root):
+        cfg = root / ".git" / "config"
+        cfg.chmod(0o666)
+    reject("GIT_CONFIG_GROUP_WRITABLE", group_writable_config,
+           "GIT_LOCAL_METADATA_UNTRUSTED")
+
+    temp, root, info, env = fixture()
+    try:
+        assert guard._git_env()["GIT_NO_REPLACE_OBJECTS"] == "1"
+        assert validate(root, MARKER, ATTEMPT, env)[
+            "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("METADATA_POSITIVE_TRUSTED_LOCAL_CHECKOUT_PASS")
+
+        with patch.object(guard.selectors, "DefaultSelector",
+                          side_effect=OSError("injected selector failure")):
+            try:
+                guard.git(root, "rev-parse", "HEAD")
+            except OSError:
+                print("NEGATIVE_PASS_SELECTOR_ERROR_FAIL_CLOSED")
+            else:
+                raise AssertionError("FALSE_ACCEPT_SELECTOR_ERROR")
+    finally:
+        temp.cleanup()
+
+    temp, root, info, env = fixture()
+    try:
+        output = root.parent / "survived-child.txt"
+        started = root.parent / "descendant-started.txt"
+        grandchild = (
+            "import pathlib,time;time.sleep(0.9);"
+            + "pathlib.Path(" + repr(str(output))
+            + ").write_text('SURVIVED',encoding='utf-8')"
+        )
+        parent_program = (
+            "import subprocess,sys,time,pathlib;"
+            + "subprocess.Popen([sys.executable,'-c',"
+            + repr(grandchild) + "]);"
+            + "pathlib.Path(" + repr(str(started))
+            + ").write_text('STARTED',encoding='utf-8');"
+            + "time.sleep(5)"
+        )
+        original_popen = subprocess.Popen
+
+        def launch(_args, **kwargs):
+            assert kwargs["start_new_session"] is True
+            return original_popen([sys.executable, "-B", "-c", parent_program],
+                                  **kwargs)
+
+        with patch.object(guard.subprocess, "Popen", side_effect=launch):
+            with patch.object(guard, "GIT_DEADLINE_SECONDS", 0.5):
+                try:
+                    guard.git(root, "rev-parse", "HEAD")
+                except BlockedPrecondition as exc:
+                    assert str(exc) == "GIT_DEADLINE_EXCEEDED"
+                else:
+                    raise AssertionError("FALSE_ACCEPT_DESCENDANT_TIMEOUT")
+        assert started.exists(), "DESCENDANT_TEST_NOT_ACTUALLY_STARTED"
+        time.sleep(1.0)
+        assert not output.exists(), "DESCENDANT_SURVIVED_GROUP_KILL"
+        print("NEGATIVE_PASS_DESCENDANT_GROUP_TERMINATION")
+    finally:
+        temp.cleanup()
+
+
 def main() -> None:
     tmp, root, info, env = fixture()
     try:
@@ -252,7 +371,8 @@ def main() -> None:
     rejection("WRONG_FROZEN_PARENT", wrong_parent)
 
     hardening_checks()
-    print("TS_EE_ACTIONS_IDENTITY_A03_HARDENED_2_POSITIVE_16_NEGATIVES_PASS")
+    metadata_adversarial_checks()
+    print("TS_EE_ACTIONS_IDENTITY_A03_METADATA_AND_PROCESS_HARDENING_PASS")
 
 
 if __name__ == "__main__":
