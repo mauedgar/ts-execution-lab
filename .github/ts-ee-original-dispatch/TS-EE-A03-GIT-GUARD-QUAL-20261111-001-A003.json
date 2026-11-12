@@ -1,0 +1,12 @@
+{
+  "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+  "execution_attempt": "TS-EE-A03-GIT-GUARD-QUAL-20261111-001-A003",
+  "repository": "mauedgar/ts-execution-lab",
+  "ref": "refs/heads/ee/ts-ee-actions-git-guard-a03-20261111-003",
+  "source_parent_commit": "0798b3d1ce392e937f772aaaa739496d5fbabe6f",
+  "source_parent_tree": "3197b00b12edbe7aaee5d083242c3457fa39bafa",
+  "workflow_path": ".github/workflows/ts-ee-original-git-a03-qual-20261111-003.yml",
+  "workflow_blob": "85cf12bc649c131f9796248fea7013aee22a93d8",
+  "marker_path": ".github/ts-ee-original-dispatch/TS-EE-A03-GIT-GUARD-QUAL-20261111-001-A003.json",
+  "control_request": "mauedgar/ts-execution-transport@1d58491850802c26dc2a015e2988adb01389369b:requests/TS-EE-A03-GIT-GUARD-QUAL-20261111-001-A003/REQUEST.md"
+}
