@@ -1,6 +1,6 @@
 # TS EE #18 — Aware C2A OpenCode2 synthetic permission qualifier, IR001 repair
 
-**Identity:** `TS-EE-AWARE-C2A-OC2-BINDING-QUAL-001` • **class:** `NONPRODUCT_SYNTHETIC_ONLY` • **owner:** TS Execution Engineering • **consumer:** Aware Control #29 (PAUSED).  
+**Identity:** `TS-EE-AWARE-C2A-OC2-BINDING-QUAL-001` • **class:** `NONPRODUCT_SYNTHETIC_ONLY` • **owner:** TS Execution Engineering • **consumer:** Aware Control #29 (independent Product responsibility).  
 **Baseline:** [PR #21](https://github.com/mauedgar/ts-execution-lab/pull/21) original candidate `dbf26d291b9356c2542ebe67c5b2a402c9a3e4e3`, original [IR001](https://github.com/mauedgar/ts-execution-transport/blob/259d6083bb45bdcc64847b74c2bcd7f600043be2/results/TS-EE-C2A-OC2-PR21-WEBINLINE-IR001-20261111-001/ORIGINAL.md) `NO_RECOMMEND / 5F / 4A` preserved unchanged.  
 **This isolated repair:** proposed response to F01–F05 and A01–A04. Tests and review must independently establish actual closure; documentation does NOT qualify a native runner.
 
@@ -29,8 +29,10 @@ This snippet is NOT authority to execute. In particular, Commander may execute o
 5. Verify **exact UTF-8 bytes** `TS_EE_ALLOWED_PROBE` in the sole approved synthetic file and absence of forbidden sibling. Only then may receipt say `PASS / CONFIRMED_SYNTHETIC_ONLY`. All post-dispatch non-PASS terminal states remain `UNKNOWN / UNKNOWN_SYNTHETIC` conservatively; do not infer `NONE` from a nonzero process exit or missing output.
 6. `--observe` retrieves the original START/DISPATCH/RESULT state without running model again; if dispatch marker exists and terminal receipt does not, effect stays UNKNOWN and must be reconciled through original provider-native evidence. All attempts keep their identity; do not append retry suffixes without a new competent grant.
 
+The updated read-only receipt reconciliation rechecks original START/DISPATCH/RESULT identities, native log SHA-256/byte length and the exact synthetic output, and returns UNKNOWN for corrupt or inconsistent evidence. These checks prove **local consistency only**: they do not authenticate the native provider or constitute independent reviewer acceptance. A successful CI on this code is not a Windows native PASS.
+
 ## Limits and review
 
 Provider authentication mode, no metered-API fallback, owner/ACL, real reparse-point behavior, final resolved per-session OpenCode permissions and actual tool registry **require empirical native qualification**; the synthetic source and CI cannot guarantee them. The original static PR #21 CI run 43039612021 PASS is not an OpenCode result. IR001 original 5F/4A preserved. Repair must undergo a NEW independent IR on a fresh exact HEAD/tree, followed by one new originally authorized synthetic execution on the intended host and separate Control audit. If native host differs, adapt only under new owner/binding qualification; do not weaken Product deny-all.
 
-**No effects on** `mauedgar/tecnotron-ai`, `mauedgar/aware-commerce`, BE #6, FE #7, original P0 TaskCycle or Phase2, secrets, workflows in other repos, paid provider accounts, deployment or production. Aware remains PAUSED until both Tecnotron #71 and TS EE #18 produce actionable final technical results; **Developer** is the term for acceptance/escalation/semantic decisions.
+**No effects on** `mauedgar/tecnotron-ai`, `mauedgar/aware-commerce`, BE #6, FE #7, original P0 TaskCycle or Phase2, secrets, workflows in other repos, paid provider accounts, deployment or production. Aware Control proceeds independently under its own competent grants; #18 qualifies this bounded C2A worker binding only, without a blanket Product pause; **Developer** is the term for acceptance/escalation/semantic decisions.
