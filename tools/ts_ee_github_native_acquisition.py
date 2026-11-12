@@ -369,7 +369,141 @@ def acquire(fetch, req):
     }
 
 
-def qualify(fetch, control_ref, guard):
+def current_provider_identity(fetch, req, control_ref, guard, runtime):
+    """Authenticate this very qualifying run using GitHub native GETs.
+
+    The immutable external Control request pins the source parent/tree and
+    workflow blob before marker dispatch. The HEAD/run/marker are verified
+    against both native runtime environment and provider API; local guard
+    JSON alone cannot prove the current original. No mutating endpoint.
+    """
+    need(type(runtime) is dict and
+         runtime.get("GITHUB_ACTIONS") == "true" and
+         runtime.get("GITHUB_REPOSITORY") == TRANSPORT and
+         runtime.get("GITHUB_EVENT_NAME") == "push" and
+         runtime.get("GITHUB_RUN_ATTEMPT") == "1" and
+         type(runtime.get("GITHUB_RUN_ID")) is str and
+         re.fullmatch(r"[1-9][0-9]*", runtime["GITHUB_RUN_ID"]) is not None and
+         type(runtime.get("GITHUB_SHA")) is str and
+         HEX.fullmatch(runtime["GITHUB_SHA"]) is not None and
+         type(runtime.get("GITHUB_REF")) is str and
+         REF.fullmatch(runtime["GITHUB_REF"]) is not None,
+         "CURRENT_RUNTIME_IDENTITY_INVALID")
+    run_id = int(runtime["GITHUB_RUN_ID"])
+    head_sha = runtime["GITHUB_SHA"]
+    branch = runtime["GITHUB_REF"].removeprefix("refs/heads/")
+    need(guard.get("version") == "TS-EE-ACTIONS-ORIGINAL-BINDING-v1" and
+         guard.get("status") == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS",
+         "CURRENT_GUARD_STATUS_INVALID")
+    need(guard.get("repository") == TRANSPORT,
+         "CURRENT_GUARD_REPOSITORY_INVALID")
+    need(guard.get("ref") == runtime["GITHUB_REF"],
+         "CURRENT_GUARD_REF_INVALID")
+    need(guard.get("run_id") == str(run_id) and
+         guard.get("run_attempt") == 1,
+         "CURRENT_GUARD_RUN_ID_INVALID")
+    need(guard.get("head_commit") == head_sha,
+         "CURRENT_GUARD_HEAD_INVALID")
+    need(type(guard.get("head_tree")) is str and
+         HEX.fullmatch(guard["head_tree"]) is not None,
+         "CURRENT_GUARD_TREE_INVALID")
+    need(type(guard.get("marker_blob")) is str and
+         HEX.fullmatch(guard["marker_blob"]) is not None,
+         "CURRENT_GUARD_MARKER_INVALID")
+    need(guard.get("source_parent_commit") == req["source_parent_commit"] and
+         guard.get("source_parent_tree") == req["source_parent_tree"] and
+         guard.get("workflow_blob") == req["workflow_blob"] and
+         guard.get("execution_attempt") == req["qualification_attempt"] and
+         guard.get("control_request") == control_ref and
+         guard.get("effect") == "READ_ONLY_IDENTITY_PREFLIGHT" and
+         guard.get("product_effect") == "NONE",
+         "CURRENT_GUARD_FROZEN_REQUEST_MISMATCH")
+
+    native_run, _ = get(fetch,
+        f"/repos/{TRANSPORT}/actions/runs/{run_id}")
+    need(native_run.get("id") == run_id and
+         native_run.get("head_sha") == head_sha and
+         native_run.get("head_branch") == branch and
+         native_run.get("path") == req["workflow_path"] and
+         native_run.get("event") == "push" and
+         native_run.get("run_attempt") == 1 and
+         native_run.get("status") in ("queued", "in_progress") and
+         native_run.get("repository", {}).get("full_name") == TRANSPORT,
+         "CURRENT_NATIVE_RUN_MISMATCH")
+    native_head, _ = get(fetch,
+        f"/repos/{TRANSPORT}/git/commits/{head_sha}")
+    need(native_head.get("sha") == head_sha and
+         native_head.get("tree", {}).get("sha") == guard["head_tree"] and
+         type(native_head.get("parents")) is list and
+         len(native_head["parents"]) == 1 and
+         native_head["parents"][0].get("sha") == req["source_parent_commit"],
+         "CURRENT_NATIVE_COMMIT_MISMATCH")
+    native_parent, _ = get(fetch,
+        f"/repos/{TRANSPORT}/git/commits/{req['source_parent_commit']}")
+    need(native_parent.get("sha") == req["source_parent_commit"] and
+         native_parent.get("tree", {}).get("sha") ==
+         req["source_parent_tree"],
+         "CURRENT_NATIVE_SOURCE_TREE_MISMATCH")
+    native_files, _ = get(fetch,
+        f"/repos/{TRANSPORT}/commits/{head_sha}")
+    entries = native_files.get("files")
+    need(native_files.get("sha") == head_sha and
+         type(entries) is list and len(entries) == 1 and
+         entries[0].get("filename") == req["marker_path"] and
+         entries[0].get("status") == "added" and
+         entries[0].get("sha") == guard["marker_blob"],
+         "CURRENT_NATIVE_MARKER_ONLY_DELTA_INVALID")
+
+    marker_raw, marker_blob = file_bytes(
+        fetch, TRANSPORT, req["marker_path"], head_sha,
+        guard["marker_blob"])
+    marker = parse_json(marker_raw)
+    expected = {
+        "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+        "execution_attempt": req["qualification_attempt"],
+        "repository": TRANSPORT,
+        "ref": runtime["GITHUB_REF"],
+        "source_parent_commit": req["source_parent_commit"],
+        "source_parent_tree": req["source_parent_tree"],
+        "workflow_path": req["workflow_path"],
+        "workflow_blob": req["workflow_blob"],
+        "marker_path": req["marker_path"],
+        "control_request": control_ref,
+    }
+    need(marker == expected and marker_blob == guard["marker_blob"],
+         "CURRENT_NATIVE_MARKER_REQUEST_MISMATCH")
+    _, verified_workflow_blob = file_bytes(
+        fetch, TRANSPORT, req["workflow_path"], head_sha,
+        req["workflow_blob"])
+    need(verified_workflow_blob == req["workflow_blob"],
+         "CURRENT_NATIVE_WORKFLOW_BLOB_INVALID")
+
+    current_list_path = (
+        f"/repos/{TRANSPORT}/actions/runs?branch={quote(branch, safe='')}"
+        f"&per_page={PAGE}&page=1")
+    listed, h1 = get(fetch, current_list_path)
+    need(type(listed.get("total_count")) is int and
+         listed["total_count"] == 1 and
+         type(listed.get("workflow_runs")) is list and
+         len(listed["workflow_runs"]) == 1 and
+         listed["workflow_runs"][0].get("id") == run_id and
+         listed["workflow_runs"][0].get("head_branch") == branch and
+         h1.get("link", "") == "",
+         "CURRENT_NATIVE_ORIGINAL_RUN_NOT_UNIQUE")
+    rechecked, h2 = get(fetch, current_list_path)
+    need(rechecked == listed and h2.get("link", "") == "",
+         "CURRENT_NATIVE_RUN_LIST_CHANGED")
+    return {
+        "current_original_run_id": run_id,
+        "current_original_commit": head_sha,
+        "current_original_tree": guard["head_tree"],
+        "current_original_marker_blob": guard["marker_blob"],
+        "current_original_workflow_blob": req["workflow_blob"],
+        "current_native_provider_verified": True,
+    }
+
+
+def qualify(fetch, control_ref, guard, runtime):
     match = CONTROL.fullmatch(control_ref)
     need(match is not None, "QUALIFICATION_REQUEST_REF_INVALID")
     data, sha = file_bytes(fetch, TRANSPORT, match.group(2), match.group(1))
@@ -384,7 +518,9 @@ def qualify(fetch, control_ref, guard):
          guard.get("run_attempt") == 1 and
          guard.get("product_effect") == "NONE",
          "CURRENT_ORIGINAL_GUARD_INVALID")
+    current = current_provider_identity(fetch, req, control_ref, guard, runtime)
     result = acquire(fetch, req)
+    result.update(current)
     result.update({
         "qualification_attempt": req["qualification_attempt"],
         "qualification_request": control_ref,
@@ -404,7 +540,7 @@ def main():
              "ORIGINAL_GUARD_NOT_BOUNDED")
         guard = parse_json(opts.original_guard.read_bytes())
         result = qualify(GitHubRead(os.environ.get("TS_EE_GITHUB_READ_TOKEN")),
-                         opts.request_ref, guard)
+                         opts.request_ref, guard, dict(os.environ))
     except (BlockedPrecondition, OSError, KeyError, TypeError) as exc:
         message = str(exc) if type(exc) is BlockedPrecondition else "INVALID_EVIDENCE"
         if re.fullmatch(r"[A-Z0-9_]{3,96}", message) is None:

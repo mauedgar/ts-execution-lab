@@ -38,7 +38,18 @@ NEW_WF = ".github/workflows/ts-ee-github-native-qual-20261111-001.yml"
 NEW_MARKER = ".github/ts-ee-original-dispatch/" + NEW_ATTEMPT + ".json"
 NEW_REQ = ("mauedgar/ts-execution-transport@" + ("a" * 40) +
            ":requests/TS-EE-GITHUB-NATIVE-ACQ-20261111-001/REQUEST.md")
-NEW_PARENT, NEW_TREE, NEW_WF_BLOB = "b" * 40, "c" * 40, "d" * 40
+NEW_PARENT, NEW_TREE = "b" * 40, "c" * 40
+NEW_WF_BYTES = b"name: current original test\non: push\n"
+NEW_WF_BLOB = blob_sha(NEW_WF_BYTES)
+CURRENT_RUN = 1234567
+CURRENT_HEAD = "e" * 40
+CURRENT_TREE = "9" * 40
+CURRENT_REF = "refs/heads/ee/ts-ee-github-native-currentrun-20261111-003"
+CURRENT_BRANCH = CURRENT_REF.removeprefix("refs/heads/")
+CURRENT_RUNS_ENDPOINT = (
+    f"/repos/{TRANSPORT}/actions/runs?branch="
+    + quote(CURRENT_BRANCH, safe="") + "&per_page=100&page=1"
+)
 RUNS_ENDPOINT = ("/repos/" + REPO + "/actions/runs?branch=" +
                  quote(OLD_REF.removeprefix("refs/heads/"), safe="") +
                  "&per_page=100&page=1")
@@ -156,8 +167,71 @@ def fixture():
         f"/repos/{REPO}/actions/runs/{RUN_ID}": (old_run, {}),
         RUNS_ENDPOINT: (listing, {"link": ""}),
     }
-    guard = {
+    current_marker = {
+        "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
         "execution_attempt": NEW_ATTEMPT,
+        "repository": TRANSPORT,
+        "ref": CURRENT_REF,
+        "source_parent_commit": NEW_PARENT,
+        "source_parent_tree": NEW_TREE,
+        "workflow_path": NEW_WF,
+        "workflow_blob": NEW_WF_BLOB,
+        "marker_path": NEW_MARKER,
+        "control_request": NEW_REQ,
+    }
+    current_marker_bytes = (json.dumps(current_marker, sort_keys=True) + "\n").encode()
+    current_marker_blob = blob_sha(current_marker_bytes)
+    current_run = {
+        "id": CURRENT_RUN, "event": "push", "status": "in_progress",
+        "conclusion": None, "run_attempt": 1,
+        "head_branch": CURRENT_BRANCH, "head_sha": CURRENT_HEAD,
+        "path": NEW_WF,
+        "repository": {"full_name": TRANSPORT},
+    }
+    urls.update({
+        f"/repos/{TRANSPORT}/actions/runs/{CURRENT_RUN}": (current_run, {}),
+        f"/repos/{TRANSPORT}/git/commits/{CURRENT_HEAD}": ({
+            "sha": CURRENT_HEAD, "tree": {"sha": CURRENT_TREE},
+            "parents": [{"sha": NEW_PARENT}],
+        }, {}),
+        f"/repos/{TRANSPORT}/git/commits/{NEW_PARENT}": ({
+            "sha": NEW_PARENT, "tree": {"sha": NEW_TREE},
+        }, {}),
+        f"/repos/{TRANSPORT}/commits/{CURRENT_HEAD}": ({
+            "sha": CURRENT_HEAD, "files": [{
+                "filename": NEW_MARKER, "status": "added",
+                "sha": current_marker_blob,
+            }],
+        }, {}),
+        f"/repos/{TRANSPORT}/contents/{NEW_MARKER}?ref={CURRENT_HEAD}": (
+            file_record(current_marker_bytes), {}),
+        f"/repos/{TRANSPORT}/contents/{NEW_WF}?ref={CURRENT_HEAD}": (
+            file_record(NEW_WF_BYTES), {}),
+        CURRENT_RUNS_ENDPOINT: ({
+            "total_count": 1, "workflow_runs": [
+                {"id": CURRENT_RUN, "head_branch": CURRENT_BRANCH}
+            ],
+        }, {"link": ""}),
+    })
+    runtime = {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_REPOSITORY": TRANSPORT,
+        "GITHUB_REF": CURRENT_REF,
+        "GITHUB_SHA": CURRENT_HEAD,
+        "GITHUB_RUN_ID": str(CURRENT_RUN),
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GITHUB_EVENT_NAME": "push",
+    }
+    guard = {
+        "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+        "status": "TS_EE_ORIGINAL_GIT_TRANSITION_PASS",
+        "execution_attempt": NEW_ATTEMPT,
+        "repository": TRANSPORT,
+        "ref": CURRENT_REF,
+        "run_id": str(CURRENT_RUN),
+        "head_commit": CURRENT_HEAD,
+        "head_tree": CURRENT_TREE,
+        "marker_blob": current_marker_blob,
         "source_parent_commit": NEW_PARENT,
         "source_parent_tree": NEW_TREE,
         "workflow_blob": NEW_WF_BLOB,
@@ -165,7 +239,7 @@ def fixture():
         "effect": "READ_ONLY_IDENTITY_PREFLIGHT",
         "product_effect": "NONE", "run_attempt": 1,
     }
-    return urls, guard
+    return urls, guard, runtime
 
 
 class FakeRead:
@@ -180,11 +254,11 @@ class FakeRead:
 
 
 def run_case(name, change, expected):
-    urls, guard = fixture()
+    urls, guard, runtime = fixture()
     change(urls, guard)
     fake = FakeRead(urls)
     try:
-        qualify(fake, NEW_REQ, guard)
+        qualify(fake, NEW_REQ, guard, runtime)
     except BlockedPrecondition as exc:
         assert str(exc) == expected, (name, expected, str(exc))
         print("NEGATIVE_PASS_" + name + "_" + expected)
@@ -200,9 +274,9 @@ def modify(urls, path, operation):
 
 
 def main():
-    urls, guard = fixture()
+    urls, guard, runtime = fixture()
     fake = FakeRead(urls)
-    good = qualify(fake, NEW_REQ, guard)
+    good = qualify(fake, NEW_REQ, guard, runtime)
     assert good["status"] == "TS_EE_GITHUB_NATIVE_EVIDENCE_PASS"
     assert good["complete_tree_and_run_inventory"] is True
     assert good["all_branch_run_ids"] == [RUN_ID]
@@ -322,6 +396,41 @@ def main():
     run_case("FORGED_GUARD", lambda u, g:
              g.update(source_parent_commit="0"*40),
              "CURRENT_ORIGINAL_SOURCE_NOT_FROZEN")
+    # Current original: separately authenticated provider run/commit/marker.
+    run_case("CURRENT_GUARD_STATUS", lambda u, g:
+             g.update(status="FORGED_PASS"),
+             "CURRENT_GUARD_STATUS_INVALID")
+    run_case("CURRENT_GUARD_RUN_ID", lambda u, g:
+             g.update(run_id=str(CURRENT_RUN+1)),
+             "CURRENT_GUARD_RUN_ID_INVALID")
+    run_case("CURRENT_GUARD_REPOSITORY", lambda u, g:
+             g.update(repository=REPO),
+             "CURRENT_GUARD_REPOSITORY_INVALID")
+    run_case("CURRENT_GUARD_REF", lambda u, g:
+             g.update(ref="refs/heads/ee/forged"),
+             "CURRENT_GUARD_REF_INVALID")
+    run_case("CURRENT_GUARD_HEAD", lambda u, g:
+             g.update(head_commit="0"*40),
+             "CURRENT_GUARD_HEAD_INVALID")
+    run_case("CURRENT_GUARD_TREE", lambda u, g:
+             g.update(head_tree="0"*40),
+             "CURRENT_NATIVE_COMMIT_MISMATCH")
+    run_case("CURRENT_GUARD_MARKER", lambda u, g:
+             g.update(marker_blob="0"*40),
+             "CURRENT_NATIVE_MARKER_ONLY_DELTA_INVALID")
+    run_case("CURRENT_PROVIDER_RUN", lambda u, g:
+             modify(u, f"/repos/{TRANSPORT}/actions/runs/{CURRENT_RUN}",
+                    lambda x: x.update(status="completed")),
+             "CURRENT_NATIVE_RUN_MISMATCH")
+    run_case("CURRENT_PROVIDER_MARKER", lambda u, g:
+             modify(u,
+                    f"/repos/{TRANSPORT}/contents/{NEW_MARKER}?ref={CURRENT_HEAD}",
+                    lambda x: x.update(sha="0"*40)),
+             "NATIVE_CONTENT_BLOB_MISMATCH")
+    run_case("CURRENT_PROVIDER_DUPLICATE", lambda u, g:
+             modify(u, CURRENT_RUNS_ENDPOINT,
+                    lambda x: x.update(total_count=2)),
+             "CURRENT_NATIVE_ORIGINAL_RUN_NOT_UNIQUE")
     # The adapter never accepts caller-provided 'native' or 'external'
     # dictionaries. A coherent forged JSON tuple can pass legacy reconcile
     # in isolation, but is not a supported input to this native acquisition.
@@ -333,7 +442,7 @@ def main():
         print("NEGATIVE_PASS_MISSING_AUTHENTICATED_TOKEN")
     else:
         raise AssertionError("FALSE_ACCEPT_UNAUTHENTICATED_NATIVE_MODE")
-    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_23_NEGATIVES_PASS")
+    print("TS_EE_NATIVE_ADAPTER_1_POSITIVE_33_NEGATIVES_PASS")
 
 
 if __name__ == "__main__":
