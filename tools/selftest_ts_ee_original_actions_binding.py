@@ -29,7 +29,9 @@ REQUEST = ("mauedgar/ts-execution-transport@" + ("a" * 40) +
 
 
 def git(root: Path, *argv: str) -> str:
-    return subprocess.check_output(["git", "-C", str(root), *argv],
+    return subprocess.check_output(["git", "-c", "user.email=synthetic@example.invalid",
+                                    "-c", "user.name=Synthetic EE Test",
+                                    "-C", str(root), *argv],
                                    stderr=subprocess.DEVNULL).decode().strip()
 
 
@@ -38,8 +40,7 @@ def fixture():
     root = Path(parent.name) / "repo"
     root.mkdir()
     git(root, "init", "-q")
-    git(root, "config", "user.email", "synthetic@example.invalid")
-    git(root, "config", "user.name", "Synthetic EE Test")
+    # Commit identity stays invocation-local; no untrusted local [user] config.
     wf = root / WORKFLOW
     wf.parent.mkdir(parents=True)
     wf.write_text("name: identity unit test\non: push\n", encoding="utf-8")
@@ -198,6 +199,92 @@ def hardening_checks() -> None:
         tmp.cleanup()
 
 
+
+def additional_git_metadata_checks() -> None:
+    """Adversarial local config, replacement refs, and process cleanup."""
+    def rejected(label, mutate, code):
+        tmp, root, info, env = fixture()
+        try:
+            mutate(root)
+            try:
+                validate(root, MARKER, ATTEMPT, env)
+            except BlockedPrecondition as exc:
+                assert str(exc) == code, (label, str(exc))
+            else:
+                raise AssertionError("FALSE_ACCEPT_" + label)
+            print("NEGATIVE_PASS_" + label + "_" + code)
+        finally:
+            tmp.cleanup()
+
+    def malicious_local_config(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write('\n[include]\n    path = /tmp/attacker.gitconfig\n')
+    rejected("LOCAL_GIT_INCLUDE", malicious_local_config,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def local_config_shell_command(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write('\n[core]\n    fsmonitor = arbitrary-command\n')
+    rejected("LOCAL_GIT_EXECUTABLE_SETTING", local_config_shell_command,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def alternate_object_store(root):
+        alt = root / ".git" / "objects" / "info" / "alternates"
+        alt.parent.mkdir(parents=True, exist_ok=True)
+        alt.write_text("/tmp/untrusted-git-objects\n", encoding="utf-8")
+    rejected("GIT_OBJECT_ALTERNATES", alternate_object_store,
+             "UNTRUSTED_GIT_OBJECT_REDIRECTION")
+
+    def symlinked_config(root):
+        original = root / ".git" / "config"
+        original.rename(original.with_name("config.saved"))
+        original.symlink_to(original.with_name("config.saved"))
+    rejected("SYMLINKED_GIT_CONFIG", symlinked_config,
+             "UNTRUSTED_GIT_METADATA_LINK")
+
+    tmp, root, info, env = fixture()
+    try:
+        git(root, "replace", "HEAD", "HEAD^")
+        assert guard._git_env()["GIT_NO_REPLACE_OBJECTS"] == "1"
+        assert validate(root, MARKER, ATTEMPT, env)[
+            "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("POSITIVE_PASS_REPLACEMENT_REFS_DISABLED")
+    finally:
+        tmp.cleanup()
+
+    tmp, root, info, env = fixture()
+    try:
+        with patch.object(guard.os, "killpg", wraps=os.killpg) as killed:
+            original_popen = subprocess.Popen
+            def launch(_argv, **kwargs):
+                return original_popen([
+                    sys.executable, "-B", "-c",
+                    "import subprocess,sys;"
+                    "subprocess.Popen([sys.executable,'-B','-c',"
+                    "'import time;time.sleep(2)'])"
+                ], **kwargs)
+            with patch.object(guard.subprocess, "Popen", side_effect=launch):
+                with patch.object(guard, "GIT_DEADLINE_SECONDS", 0.15):
+                    try:
+                        guard.git(root, "rev-parse", "HEAD")
+                    except BlockedPrecondition as exc:
+                        assert str(exc) == "GIT_DEADLINE_EXCEEDED", str(exc)
+                    else:
+                        raise AssertionError("FALSE_ACCEPT_DESCENDANT_PIPES")
+            assert killed.called, "DESCENDANT_GROUP_NOT_KILLED"
+            print("NEGATIVE_PASS_DESCENDANT_PIPES_GROUP_KILLED")
+        with patch.object(guard.selectors, "DefaultSelector",
+                          side_effect=OSError("synthetic selector failure")):
+            try:
+                guard.git(root, "rev-parse", "HEAD")
+            except OSError:
+                print("NEGATIVE_PASS_SELECTOR_FAILURE_CLOSED")
+            else:
+                raise AssertionError("FALSE_ACCEPT_SELECTOR_FAILURE")
+    finally:
+        tmp.cleanup()
+
+
 def main() -> None:
     tmp, root, info, env = fixture()
     try:
@@ -252,7 +339,8 @@ def main() -> None:
     rejection("WRONG_FROZEN_PARENT", wrong_parent)
 
     hardening_checks()
-    print("TS_EE_ACTIONS_IDENTITY_A03_HARDENED_2_POSITIVE_16_NEGATIVES_PASS")
+    additional_git_metadata_checks()
+    print("TS_EE_ACTIONS_IDENTITY_A03_METADATA_SUCCESSOR_SYNTHETIC_PASS")
 
 
 if __name__ == "__main__":

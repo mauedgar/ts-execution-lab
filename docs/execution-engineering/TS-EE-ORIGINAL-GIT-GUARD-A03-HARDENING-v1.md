@@ -24,3 +24,12 @@ This **new distinct nonProduct** source candidate branches from frozen PR28 HEAD
 A NEW isolated source parent, immutable external Control request, marker-only Actions dispatch, native Python3.15.2 positive+negative suite, actual qualified Git guard invocation, terminal provider native run/job/receipt and independent STRICT_READ_ONLY source review are mandatory before claiming the inherited A03 repaired. None of these may repeat PR28/PR23 original CI/IR; use a unique ExecutionAttempt and create-only result. Do not equate synthetic unit PASS with Product integration or an Independent Review PASS. Fail/UNKNOWN requires original identity/effect reconciliation, never blind retry.
 
 No Product/Neon/notebook/PG16 role/SQL/physical A02 effects. PA01–PA04 and physical A02 remain BLOCKED; Beta Run008 and Kernel replacement NO_GO.
+
+
+## IR001 disposition and isolated 2026-11-12 successor (not historical rewrite)
+The original PR29 IR001 is terminal NO_RECOMMEND: F01 MEDIUM (local .git/config and replacement-ref trust), A01 LOW (superseded historical A001 workflow), A02 LOW (adversarial coverage). Original A001 FAILURE, A002 native SUCCESS, and their original receipts remain immutable. A distinct stacked successor branch fixes source only:
+- Explicitly requires a normal non-symlink .git directory and an allowlisted local Git config profile limited to inert checkout core, origin and branch bookkeeping, with bounded strict UTF-8 parsing. Reject local includes, executable hooks/fsmonitor settings, unusual sections, object alternates, grafts, config.worktree and metadata symlinks. Trust is CONDITIONAL on a frozen isolated actions/checkout source, not authentication of arbitrary repositories. Unrecognized checkout config blocks the new qualification rather than silently broadening trust.
+- Set GIT_NO_REPLACE_OBJECTS=1 and GIT_NO_LAZY_FETCH=1 in minimal Git child environment; kill original process group on exceptional exit even if direct parent exited.
+- Add local config poisoning, alternate objects, symlink, replacement ref, descendant-held-pipes and selector-failure tests; original A002 suite remains unchanged in its historic Git commit.
+- Remove the obsolete A001 workflow from successor integration candidate; retain historical original commit/receipt via immutable Git provenance. Keep predecessor PR29 DRAFT and unmerged.
+- New source qualification uses unique branch, original ExecutionAttempt and frozen request; native CI success cannot substitute for a new independent review. No Product or physical A02 effect, Kernel/Beta Run008 NO_GO.
