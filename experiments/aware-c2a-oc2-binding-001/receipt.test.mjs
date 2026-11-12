@@ -27,12 +27,12 @@ const make=()=>{
   const meta={sha256:sha(bytes),bytes:bytes.length,exit_code:0,signal:null,
     spawn_error:null,native_error:null,stdout_truncated:false,session_id:'ses_ABC123'};
   return {
-    'START.json':{...subject,status:'STARTED',native_dispatched:false},
-    'DISPATCH.json':{...subject,status:'DISPATCH_MARKER'},
+    'START.json':{...structuredClone(subject),status:'STARTED',native_dispatched:false},
+    'DISPATCH.json':{...structuredClone(subject),status:'DISPATCH_MARKER'},
     'CONTEXT.json':{scope:'SYNTHETIC_NONPRODUCT_ONLY'},
     'EFFECTIVE.json':{debug_config_only:true},
     'NATIVE_META.json':meta,
-    'RESULT.json':{...subject,status:'PASS',effect_state:'CONFIRMED_SYNTHETIC_ONLY',
+    'RESULT.json':{...structuredClone(subject),status:'PASS',effect_state:'CONFIRMED_SYNTHETIC_ONLY',
       native_dispatched:true,terminus_proven:true,
       observed:{session:'ses_ABC123',complete:true},
       original_native_log:{sha256:sha(bytes),bytes:bytes.length},
@@ -98,7 +98,7 @@ test('confirmed pre-dispatch block keeps NONE, lost/ambiguous receipt never does
   const records=make();
   records['DISPATCH.json']=null;
   records['NATIVE_META.json']=null;
-  records['RESULT.json']={...subject,status:'BLOCKED_PRECONDITION',effect_state:'NONE',
+  records['RESULT.json']={...structuredClone(subject),status:'BLOCKED_PRECONDITION',effect_state:'NONE',
     native_dispatched:false};
   const confirmed=reconcileOriginalReceipt(r,records,{});
   assert.equal(confirmed.status,'BLOCKED_PRECONDITION');
