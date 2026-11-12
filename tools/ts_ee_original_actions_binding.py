@@ -9,9 +9,11 @@ Python stdlib; works on CPython 3.15.2 (legacy CI Python 3 also supported).
 from __future__ import annotations
 
 import argparse
+import configparser
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 import re
 import selectors
@@ -50,6 +52,85 @@ def safe_path(value: object, prefix: str) -> bool:
             and not value.endswith("/"))
 
 
+def _repo_metadata_preflight(root: Path) -> None:
+    """Fail closed on local Git metadata outside trusted checkout subset.
+
+    Root metadata is a trusted temporary GitHub-hosted checkout, not an
+    arbitrary repo. This is an additional local policy check, not a
+    cryptographic authorization or a replacement for native GitHub receipt.
+    """
+    require(sys.platform.startswith("linux"), "GIT_GUARD_REQUIRES_LINUX")
+    require(root.is_dir() and not root.is_symlink(),
+            "GIT_LOCAL_METADATA_UNTRUSTED")
+    root_stat = root.stat()
+    gitdir = root / ".git"
+    cfg_path = gitdir / "config"
+    require(gitdir.is_dir() and not gitdir.is_symlink() and
+            cfg_path.is_file() and not cfg_path.is_symlink(),
+            "GIT_LOCAL_METADATA_UNTRUSTED")
+    for item in (root_stat, gitdir.stat(), cfg_path.stat()):
+        require(item.st_uid == os.getuid() and not (item.st_mode & 0o022),
+                "GIT_LOCAL_METADATA_UNTRUSTED")
+    require(cfg_path.stat().st_size <= 16384,
+            "GIT_LOCAL_CONFIG_UNTRUSTED")
+    try:
+        raw = cfg_path.read_bytes()
+        require(b"\x00" not in raw, "GIT_LOCAL_CONFIG_UNTRUSTED")
+        local_text = raw.decode("utf-8", "strict")
+        parser = configparser.ConfigParser(
+            interpolation=None, strict=True,
+            default_section="TS_EE_NO_DEFAULT_SECTION",
+        )
+        parser.read_string(local_text)
+    except (UnicodeError, OSError, configparser.Error) as exc:
+        raise BlockedPrecondition("GIT_LOCAL_CONFIG_UNTRUSTED") from exc
+
+    allowed_core = {
+        "repositoryformatversion", "filemode", "bare",
+        "logallrefupdates", "ignorecase", "precomposeunicode",
+    }
+    for name in parser.sections():
+        if name == "core":
+            require(set(parser[name]) <= allowed_core,
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+            require(parser[name].get("repositoryformatversion") == "0"
+                    and parser[name].get("bare", "").lower() == "false",
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+        elif name == "user":
+            require(set(parser[name]) <= {"name", "email"},
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+        elif name == 'remote "origin"':
+            require(set(parser[name]) <= {"url", "fetch"},
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+            require(parser[name].get("url", "").startswith(
+                "https://github.com/mauedgar/"
+            ) or "url" not in parser[name],
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+        elif name.startswith('branch "') and name.endswith('"'):
+            require(set(parser[name]) <= {"remote", "merge", "rebase"}
+                    and len(name) <= 160,
+                    "GIT_LOCAL_CONFIG_UNTRUSTED")
+        else:
+            # Reject include/includeIf, extensions, filters, credential,
+            # unreviewed Git plugin and executable config sections.
+            raise BlockedPrecondition("GIT_LOCAL_CONFIG_UNTRUSTED")
+
+    for relative in ("info/grafts", "objects/info/alternates"):
+        require(not (gitdir / relative).exists(),
+                "GIT_GRAFTS_OR_ALTERNATES_PRESENT")
+    refs = gitdir / "refs" / "replace"
+    require(not refs.exists() or
+            (refs.is_dir() and not any(refs.iterdir())),
+            "GIT_REPLACE_REFS_PRESENT")
+    packed = gitdir / "packed-refs"
+    if packed.exists():
+        require(packed.is_file() and not packed.is_symlink()
+                and packed.stat().st_size <= 65536,
+                "GIT_REPLACE_REFS_PRESENT")
+        require(b"refs/replace/" not in packed.read_bytes(),
+                "GIT_REPLACE_REFS_PRESENT")
+
+
 # Strictly bounded Linux-only guard for disposable GitHub-hosted runner jobs.
 # No inherited GIT_CONFIG_*, GIT_EXEC_PATH, GIT_TRACE, HOME or arbitrary PATH.
 GIT_BINARY = "/usr/bin/git"
@@ -65,6 +146,7 @@ def _git_env() -> dict[str, str]:
         "XDG_CONFIG_HOME": "/nonexistent-ts-ee-git-guard",
         "LC_ALL": "C",
         "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_SYSTEM": "/dev/null",
         "GIT_ATTR_NOSYSTEM": "1",
@@ -170,6 +252,7 @@ def validate(root: Path, marker_path: str, attempt: str,
     Do not mistake self-reported marker fields for independent authority.
     """
     require(root.is_dir(), "REPO_ROOT_NOT_FOUND")
+    _repo_metadata_preflight(root)
     require(safe_path(marker_path, SENTINEL_ROOT), "UNSAFE_MARKER_PATH")
     require(type(attempt) is str and ATTEMPT.fullmatch(attempt) is not None,
             "INVALID_ORIGINAL_ATTEMPT")
