@@ -1,0 +1,12 @@
+{
+  "version": "TS-EE-ACTIONS-ORIGINAL-BINDING-v1",
+  "execution_attempt": "TS-EE-A03-GIT-METADATA-QUAL-20261112-003-A005",
+  "repository": "mauedgar/ts-execution-lab",
+  "ref": "refs/heads/ee/ts-ee-a03-inert-worktree-config-20261112-003",
+  "source_parent_commit": "f382805314b15c84aac66bbdc314e8e7218d8cfa",
+  "source_parent_tree": "13d357539e228527900a35656b28899d1144610b",
+  "workflow_path": ".github/workflows/ts-ee-original-git-a03-inert-worktree-20261112-003.yml",
+  "workflow_blob": "13b2c93cb31870ee3c397c3d83ae59fc5e008617",
+  "marker_path": ".github/ts-ee-original-dispatch/TS-EE-A03-GIT-METADATA-QUAL-20261112-003-A005.json",
+  "control_request": "mauedgar/ts-execution-transport@b4bb29434ea43dd67a90cb8ca7d5151372b17de0:requests/TS-EE-A03-GIT-METADATA-QUAL-20261112-003-A005/REQUEST.md"
+}
