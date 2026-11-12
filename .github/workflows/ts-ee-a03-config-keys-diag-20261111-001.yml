@@ -1,0 +1,61 @@
+name: TS EE A03 disposable GitHub checkout local config key-only diagnostic
+
+on:
+  push:
+    branches:
+      - ee/ts-ee-a03-local-config-diag-20261111-001
+    paths:
+      - .github/ts-ee-original-dispatch/TS-EE-A03-GIT-CONFIG-DIAG-20261111-001-A001.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ts-ee-a03-local-config-names-20261111-001
+  cancel-in-progress: false
+
+jobs:
+  key-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout one disposable branch with no persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Read only checkout metadata key names, never values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY'
+          import configparser,hashlib,json,os,pathlib,re,stat
+          path=pathlib.Path(".git/config")
+          assert path.is_file() and not path.is_symlink()
+          raw=path.read_bytes()
+          assert len(raw)<=16384
+          cfg=configparser.ConfigParser(
+              interpolation=None,strict=True,
+              default_section="TS_EE_NO_DEFAULT_SECTION")
+          cfg.read_string(raw.decode("utf-8","strict"))
+          records=[]
+          for sec in cfg.sections():
+              category=sec.split(" ",1)[0]
+              if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}",category):
+                  category="OTHER"
+              keys=[]
+              for key in cfg[sec]:
+                  if re.fullmatch(r"[a-z0-9_.-]{1,64}",key):
+                      keys.append(key)
+                  else:
+                      keys.append("REDACTED_KEY_"+hashlib.sha256(
+                          key.encode()).hexdigest()[:10])
+              records.append({"section_type":category,"keys":sorted(keys)})
+          print("TS_EE_A03_GIT_CONFIG_KEY_ONLY_DIAGNOSTIC="+json.dumps(
+              {"record_count":len(records),"sections":records,
+               "config_mode":oct(stat.S_IMODE(path.stat().st_mode)),
+               "owner_is_runner":path.stat().st_uid==os.getuid()},
+              sort_keys=True,separators=(",",":")))
+          print("TS_EE_A03_DIAGNOSTIC_NO_VALUES_NO_TOKENS_NO_PRODUCT")
+          PY
