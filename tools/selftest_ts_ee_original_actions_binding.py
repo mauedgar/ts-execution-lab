@@ -244,6 +244,37 @@ def additional_git_metadata_checks() -> None:
 
     tmp, root, info, env = fixture()
     try:
+        worktree_config = root / ".git" / "config.worktree"
+        worktree_config.write_text(
+            "[core]\n    sparseCheckout = true\n", encoding="utf-8")
+        # Inert when no [extensions] worktreeConfig appears in .git/config.
+        assert validate(root, MARKER, ATTEMPT, env)[
+            "status"] == "TS_EE_ORIGINAL_GIT_TRANSITION_PASS"
+        print("POSITIVE_PASS_INERT_WORKTREE_CONFIG")
+    finally:
+        tmp.cleanup()
+
+    def active_worktree_config(root):
+        with (root / ".git" / "config").open("a", encoding="utf-8") as f:
+            f.write("\n[extensions]\n    worktreeConfig = true\n")
+        (root / ".git" / "config.worktree").write_text(
+            "[core]\n    fsmonitor = arbitrary-command\n", encoding="utf-8")
+    rejected("ENABLED_WORKTREE_EXTENSION", active_worktree_config,
+             "UNTRUSTED_GIT_LOCAL_CONFIG")
+
+    def linked_worktree_config(root):
+        p = root / ".git" / "config.worktree"
+        p.symlink_to(root / ".git" / "config")
+    rejected("SYMLINKED_WORKTREE_CONFIG", linked_worktree_config,
+             "UNTRUSTED_GIT_WORKTREE_CONFIG")
+
+    def oversized_worktree_config(root):
+        (root / ".git" / "config.worktree").write_bytes(b"X" * 10000)
+    rejected("OVERSIZED_WORKTREE_CONFIG", oversized_worktree_config,
+             "UNTRUSTED_GIT_WORKTREE_CONFIG")
+
+    tmp, root, info, env = fixture()
+    try:
         git(root, "replace", "HEAD", "HEAD^")
         assert guard._git_env()["GIT_NO_REPLACE_OBJECTS"] == "1"
         assert validate(root, MARKER, ATTEMPT, env)[

@@ -92,8 +92,7 @@ def _trusted_checkout_metadata(root: Path) -> None:
     for relative, label in (
             ("objects/info/alternates", "ALTERNATES"),
             ("info/grafts", "GRAFTS"),
-            ("commondir", "COMMONDIR"),
-            ("config.worktree", "WORKTREE_CONFIG")):
+            ("commondir", "COMMONDIR")):
         entry = gitdir / relative
         require(not entry.exists() and not entry.is_symlink(),
                 "UNTRUSTED_GIT_OBJECT_REDIRECTION_" + label)
@@ -150,6 +149,16 @@ def _trusted_checkout_metadata(root: Path) -> None:
     require(("[core]", "repositoryformatversion") in observed and
             ("[core]", "bare") in observed,
             "UNTRUSTED_GIT_LOCAL_CONFIG")
+    # Git only reads config.worktree if extensions.worktreeConfig is enabled.
+    # The strict local-config section allowlist above rejects ALL extensions,
+    # making this checkout-created file inert. Still reject symlinks and
+    # unbounded files rather than broadening trusted local metadata.
+    worktree_config = gitdir / "config.worktree"
+    if worktree_config.exists() or worktree_config.is_symlink():
+        require(worktree_config.is_file() and not worktree_config.is_symlink(),
+                "UNTRUSTED_GIT_WORKTREE_CONFIG")
+        require(worktree_config.stat().st_size <= 4096,
+                "UNTRUSTED_GIT_WORKTREE_CONFIG")
 
 
 def _bounded_git(root: Path, args: tuple[str, ...], max_output: int) -> bytes:
