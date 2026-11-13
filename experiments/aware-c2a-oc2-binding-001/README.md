@@ -12,11 +12,19 @@ Request schema `ts-ee-oc2-c2a-request/v3` fields: `product=mauedgar/aware-commer
 
 The current isolated prototype deliberately admits only original host `DESKTOP-DJLBEQH`; the competent Control must not substitute another host silently. The scratch anchor and parent must already exist, be locally provisioned by their owner, free of symlink/reparse traversal according to the native path checks, and be separated from Product. The scratch parent's final component must equal `ts-ee-oc2-c2a-synthetic`. File ownership/NTFS ACL and local OAuth provider credential mode are **separate S0 checks** not proven by Node unit tests. On uncertainty return `BLOCKED_PRECONDITION/NONE`, not PASS.
 
-One original `attempt_id` must be fresh. The bootstrap supports only `--run` and `--observe`. `--observe` is read-only and returns existing original receipts; there is no resubmission. The qualified command, after S0, is:
+One original `attempt_id` must be fresh. The bootstrap supports only `--run` and `--observe`. `--observe` is read-only and returns existing original receipts; there is no resubmission. Unlike `--run`, it does NOT require the current grant to be unexpired or the current OpenCode binary to remain available; this preserves historical reconciliation after grant expiry or credential rotation. It still requires original request identity, qualified host and existing scratch parent and returns only local consistency, never independent provider authentication. An absent/malformed original resolves to UNKNOWN rather than inventing a NONE effect. The qualified command, after S0, is:
 
 ```powershell
 <verified-node22.exe> <verified-bootstrap.mjs> <verified-request.json> --run <verified-local-GRANT.json> <externally-pinned-immutable-grant-ref> <externally-pinned-GRANT-sha256>
 ```
+
+The bounded **observation-only** form (historical attempt, no new grant or model call) is:
+
+```powershell
+<verified-node22.exe> <verified-bootstrap.mjs> <verified-original-request.json> --observe
+```
+
+**Source repair F06 for this candidate:** the read-only mode branches before run-only binary hash, current provider, grant expiry and scratch mutation checks. Its command-line exceptions classify original state as `UNKNOWN` rather than `NONE`. Original START/DISPATCH/RESULT, native log and exact disposable file are still reconciled with strict same-attempt evidence, with `native_provider_authenticated=false` regardless of local consistency. This source change has no verified original host/provider receipts or native crash fault-injection; F06 remains PARTIAL until IR and host qualification. `authority.mjs` additionally accepts only canonical one-line grant JSON plus LF; duplicate/shadowed fields fail closed. Static tests are not a genuine authentication root.
 
 This snippet is NOT authority to execute. In particular, Commander may execute only a **previously materialized, complete, versioned and hash-verified runner and bounded request**. No Commander semantic exploration, source creation or dynamic shell construction. `node.exe` as direct execution is permitted only if the bounded run has already been admitted; the preferred mechanical PowerShell runner contract remains applicable if that is the selected route.
 
