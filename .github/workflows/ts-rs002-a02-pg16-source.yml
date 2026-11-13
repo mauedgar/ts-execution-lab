@@ -18,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           cd experiments/TS-RS002-A02-PG16-PROVISION-20261113-001
-          printf '%s  %s\n' 'eb6e688edee625e00e90c07cddc7e7d121adce5e29518325ff6b7d75daff7f55' provision_pg16.sh | sha256sum -c -
+          printf '%s  %s\n' '8d71333a114f1db4be341f1ea09f604000dfec27646d6c5c1b82f79a0dbbb22d' provision_pg16.sh | sha256sum -c -
           printf '%s  %s\n' 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721' schema.sql | sha256sum -c -
           test "$(git hash-object schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
           bash -n provision_pg16.sh
