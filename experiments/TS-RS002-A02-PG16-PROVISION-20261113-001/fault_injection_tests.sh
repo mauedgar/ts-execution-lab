@@ -73,6 +73,29 @@ esac
 MOCK
 chmod 700 "$RUNTIME/fake-bin/"*
 export PATH="$RUNTIME/fake-bin:$PATH"
+
+# Regression proof: the EXACT prior integrated Git blob MUST fail under the
+# realistic created-but-unstarted empty NetworkSettings.NetworkID lifecycle.
+# Read immutable Git source with no network; only fake Docker/temporary files.
+LEGACY_REF=dc5a755cba5ffb4cb7bc6ee5995f20a27d692aa5
+LEGACY_SOURCE=experiments/TS-RS002-A02-PG16-PROVISION-20261113-001/provision_pg16.sh
+git -C "$ORIGIN" show "$LEGACY_REF:$LEGACY_SOURCE" > "$RUNTIME/legacy_runner.sh"
+[[ "$(git hash-object "$RUNTIME/legacy_runner.sh")" == 3959a3039fc0efc56f9f0103d1c944c37c11aef0 ]] || { echo 'legacy source blob mismatch' >&2;exit 1; }
+[[ "$(sha256sum "$RUNTIME/legacy_runner.sh" | cut -d' ' -f1)" == 9ea07532c10e3cb0005b2a073022cf37dead84a26517ceface9c369620f1d767 ]] || { echo 'legacy source SHA mismatch' >&2;exit 1; }
+sed -i "s|^ROOT='/var/tmp/ts-rs002-a02-pg16-20261113-001'$|ROOT='$RUNTIME/legacy_effect_root'|" "$RUNTIME/legacy_runner.sh"
+sed -i "s|^EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'$|EXPECTED_ADMISSION_SHA256='$test_hash'|" "$RUNTIME/legacy_runner.sh"
+grep -Fxq "ROOT='$RUNTIME/legacy_effect_root'" "$RUNTIME/legacy_runner.sh"
+grep -Fxq "EXPECTED_ADMISSION_SHA256='$test_hash'" "$RUNTIME/legacy_runner.sh"
+rm -f -- "$STUB_START_MARK"
+if (cd "$RUNTIME" && STUB_FAIL_STAGE=none bash ./legacy_runner.sh --apply) > "$RUNTIME/legacy_stdout" 2> "$RUNTIME/legacy_stderr"; then
+  echo 'FAIL: historic prestart NetworkID defect did not reproduce' >&2; exit 1
+fi
+grep -Fq 'BLOCKED: container connected to unexpected network' "$RUNTIME/legacy_stderr" || { echo 'FAIL: wrong historic failure cause' >&2;exit 1; }
+grep -Fxq 'status=BLOCKED_OR_INCOMPLETE' "$RUNTIME/legacy_effect_root/attempt-status.txt"
+grep -Fxq 'phase=CONTAINER_CREATE' "$RUNTIME/legacy_effect_root/attempt-status.txt"
+[[ ! -e "$STUB_START_MARK" ]] || { echo 'FAIL: historic runner started Docker despite premature NetworkID' >&2; exit 1; }
+printf 'PASS historical-integrated-runner-regression exact-source premature-network-id BLOCKED before start\n'
+
 check_failure() {
   local fault="$1"
   rm -rf -- "$RUNTIME/effect_root"
@@ -116,4 +139,7 @@ rm -f -- "$STUB_START_MARK"
 (cd "$RUNTIME" && STUB_FAIL_STAGE=none bash ./provision_pg16.sh --apply) > "$RUNTIME/stdout" 2> "$RUNTIME/stderr"
 grep -q 'STARTED_UNVERIFIED' "$RUNTIME/stdout"
 grep -Fxq 'status=PENDING_NATIVE_POSTCONDITIONS' "$RUNTIME/effect_root/attempt-status.txt"
-printf 'PASS source-mocked-started-unverified 1/1, partial-failure 16/16; Docker NetworkID empty before start and assigned only after start; all Docker calls mocked\n'
+grep -Fxq 'configured_prestart_network_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$RUNTIME/effect_root/attempt-status.txt"
+grep -Fxq 'post_start_attested_network=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$RUNTIME/effect_root/attempt-status.txt"
+[[ -f "$STUB_START_MARK" ]] || { echo 'FAIL: start marker absent on positive path' >&2;exit 1; }
+printf 'PASS source-mocked-started-unverified 1/1, partial-failure 16/16; historical exact-source regression 1/1; native network IDs before/after start attested; all Docker calls mocked\n'
