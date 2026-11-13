@@ -1,6 +1,6 @@
 # TS-RS002 A02 PG16 — isolated provisioning candidate (NONPRODUCT)
 
-Status: SOURCE_REPAIR_004_NOT_ADMITTED. Original PR40 IR001 4F/5A, PR41 IR002 1F/3A and PR42 IR003 RECOMMEND_SOURCE_ONLY 0F/4A preserved immutable. Owner: TS_REMOTE_STATE_002_EXPERIMENTAL_CONTROL. This branch does not grant physical execution, Product acceptance, Kernel replacement or Beta Run 008.
+Status: SOURCE_REPAIR_005_NOT_ADMITTED. Original PR40 IR001 4F/5A, PR41 IR002 1F/3A, PR42 IR003 RECOMMEND_SOURCE_ONLY 0F/4A and PR43 IR004 NO_RECOMMEND_SOURCE_ONLY 1F/2A preserved immutable. Owner: TS_REMOTE_STATE_002_EXPERIMENTAL_CONTROL. This branch does not grant physical execution, Product acceptance, Kernel replacement or Beta Run 008.
 
 ## Exact frozen subject
 - Repository: mauedgar/ts-execution-lab; base main 7d1705fc08b02ae91a2981bfc82bea24386fddc3.
@@ -14,7 +14,7 @@ Status: SOURCE_REPAIR_004_NOT_ADMITTED. Original PR40 IR001 4F/5A, PR41 IR002 1F
 - Private WSL workspace: /var/tmp/ts-rs002-a02-pg16-20261113-001.
 - Pinned immutable amd64 **registry manifest**: image.lock = postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e, official 16.15-bookworm; previous PR42 config/layer sha256:efdf07c... replaced. See PHYSICAL_ADMISSION_MATRIX.md for independently recorded Docker Hub source, OCI entrypoint and host qualifications. Reattest on notebook before dispatch.
 - Schema: schema.sql exact Git blob 3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0, original TS-R3 source (not Product).
-- Script: provision_pg16.sh, source blob e73bfe94ee153d864b7efd0a7e06cafb9c94b7f1, SHA-256 093df43c9d83fb693304f41f5f2660f4997c13d8ab55e44e90c2008da9d800ee.
+- Script: provision_pg16.sh, source blob 3959a3039fc0efc56f9f0103d1c944c37c11aef0, SHA-256 9ea07532c10e3cb0005b2a073022cf37dead84a26517ceface9c369620f1d767.
 - Lock blob: 82ab4fa25cf9a724903a183172bda166a780192d, SHA256 890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47.
 - Negative tests blob: b48e5927430352b420c76907b86693297c9eb55e, SHA256 8a8afd13ea30c3d304bd199985747e8047ac39dc4910136b572bfac2a28d22cf.
 
@@ -41,3 +41,10 @@ Full source IR003 frozen at `mauedgar/ts-execution-transport@e780bc1e06e613778cf
 - A03: explicit `default_transaction_read_only=on` defense in depth added to observer role, no writer privileges inferred; independently observed read-only ACL, membership and negative write/TEMP tests remain physical P0/P2. Nothing here asserts PostgreSQL role genesis occurred.
 - A04: original native host UID/daemon ID and exact postconditions/control grant remain external prerequisites, all recorded in the separate physical admission matrix. Source runner stays `UNBOUND_NO_DISPATCH`, so no physical --apply can be started by this code. MAT-XFORM on notebook remains unqualified.
 - This is a **distinct** source candidate; own native CI and fresh WEB_INLINE IR004 required. `0F/0A` may be claimed **only for source** if independently reviewed and true; never silently reclassify physical unknowns as accepted. No Product/Neon/host effects or source integration yet.
+
+## Original PR43 IR004 disposition and separate repair 005
+PR43 exact original WEB_INLINE IR004 `NO_RECOMMEND / 1F / 2A SOURCE`, immutable original receipt `mauedgar/ts-execution-transport@0083b50a24bd41406e5058e5853e4e560743331a:results/TS-RS002-A02-PG16-PR43-WEBINLINE-IR004-20261113-001/ORIGINAL.md`, Git blob `aef097be630e2765c223914a8959c872294933dd`.
+- F01 MEDIUM: previous runner created container by ID but started by mutable human-readable name. This distinct candidate runs `docker container start "$container_id"` ONLY, records the returned exact native ID and checks it equals the original. After start, it independently rechecks exact container `Id`, `Name`, Operation/Attempt labels, network native ID, PGDATA anonymous volume identity and state. No foreign resource name can substitute for the captured ID without fail-closed blocking.
+- A01 LOW: CI requests official OCI `docker manifest inspect --verbose` descriptor and independently asserts `platform.os=linux`, `platform.architecture=amd64` and image `SchemaV2Manifest.config.digest`; registry read-only validation, not host image pull.
+- A02 LOW: hermetic fake Docker harness requires start by exact 64-byte ID and simulates swapped start return ID, changed native name and wrong operation label. Source-only 14 failure cases must retain UNKNOWN and immutable prior IDs.
+- Physical P0/P1/P2/P3, A01–A04, qualified TS-EXB carrier, Product kernel/Neon are still NOT proven, and runner remains `UNBOUND_NO_DISPATCH`. This candidate requires its own native CI and new independent WEB_INLINE IR005 with 0F/0 actionable source advisories before competent EE source integration. Review PASS never grants physical provisioning or Kernel replacement.
