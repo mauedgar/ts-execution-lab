@@ -91,11 +91,11 @@ test('malformed external bytes, expiry and mutable issue comment refs fail close
 test('canonical grant rejects duplicate root keys, shadowed issuer and noncanonical JSON',()=>{
   const x=material();
   const dual=Buffer.from(JSON.stringify(grant).replace('"issuer":"AWARE_CONTROL",',
-    '"issuer":"TS_EXECUTION_ENGINEERING","issuer":"AWARE_CONTROL",')+'\\n');
+    '"issuer":"TS_EXECUTION_ENGINEERING","issuer":"AWARE_CONTROL",')+'\n');
   const dupAnchor={ref,sha256:sha(dual)};
   assert.throws(()=>verifyControlGrant({...x.request,authorization_receipt_sha256:dupAnchor.sha256},
     dual,dupAnchor,{now}));
-  const spaced=Buffer.from(JSON.stringify(grant,null,2)+'\\n');
+  const spaced=Buffer.from(JSON.stringify(grant,null,2)+'\n');
   const spaceAnchor={ref,sha256:sha(spaced)};
   assert.throws(()=>verifyControlGrant({...x.request,authorization_receipt_sha256:spaceAnchor.sha256},
     spaced,spaceAnchor,{now}));
