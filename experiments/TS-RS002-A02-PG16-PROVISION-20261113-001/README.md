@@ -1,6 +1,6 @@
 # TS-RS002 A02 PG16 — isolated provisioning candidate (NONPRODUCT)
 
-Status: SOURCE_REPAIR_003_NOT_ADMITTED; original PR40 IR001 NO_RECOMMEND 4F/5A and PR41 IR002 NO_RECOMMEND 1F/3A preserved unmodified. Owner: TS_REMOTE_STATE_002_EXPERIMENTAL_CONTROL. This branch does not grant physical execution, Product acceptance, Kernel replacement or Beta Run 008.
+Status: SOURCE_REPAIR_004_NOT_ADMITTED. Original PR40 IR001 4F/5A, PR41 IR002 1F/3A and PR42 IR003 RECOMMEND_SOURCE_ONLY 0F/4A preserved immutable. Owner: TS_REMOTE_STATE_002_EXPERIMENTAL_CONTROL. This branch does not grant physical execution, Product acceptance, Kernel replacement or Beta Run 008.
 
 ## Exact frozen subject
 - Repository: mauedgar/ts-execution-lab; base main 7d1705fc08b02ae91a2981bfc82bea24386fddc3.
@@ -12,17 +12,17 @@ Status: SOURCE_REPAIR_003_NOT_ADMITTED; original PR40 IR001 NO_RECOMMEND 4F/5A a
 - Network: ts-rs002-a02-pg16-net-20261113-001 (internal; no published ports).
 - Database: ts_rs002_a02_lab.
 - Private WSL workspace: /var/tmp/ts-rs002-a02-pg16-20261113-001.
-- Pinned immutable amd64 image: see image.lock (16.15/bookworm per original Docker Hub manifest; independently reattest before dispatch).
+- Pinned immutable amd64 **registry manifest**: image.lock = postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e, official 16.15-bookworm; previous PR42 config/layer sha256:efdf07c... replaced. See PHYSICAL_ADMISSION_MATRIX.md for independently recorded Docker Hub source, OCI entrypoint and host qualifications. Reattest on notebook before dispatch.
 - Schema: schema.sql exact Git blob 3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0, original TS-R3 source (not Product).
-- Script: provision_pg16.sh, source blob a8fb4f5597d3511239f5ffbd8bc91118aaea6ca0, SHA-256 4299dfec98858b20e6d051a465ffcd3c6b33fa82eb45759002d5814b69a24598.
-- Lock blob: 2c9b4759cb1f66bd12a1f5caa56c838541dd85ec.
+- Script: provision_pg16.sh, source blob e73bfe94ee153d864b7efd0a7e06cafb9c94b7f1, SHA-256 093df43c9d83fb693304f41f5f2660f4997c13d8ab55e44e90c2008da9d800ee.
+- Lock blob: 82ab4fa25cf9a724903a183172bda166a780192d, SHA256 890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47.
 - Negative tests blob: b48e5927430352b420c76907b86693297c9eb55e, SHA256 8a8afd13ea30c3d304bd199985747e8047ac39dc4910136b572bfac2a28d22cf.
 
 ## Strict mode and evidence
 - --preflight: checks immutable image syntax, original schema hash, WSL hostname/UID, Docker daemon identity, exclusive root/container/network name absence and native volume inventory availability; anonymous volume cannot preexist because its identity is allocated only on `container create`; no Docker mutation. No DB connections or Docker mutations.
 - --apply: NOT ADMITTED (UNBOUND_NO_DISPATCH); create-only local secrets and startup SQL; pinned image pull; isolated native-ID-pinned Docker network and container with new anonymous volume. Never cleans up, replaces, publishes port, touches existing clusters/Neon, or retries.
 - If any operation after workspace creation fails, effect is UNKNOWN until reconciled. Successful startup is STARTED_UNVERIFIED, not PASS. Independent provider-native postconditions are still necessary (container/network/volume IDs, actual PG16 system identifier, role/genesis/ACL, independent read-only observer).
-- Negative controls (synthetic): prior PR41 CI 10/10 blocking tests PASS; PR42 has 10 negatives + one fake-positive and four new simulated partial-failure stages/one fake started-unverified case awaiting original Actions CI. No physical Docker calls are present in these tests. Not a real notebook test, independent IR or physical admission.
+- Negative controls (synthetic): prior PR41 CI 10/10 blocking tests PASS; PR42 original source CI PASS (run 43363724229); this PR43 candidate adds official registry manifest verification, 11 synthetic partial-failure paths with 1 mocked STARTED_UNVERIFIED; awaiting its own original CI. No physical Docker calls are present in these tests. Not a real notebook test, independent IR or physical admission.
 - MAT-XFORM v1 source is available in ts-execution-lab at main@7d1705f, but a qualified installed extractor and carrier on the notebook remain UNVERIFIED. Never use Commander for semantic repository exploration, file generation, unqualified extraction or retry.
 - Prior host precheck: mauedgar/ts-execution-transport@3242a2be3515d04cd5f1b82c73928439e5dfa0a2:receipts/TS-RS002-A02-PG16-PRECHECK-20261113-001/ORIGINAL.md.
 - Only after transport qualification, independent WEB_INLINE review, exact runnable input/hash, host reobservation and a competent admission may a distinct frozen actual physical ExecutionAttempt be dispatched once.
@@ -33,3 +33,11 @@ Original PR40 WEB_INLINE IR001 terminal NO_RECOMMEND, 4 findings/5 advisories, o
 
 ## IR002 disposition (new distinct repair 003)
 Original PR41 WEB_INLINE IR002 is terminal NO_RECOMMEND/1F/3A, review Git blob 73cbab555165635e83fe2d281579681ccd9ef519, native byte-identical Git Transport commit bc14067f14b0edae345ff41c7475be75c876eca8. IR002 F01 high: Docker named volume create may silently reuse an existing name after a race. This repair changes to Docker daemon-allocated anonymous PGDATA volume at container-create time; attached new random volume name, local driver and exactly one matching mount are captured/validated as native postconditions. The network attachment uses the exact returned network ID instead of the potentially ambiguous name. The partial-effect failure recorder now APPENDS failure/effect status to the receipt, not clobbering earlier native IDs. The workflow adds hermetic fake-Docker fault injection for stages network_create, container_create, volume_attest, container_start and a fake STARTED_UNVERIFIED; no actual database/provision effects. IR002 A01/A03 remain physical admission and read-only P0/P1/P2 gates, not source FAIL-closures. This third candidate requires its own native CI and distinct WEB_INLINE IR003; 0/0 cannot be asserted in advance.
+
+## Original PR42 IR003 disposition and new repair 004
+Full source IR003 frozen at `mauedgar/ts-execution-transport@e780bc1e06e613778cf71c9bd090dd8d484207bb:results/TS-RS002-A02-PG16-PR42-WEBINLINE-IR003-20261113-001/ORIGINAL.md`, git blob `2c221064074dc77d05333565d9bfabd8fd67b3de`. Verdict `RECOMMEND_SOURCE_ONLY / 0F / 4A`. There is no waiver of four explicit physical deferments. Addressed source-evaluable parts:
+- A01: image.lock now pins the **actual official linux/amd64 OCI manifest digest** rather than an image config/layer SHA. The native CI registry read-only manifest inspection and physical post-pull PG_VERSION remain separate. See PHYSICAL_ADMISSION_MATRIX.md.
+- A02: failure matrix expanded from 4 to 11 synthetic cases, including invalid native IDs, failed registry pull, daemon responses, wrong volume driver/network binding and post-start exited. Native partial returned IDs are appended immediately before further postconditions, preserving original provenance. Tests cannot simulate every physical crash or race; independent physical gate stays OPEN.
+- A03: explicit `default_transaction_read_only=on` defense in depth added to observer role, no writer privileges inferred; independently observed read-only ACL, membership and negative write/TEMP tests remain physical P0/P2. Nothing here asserts PostgreSQL role genesis occurred.
+- A04: original native host UID/daemon ID and exact postconditions/control grant remain external prerequisites, all recorded in the separate physical admission matrix. Source runner stays `UNBOUND_NO_DISPATCH`, so no physical --apply can be started by this code. MAT-XFORM on notebook remains unqualified.
+- This is a **distinct** source candidate; own native CI and fresh WEB_INLINE IR004 required. `0F/0A` may be claimed **only for source** if independently reviewed and true; never silently reclassify physical unknowns as accepted. No Product/Neon/host effects or source integration yet.
