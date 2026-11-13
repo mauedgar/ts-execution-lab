@@ -70,12 +70,14 @@ jobs:
 
       - name: Verify reviewed immutable preflight script
         shell: bash
+        env:
+          EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           expected='c82d6ca8ad7c1f9f70c82f4b23890debda909abc'
           actual="$(git -C "$GITHUB_WORKSPACE/control" hash-object -- tools/ts_ee_oc2_free_review_fallback_preflight.py)"
           test "$actual" = "$expected"
-          test "$(git -C "$GITHUB_WORKSPACE/control" rev-parse HEAD)" = "$GITHUB_WORKFLOW_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE/control" rev-parse HEAD)" = "$EXPECTED_WORKFLOW_SHA"
 
       - name: Checkout exact synthetic lab subject
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
