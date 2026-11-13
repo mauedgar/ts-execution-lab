@@ -55,6 +55,7 @@ export function verifyControlGrant(request,grantBytes,controlAnchor,{now=Date.no
     node_executable:request.node_executable,git_executable:request.git_executable,
     opencode_executable:request.opencode_executable,
     bootstrap_sha256:request.bootstrap_sha256,binding_sha256:request.binding_sha256,
+    authority_source_sha256:request.authority_source_sha256,
     runner_sha256:request.runner_sha256,node_sha256:request.node_sha256,
     git_sha256:request.git_sha256,executable_sha256:request.executable_sha256
   };
