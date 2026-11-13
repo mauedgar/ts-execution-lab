@@ -150,6 +150,8 @@ Before an effect, verify the current identities/state relevant to that effect:
 
 Never assume a prior observation is still current.
 
+**OpenCode2 local launch binding (Developer ruling 2026-11-13):** OpenCode2 local semantic execution MUST originate in a visible Orca-owned terminal (Windows or WSL) of the already-authorized task worktree and host. Interpret the Developer's unqualified “lanzar OpenCode2” as Orca terminal dispatch; never as bare Commander/PowerShell/WSL inference, detached background CLI or automatic Actions fallback. Reuse the operating procedure in `docs/execution-engineering/ORCA-DEVELOPER-UX-v1.md` §7.1. Commander may perform only independently authorized bounded mechanical preflights; provider-native session/terminal identities and receipts remain mandatory. If Orca binding cannot be verified, stop with `BLOCKED_ORCA_BINDING`. This instruction chooses the local execution surface only: no Product, model, grant or retry authority is added.
+
 ### Bound
 
 Recover or establish an explicit responsibility ceiling / DoD before implementation.
