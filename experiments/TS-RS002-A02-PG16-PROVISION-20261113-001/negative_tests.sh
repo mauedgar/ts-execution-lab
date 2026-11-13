@@ -31,4 +31,26 @@ assert_blocked symlink-lock --preflight
 rm "$RUNTIME/schema.sql"
 ln -s /etc/hosts "$RUNTIME/schema.sql"
 assert_blocked symlink-schema --preflight
-printf 'NEGATIVE_CONTROLS %d/%d PASS (source-level only)\n' "$BLOCKS" "$BLOCKS"
+# Positive PRECHECK only with a fully fake host/engine; never runs a physical docker.
+rm "$RUNTIME/schema.sql" "$RUNTIME/image.lock"
+cp "$ROOT/schema.sql" "$ROOT/image.lock" "$RUNTIME/"
+mkdir -p "$RUNTIME/fake-bin"
+cat > "$RUNTIME/fake-bin/hostname" <<'STUB'
+#!/usr/bin/env bash
+printf 'DESKTOP-DJLBEQH\n'
+STUB
+cat > "$RUNTIME/fake-bin/docker" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  'context show') printf 'default\n';;
+  'version --format') printf '29.1.3\n';;
+  'info --format') printf 'linux/amd64\n';;
+  'container inspect'|'volume inspect'|'network inspect') exit 1;;
+  *) printf 'unexpected docker command (mutation blocked)\n' >&2; exit 42;;
+esac
+STUB
+chmod 700 "$RUNTIME/fake-bin/hostname" "$RUNTIME/fake-bin/docker"
+(cd "$RUNTIME" && PATH="$RUNTIME/fake-bin:$PATH" bash ./provision_pg16.sh --preflight) > "$RUNTIME/out"
+grep -q 'PREFLIGHT_PASS' "$RUNTIME/out" || { echo 'FAIL synthetic positive preflight'; exit 1; }
+echo 'PASS synthetic-positive-preflight'
+printf 'NEGATIVE_CONTROLS %d/%d PASS; synthetic-positive 1/1 PASS (source-level only)\n' "$BLOCKS" "$BLOCKS"
