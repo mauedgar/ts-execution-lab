@@ -1,0 +1,26 @@
+name: TS RS002 A02 PG16 source-only qualification
+on:
+  pull_request:
+    paths:
+      - 'experiments/TS-RS002-A02-PG16-PROVISION-20261113-001/**'
+      - '.github/workflows/ts-rs002-a02-pg16-source.yml'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Static integrity and negative controls (no Docker mutation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd experiments/TS-RS002-A02-PG16-PROVISION-20261113-001
+          printf '%s  %s\n' '8d71333a114f1db4be341f1ea09f604000dfec27646d6c5c1b82f79a0dbbb22d' provision_pg16.sh | sha256sum -c -
+          printf '%s  %s\n' 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721' schema.sql | sha256sum -c -
+          test "$(git hash-object schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
+          bash -n provision_pg16.sh
+          bash -n negative_tests.sh
+          bash negative_tests.sh
