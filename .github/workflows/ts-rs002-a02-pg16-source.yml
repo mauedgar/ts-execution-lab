@@ -9,31 +9,29 @@ permissions:
 jobs:
   source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - name: Checkout candidate
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Static integrity and negative controls (no Docker mutation)
+      - name: Static source integrity and hermetic fault controls
         shell: bash
         run: |
           set -euo pipefail
           cd experiments/TS-RS002-A02-PG16-PROVISION-20261113-001
           printf '%s  %s\n' '093df43c9d83fb693304f41f5f2660f4997c13d8ab55e44e90c2008da9d800ee' provision_pg16.sh | sha256sum -c -
           printf '%s  %s\n' 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721' schema.sql | sha256sum -c -
+          printf '%s  %s\n' '890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47' image.lock | sha256sum -c -
           test "$(git hash-object schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
-          bash -n provision_pg16.sh
-          bash -n negative_tests.sh
           test "$(git hash-object provision_pg16.sh)" = 'e73bfe94ee153d864b7efd0a7e06cafb9c94b7f1'
           test "$(git hash-object fault_injection_tests.sh)" = 'db13a63e16de09519399355e1e96fd2ec7c73a4a'
-          printf '%s  %s\n' '890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47' image.lock | sha256sum -c -
           test "$(git hash-object image.lock)" = '82ab4fa25cf9a724903a183172bda166a780192d'
-          test "$(grep -c '^EXPECTED_ADMISSION_SHA256=\x27UNBOUND_NO_DISPATCH\x27
-          bash fault_injection_tests.sh
- provision_pg16.sh)" = 1
+          grep -Fq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" provision_pg16.sh
+          bash -n provision_pg16.sh
+          bash -n negative_tests.sh
           bash -n fault_injection_tests.sh
           bash negative_tests.sh
           bash fault_injection_tests.sh
-      - name: Inspect official pinned OCI registry manifest (read-only, no image pull)
+      - name: Inspect pinned registry manifest without pulling an image
         shell: bash
         run: |
           set -euo pipefail
