@@ -9,7 +9,8 @@ OPERATION='TS-RS002-A02-PG16-PROVISION-20261113-001'
 ATTEMPT='TS-RS002-A02-PG16-PROVISION-A001'
 HOST='DESKTOP-DJLBEQH'
 CONTAINER='ts-rs002-a02-pg16-20261113-001'
-VOLUME='ts-rs002-a02-pg16-data-20261113-001'
+# Anonymous volume is allocated atomically by Docker container create, never looked up by user name.
+VOLUME_TARGET='/var/lib/postgresql/data'
 NETWORK='ts-rs002-a02-pg16-net-20261113-001'
 DATABASE='ts_rs002_a02_lab'
 PGUSER='ts_rs002_admin'
@@ -30,8 +31,9 @@ fail() {
   local message="$1"
   printf 'BLOCKED: %s\n' "$message" >&2
   if [[ -n "$result_file" ]]; then
-    printf 'operation=%s\nattempt=%s\nphase=%s\neffect=%s\nstatus=BLOCKED_OR_INCOMPLETE\n' \
-      "$OPERATION" "$ATTEMPT" "$phase" "$status" > "$result_file" || :
+    # Append, never truncate native IDs already observed after a partial effect.
+    printf 'phase=%s\neffect=UNKNOWN\nstatus=BLOCKED_OR_INCOMPLETE\n' \
+      "$phase" >> "$result_file" || :
   fi
   exit 21
 }
@@ -58,13 +60,13 @@ containers=$(docker container ls -a --format '{{.Names}}') || fail 'container in
 volumes=$(docker volume ls --format '{{.Name}}') || fail 'volume inventory unavailable'
 networks=$(docker network ls --format '{{.Name}}') || fail 'network inventory unavailable'
 if grep -Fxq -- "$CONTAINER" <<< "$containers"; then fail 'container collision'; fi
-if grep -Fxq -- "$VOLUME" <<< "$volumes"; then fail 'volume collision'; fi
+# Existing foreign named volumes are never selected; Docker will allocate a new anonymous volume.
 if grep -Fxq -- "$NETWORK" <<< "$networks"; then fail 'network collision'; fi
 command -v openssl >/dev/null 2>&1 || fail 'openssl unavailable'
 # No database, SQL or network connection is performed in preflight.
 if [[ "$mode" == '--preflight' ]]; then
-  printf 'PREFLIGHT_PASS operation=%s host=%s container=%s volume=%s network=%s effect=NONE\n' \
-    "$OPERATION" "$HOST" "$CONTAINER" "$VOLUME" "$NETWORK"
+  printf 'PREFLIGHT_PASS operation=%s host=%s container=%s volume_policy=DAEMON_ANONYMOUS_NEW network=%s effect=NONE\n' \
+    "$OPERATION" "$HOST" "$CONTAINER" "$NETWORK"
   exit 0
 fi
 
@@ -128,18 +130,18 @@ grep -Fxq 'PG_VERSION=16.15-1.pgdg12+2' <<< "$image_env" || fail 'image PG_VERSI
 phase='NETWORK_CREATE'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
 network_id=$(docker network create --internal --label "ts.rs002.operation=$OPERATION" "$NETWORK") || fail 'network create failed'
+[[ "$network_id" =~ ^[0-9a-f]{64}$ ]] || fail 'new network ID malformed or unknown'
+observed_network_id=$(docker network inspect --format '{{.Id}}' "$network_id") || fail 'network native ID not attested'
+[[ "$observed_network_id" == "$network_id" ]] || fail 'network native ID mismatch'
 printf 'network_id=%s\n' "$network_id" >> "$result_file"
-phase='VOLUME_CREATE'
-printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
-volume_name=$(docker volume create --label "ts.rs002.operation=$OPERATION" "$VOLUME") || fail 'volume create failed'
-[[ "$volume_name" == "$VOLUME" ]] || fail 'volume created with unexpected identity'
-printf 'volume_name=%s\n' "$volume_name" >> "$result_file"
+# Docker allocates an anonymous volume WITH the uniquely created container.
+# No separate 'docker volume create NAME' can accidentally reuse foreign storage.
 phase='CONTAINER_CREATE'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
-container_id=$(docker container create --name "$CONTAINER" --network "$NETWORK" \
+container_id=$(docker container create --name "$CONTAINER" --network "$network_id" \
   --label "ts.rs002.operation=$OPERATION" --label "ts.rs002.attempt=$ATTEMPT" \
   --memory 512m --cpus 1 --pids-limit 256 --restart no \
-  --mount "type=volume,src=$VOLUME,dst=/var/lib/postgresql/data" \
+  --mount "type=volume,dst=$VOLUME_TARGET,volume-nocopy" \
   --mount "type=bind,src=$ROOT/init,dst=/docker-entrypoint-initdb.d,readonly" \
   --mount "type=bind,src=$ROOT/secrets/admin.pass,dst=/run/secrets/ts-admin-pass,readonly" \
   --mount "type=bind,src=$ROOT/secrets/observer.pass,dst=/run/secrets/observer.pass,readonly" \
@@ -151,6 +153,17 @@ container_id=$(docker container create --name "$CONTAINER" --network "$NETWORK" 
   "$IMAGE") || fail 'container create failed'
 [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || fail 'container ID malformed'
 printf 'container_id=%s\n' "$container_id" >> "$result_file"
+# Only a single daemon-generated anonymous volume at the EXACT PGDATA target is allowed.
+volume_mount=$(docker container inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}' "$container_id") || fail 'anonymous PGDATA mount unavailable'
+IFS='|' read -r volume_name volume_type volume_rw <<< "$volume_mount"
+[[ "$volume_name" =~ ^[0-9a-f]{64}$ && "$volume_type" == volume && "$volume_rw" == true ]] || fail 'PGDATA volume not daemon-created anonymous volume'
+volume_driver=$(docker volume inspect --format '{{.Driver}}' "$volume_name") || fail 'anonymous volume native driver unavailable'
+[[ "$volume_driver" == local ]] || fail 'anonymous volume driver not local'
+printf 'volume_name=%s\nvolume_type=%s\nvolume_driver=%s\n' "$volume_name" "$volume_type" "$volume_driver" >> "$result_file"
+# Exact created network is identified by ID, never ambiguous network name.
+attached_network_id=$(docker container inspect --format '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}' "$container_id") || fail 'attached network ID unavailable'
+[[ "$attached_network_id" == "$network_id" ]] || fail 'container connected to unexpected network'
+printf 'attached_network_id=%s\n' "$attached_network_id" >> "$result_file"
 phase='CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
 started_name=$(docker container start "$CONTAINER") || fail 'container start failed'
@@ -163,4 +176,4 @@ printf 'phase=%s\neffect=RESOURCE_IDS_CAPTURED_PENDING_PG_GENESIS\nstatus=PENDIN
 # No PASS here: a separate, exact native observation must attest genesis,
 # roles/ACLs and pg_controldata system_identifier before provisioning PASS.
 printf 'STARTED_UNVERIFIED operation=%s attempt=%s container=%s volume=%s network=%s receipt=%s\n' \
-  "$OPERATION" "$ATTEMPT" "$CONTAINER" "$VOLUME" "$NETWORK" "$result_file"
+  "$OPERATION" "$ATTEMPT" "$CONTAINER" "$volume_name" "$NETWORK" "$result_file"
