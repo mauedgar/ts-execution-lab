@@ -50,11 +50,17 @@ case "$1 $2" in
  'network create'|'network inspect') printf '%s\n' "$net";;
  'container create') printf '%s\n' "$ctr";;
  'container inspect')
-   if [[ "$*" == *".Mounts"* ]]; then printf '%s|volume|true\n' "$vol"
+   if [[ "$*" == *".Mounts"* ]];then printf '%s|volume|true\n' "$vol"
    elif [[ "$*" == *".NetworkSettings.Networks"* ]];then printf '%s\n' "$net"
+   elif [[ "$*" == *"{{.Id}}"* ]];then printf '%s\n' "$ctr"
+   elif [[ "$*" == *"{{.Name}}"* ]];then if [[ "$STUB_FAIL_STAGE" == post_start_foreign_name ]];then printf '/FOREIGN\n';else printf '/ts-rs002-a02-pg16-20261113-001\n';fi
+   elif [[ "$*" == *"ts.rs002.operation"* ]];then if [[ "$STUB_FAIL_STAGE" == post_start_foreign_operation ]];then printf 'FOREIGN\n';else printf 'TS-RS002-A02-PG16-PROVISION-20261113-001\n';fi
+   elif [[ "$*" == *"ts.rs002.attempt"* ]];then printf 'TS-RS002-A02-PG16-PROVISION-A001\n'
    else printf 'running\n';fi;;
  'volume inspect') printf 'local\n';;
- 'container start') printf 'ts-rs002-a02-pg16-20261113-001\n';;
+ 'container start')
+   [[ "${3:-}" == "$ctr" ]] || { printf 'BLOCKED_BY_FAKE: must start by native ID\n' >&2; exit 78; }
+   if [[ "$STUB_FAIL_STAGE" == start_foreign_id ]];then printf '%064d\n' 0;else printf '%s\n' "$ctr";fi;;
  *) printf 'UNEXPECTED_MOCK_COMMAND: %s\n' "$*" >&2; exit 99;;
 esac
 MOCK
@@ -70,13 +76,13 @@ check_failure() {
   [[ -f "$receipt" ]] || { printf 'FAIL: missing receipt at %s\n' "$fault" >&2;exit 1; }
   grep -Fxq 'effect=UNKNOWN' "$receipt" || { printf 'FAIL: did not preserve UNKNOWN at %s\n' "$fault" >&2;exit 1; }
   grep -Fq 'NONTERMINAL_PARTIAL_EFFECT' "$RUNTIME/stderr" || { printf 'FAIL: missing failure banner at %s\n' "$fault" >&2;exit 1; }
-  if [[ "$fault" == container_create || "$fault" == volume_attest || "$fault" == container_start ]]; then
+  if [[ "$fault" == container_create || "$fault" == volume_attest || "$fault" == container_start || "$fault" == start_foreign_id || "$fault" == post_start_foreign_name || "$fault" == post_start_foreign_operation ]]; then
     grep -Fxq "network_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" "$receipt" || { echo "lost network ID at $fault";exit 1; }
   fi
-  if [[ "$fault" == volume_attest || "$fault" == container_start ]]; then
+  if [[ "$fault" == volume_attest || "$fault" == container_start || "$fault" == start_foreign_id || "$fault" == post_start_foreign_name || "$fault" == post_start_foreign_operation ]]; then
     grep -Fxq "container_id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$receipt" || { echo "lost container ID at $fault";exit 1; }
   fi
-  if [[ "$fault" == container_start ]]; then
+  if [[ "$fault" == container_start || "$fault" == start_foreign_id || "$fault" == post_start_foreign_name || "$fault" == post_start_foreign_operation ]]; then
     grep -Fxq "volume_name=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" "$receipt" || { echo "lost anonymous volume at $fault";exit 1; }
   fi
   printf 'PASS source-fault-injection %s effect=UNKNOWN preserved\n' "$fault"
@@ -91,9 +97,12 @@ check_failure volume_attest
 check_failure bad_volume_driver
 check_failure bad_network_attach
 check_failure container_start
+check_failure start_foreign_id
+check_failure post_start_foreign_name
+check_failure post_start_foreign_operation
 check_failure post_start_exited
 rm -rf -- "$RUNTIME/effect_root"
 (cd "$RUNTIME" && STUB_FAIL_STAGE=none bash ./provision_pg16.sh --apply) > "$RUNTIME/stdout" 2> "$RUNTIME/stderr"
 grep -q 'STARTED_UNVERIFIED' "$RUNTIME/stdout"
 grep -Fxq 'status=PENDING_NATIVE_POSTCONDITIONS' "$RUNTIME/effect_root/attempt-status.txt"
-printf 'PASS source-mocked-started-unverified 1/1, partial-failure 11/11; all Docker calls mocked\n'
+printf 'PASS source-mocked-started-unverified 1/1, partial-failure 14/14; all Docker calls mocked\n'
