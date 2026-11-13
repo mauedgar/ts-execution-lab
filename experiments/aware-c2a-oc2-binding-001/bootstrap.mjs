@@ -104,6 +104,9 @@ export function observeOriginal(r) {
   const parent=noLinks(r.scratch_parent,'ORIGINAL_OBSERVE_SCRATCH_PARENT');
   if(path.basename(parent).toLowerCase()!=='ts-ee-oc2-c2a-synthetic')
     throw Error('ORIGINAL_OBSERVE_PARENT_NOT_QUALIFIED');
+  if(!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.attempt_id||'')
+    ||!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.operation_id||''))
+    throw Error('ORIGINAL_OBSERVE_ID_UNSAFE');
   const attempt=path.join(parent,r.attempt_id);
   if(!inRoot(parent,attempt))
     throw Error('ORIGINAL_OBSERVE_PATH_OUTSIDE_PARENT');
@@ -199,5 +202,6 @@ if(invoked){
     grantPath:process.argv[4],ref:process.argv[5],sha256:process.argv[6]
   }).then(r=>{
     console.log(JSON.stringify(r));if(r?.status==='BLOCKED_PRECONDITION')process.exitCode=20;
-  }).catch(e=>{console.error(JSON.stringify({status:'BLOCKED_PRECONDITION',effect_state:'NONE',reason:String(e.message).slice(0,140)}));process.exitCode=22});
+  }).catch(e=>{console.error(JSON.stringify({status:mode==='--observe'?'UNKNOWN':'BLOCKED_PRECONDITION',
+    effect_state:mode==='--observe'?'UNKNOWN':'NONE',reason:String(e.message).slice(0,140)}));process.exitCode=22});
 }
