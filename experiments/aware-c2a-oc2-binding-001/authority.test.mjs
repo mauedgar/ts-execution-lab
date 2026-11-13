@@ -33,7 +33,7 @@ const grant={
   forbidden_effects:['BLOCKED.txt','UNSCOPED_SHELL','PRODUCT_SOURCE'],subject
 };
 const material=(x=grant)=>{
-  const bytes=Buffer.from(JSON.stringify(x),'utf8');
+  const bytes=Buffer.from(JSON.stringify(x)+'\n','utf8');
   const anchor={ref,sha256:sha(bytes)};
   return {bytes,anchor,request:{...request,authorization_receipt_sha256:anchor.sha256}};
 };
@@ -86,4 +86,17 @@ test('malformed external bytes, expiry and mutable issue comment refs fail close
   assert.throws(()=>verifyControlGrant(x.request,x.bytes,wrong,{now}));
   assert.throws(()=>verifyControlGrant(x.request,Buffer.alloc(0),x.anchor,{now}));
   assert.throws(()=>verifyControlGrant(x.request,Buffer.from([0xC3,0x28,...x.bytes]),x.anchor,{now}));
+});
+
+test('canonical grant rejects duplicate root keys, shadowed issuer and noncanonical JSON',()=>{
+  const x=material();
+  const dual=Buffer.from(JSON.stringify(grant).replace('"issuer":"AWARE_CONTROL",',
+    '"issuer":"TS_EXECUTION_ENGINEERING","issuer":"AWARE_CONTROL",')+'\\n');
+  const dupAnchor={ref,sha256:sha(dual)};
+  assert.throws(()=>verifyControlGrant({...x.request,authorization_receipt_sha256:dupAnchor.sha256},
+    dual,dupAnchor,{now}));
+  const spaced=Buffer.from(JSON.stringify(grant,null,2)+'\\n');
+  const spaceAnchor={ref,sha256:sha(spaced)};
+  assert.throws(()=>verifyControlGrant({...x.request,authorization_receipt_sha256:spaceAnchor.sha256},
+    spaced,spaceAnchor,{now}));
 });
