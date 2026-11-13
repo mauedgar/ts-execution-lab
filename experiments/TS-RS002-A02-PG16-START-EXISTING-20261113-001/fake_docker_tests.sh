@@ -64,7 +64,8 @@ grep -Fxq "EXPECTED_ADMISSION_SHA256='$test_hash'" "$RUNTIME/bound.sh"
 
 cat > "$RUNTIME/fake-bin/hostname" <<'MOCK'
 #!/usr/bin/env bash
-echo DESKTOP-DJLBEQH
+if [[ "${STUB_FAIL:-none}" == immediate_hostname_change && -d "${STUB_RESULT:-/nonexistent}" ]];then echo FOREIGN
+else echo DESKTOP-DJLBEQH;fi
 MOCK
 cat > "$RUNTIME/fake-bin/id" <<'MOCK'
 #!/usr/bin/env bash
@@ -86,7 +87,8 @@ VOL='e0f82fa682d2559142b6d90e0c9d23aec384728b2ec618ee3344faa1fa3da899'
 IMG='postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
 case "$1 $2" in
  'context show') echo default;;
- 'version --format') echo 29.1.3;;
+ 'version --format')
+    if [[ "$STUB_FAIL" == immediate_docker_version_change && -d "$STUB_RESULT" ]];then echo FOREIGN;else echo 29.1.3;fi;;
  'info --format')
     if [[ "$3" == '{{.ID}}' ]]; then
       if [[ "$STUB_FAIL" == foreign_daemon ]]; then echo FOREIGN; else echo 1219e4b8-5972-4880-8ebd-4fd2498a3e83; fi
@@ -145,7 +147,8 @@ case "$1 $2" in
  'network inspect')
     [[ "$5" == "$NID" ]] || exit 82
     case "$4" in
-      '{{.Id}}') echo "$NID";;
+      '{{.Id}}')
+        if [[ "$STUB_FAIL" == immediate_native_network_id_change && -d "$STUB_RESULT" ]];then echo FOREIGN;else echo "$NID";fi;;
       '{{.Name}}') if [[ "$STUB_FAIL" == foreign_network_name ]];then echo FOREIGN;else echo ts-rs002-a02-pg16-net-20261113-001;fi;;
       '{{.Driver}}') if [[ "$STUB_FAIL" == foreign_network_driver ]];then echo host;else echo bridge;fi;;
       '{{.Internal}}') echo true;;
@@ -234,6 +237,9 @@ start_failure poststart_exposed_port
 start_failure poststart_foreign_secret
 start_failure poststart_foreign_mount_type
 start_failure immediate_memory_change
+start_failure immediate_hostname_change
+start_failure immediate_docker_version_change
+start_failure immediate_native_network_id_change
 
 rm -rf -- "$RUNTIME/result"
 rm -f -- "$STUB_STARTED"
@@ -242,7 +248,7 @@ grep -Fq 'STARTED_UNVERIFIED original=A001 distinct=B001' "$RUNTIME/out"
 grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attempt-status.txt"
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
-echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 11 partial effects; no real Docker'
+echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 14 partial effects; no real Docker'
 
 # IR009 A02: exercise actual unexpected nonzero shell exits and handled SIGTERM
 # after receipt creation, using ONLY disposable CI-runner copies.
@@ -282,6 +288,46 @@ abnormal() {
 abnormal unexpected receipt
 abnormal signal receipt
 abnormal dircrash directory-only
+
+# Source-only receipt persistence faults injected into DISPOSABLE copies only.
+# No original host path, Docker resource or Product file is ever touched.
+python3 - "$RUNTIME/bound.sh" "$RUNTIME/filecreate.sh" "$RUNTIME/preappend.sh" "$RUNTIME/postappend.sh" <<'WRITE_FAULT_COPIES'
+import pathlib,sys
+src=pathlib.Path(sys.argv[1]).read_text()
+def inject(old, new, path):
+    assert src.count(old)==1, (old,path)
+    pathlib.Path(path).write_text(src.replace(old,new,1))
+marker='receipt="$RECEIPT_ROOT/attempt-status.txt"'
+inject(marker,marker+'\nmkdir -- "$receipt" # source-only file creation collision',sys.argv[2])
+marker="phase='IMMEDIATE_PRESTART_RECHECK'"
+inject(marker,marker+'\nchmod 400 -- "$receipt" # source-only prestart append denied',sys.argv[3])
+marker="phase='STARTED_UNVERIFIED'"
+inject(marker,marker+'\nchmod 400 -- "$receipt" # source-only terminal append denied after fake Docker start',sys.argv[4])
+WRITE_FAULT_COPIES
+receipt_write_failure() {
+  local mode="$1" started="$2"
+  rm -rf -- "$RUNTIME/result"
+  rm -f -- "$STUB_STARTED"
+  if (cd "$RUNTIME" && STUB_FAIL=none bash "./$mode.sh" --start-existing) > "$RUNTIME/out" 2> "$RUNTIME/err";then
+    echo "FAIL: synthetic receipt fault $mode incorrectly succeeded" >&2;exit 97
+  fi
+  [[ -d "$RUNTIME/result" ]] || { echo "FAIL: $mode omitted uncertain directory" >&2;exit 98; }
+  grep -Fq 'NONTERMINAL_PARTIAL_EFFECT original=A001 distinct=B001' "$RUNTIME/err" || { echo "FAIL: $mode omitted original UNKNOWN banner" >&2;exit 99; }
+  if [[ "$mode" == filecreate ]];then
+    [[ -d "$RUNTIME/result/attempt-status.txt" ]] || { echo "FAIL: $mode was not receipt-create collision" >&2;exit 100; }
+  else
+    grep -Fxq 'effect=UNKNOWN' "$RUNTIME/result/attempt-status.txt"
+    ! grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attempt-status.txt"
+  fi
+  if [[ "$started" == yes ]];then [[ -f "$STUB_STARTED" ]] || exit 101
+  else [[ ! -e "$STUB_STARTED" ]] || exit 102; fi
+  echo "PASS synthetic receipt write fault $mode preserves UNKNOWN/no false PASS; fake_start=$started"
+}
+receipt_write_failure filecreate no
+receipt_write_failure preappend no
+receipt_write_failure postappend yes
+# Repair file mode only within disposable fixture; never reuse a real B001 receipt.
+chmod 600 "$RUNTIME/result/attempt-status.txt"
 
 # Source-only lock negative: a syntactically valid but EXTRA-key admission JSON
 # is rejected, even if its SHA is rebound in an isolated synthetic copy.
