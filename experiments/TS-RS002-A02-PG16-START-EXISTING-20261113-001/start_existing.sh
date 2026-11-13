@@ -70,6 +70,7 @@ eq 'original root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT")" '700:1000:1000'
 [[ -d "$ORIGINAL_ROOT/secrets" && ! -L "$ORIGINAL_ROOT/secrets" ]] || fail 'original secrets root invalid'
 eq 'original secrets DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/secrets")" '700:1000:1000'
 [[ -d "$ORIGINAL_ROOT/init" && ! -L "$ORIGINAL_ROOT/init" ]] || fail 'original init root invalid'
+eq 'original init DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init")" '755:1000:1000'
 for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   source="$ORIGINAL_ROOT/secrets/$name"
   [[ -f "$source" && ! -L "$source" ]] || fail 'missing or linked original credential'
@@ -82,6 +83,8 @@ done
 [[ -f "$ORIGINAL_ROOT/init/01-schema.sql" && ! -L "$ORIGINAL_ROOT/init/01-schema.sql" ]] || fail 'original SQL missing'
 eq 'original SQL sha256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut -d' ' -f1)" 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
 [[ -f "$ORIGINAL_ROOT/init/02-roles.sh" && ! -L "$ORIGINAL_ROOT/init/02-roles.sh" ]] || fail 'original roles missing'
+eq 'original roles owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/02-roles.sh")" '644:1000:1000'
+eq 'original roles genesis SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/02-roles.sh" | cut -d' ' -f1)" '67737d584aeeb167ec84c70fef2437d71f11fac10e77e92d989e4418add3f2cd'
 eq 'frozen init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Source}}|{{.RW}}{{end}}{{end}}')" "$ORIGINAL_ROOT/init|false"
 
 if [[ "$mode" == --preflight ]]; then
