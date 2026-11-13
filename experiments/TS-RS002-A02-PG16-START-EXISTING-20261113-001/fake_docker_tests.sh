@@ -117,7 +117,7 @@ case "$1 $2" in
       '{{index .ImageManifestDescriptor.platform "os"}}/{{index .ImageManifestDescriptor.platform "architecture"}}')
         if [[ "$STUB_FAIL" == foreign_platform ]];then echo linux/arm64;else echo linux/amd64;fi;;
       '{{.HostConfig.Memory}}')
-        if [[ "$STUB_FAIL" == foreign_memory ]];then echo 128;else echo 536870912;fi;;
+        if [[ "$STUB_FAIL" == foreign_memory || ( "$STUB_FAIL" == immediate_memory_change && -d "$STUB_RESULT" ) ]];then echo 128;else echo 536870912;fi;;
       '{{.HostConfig.NanoCpus}}') if [[ "$STUB_FAIL" == foreign_cpu ]];then echo 0;else echo 1000000000;fi;;
       '{{.HostConfig.PidsLimit}}') if [[ "$STUB_FAIL" == foreign_pids ]];then echo 128;else echo 256;fi;;
       '{{.HostConfig.Privileged}}'|'{{.HostConfig.PublishAllPorts}}') echo false;;
@@ -126,12 +126,16 @@ case "$1 $2" in
       '{{.HostConfig.RestartPolicy.Name}}') echo no;;
       *'"/var/lib/postgresql/data"'*)
           if [[ "$STUB_FAIL" == foreign_volume ]];then echo FOREIGN'|volume|true';else echo "$VOL|volume|true";fi;;
-      *'"/docker-entrypoint-initdb.d"'*) echo "$STUB_ORIGINAL/init|false";;
-      *'/run/secrets/ts-admin-pass'*) echo "$STUB_ORIGINAL/secrets/admin.pass|false";;
+      *'"/docker-entrypoint-initdb.d"'*)
+        if [[ "$STUB_FAIL" == foreign_init_mount_type ]];then echo "volume|$STUB_ORIGINAL/init|false";else echo "bind|$STUB_ORIGINAL/init|false";fi;;
+      *'/run/secrets/ts-admin-pass'*)
+        if [[ "$STUB_FAIL" == foreign_secret_mount_type ]];then echo "volume|$STUB_ORIGINAL/secrets/admin.pass|false";else echo "bind|$STUB_ORIGINAL/secrets/admin.pass|false";fi;;
       *'/run/secrets/observer.pass'*)
-        if [[ "$STUB_FAIL" == poststart_foreign_secret && -f "$STUB_STARTED" ]];then echo '/tmp/foreign-secret|false';else echo "$STUB_ORIGINAL/secrets/observer.pass|false";fi;;
-      *'/run/secrets/writer_a.pass'*) echo "$STUB_ORIGINAL/secrets/writer_a.pass|false";;
-      *'/run/secrets/writer_b.pass'*) echo "$STUB_ORIGINAL/secrets/writer_b.pass|false";;
+        if [[ "$STUB_FAIL" == poststart_foreign_secret && -f "$STUB_STARTED" ]];then echo 'bind|/tmp/foreign-secret|false'
+        elif [[ "$STUB_FAIL" == poststart_foreign_mount_type && -f "$STUB_STARTED" ]];then echo "volume|$STUB_ORIGINAL/secrets/observer.pass|false"
+        else echo "bind|$STUB_ORIGINAL/secrets/observer.pass|false";fi;;
+      *'/run/secrets/writer_a.pass'*) echo "bind|$STUB_ORIGINAL/secrets/writer_a.pass|false";;
+      *'/run/secrets/writer_b.pass'*) echo "bind|$STUB_ORIGINAL/secrets/writer_b.pass|false";;
       *'.NetworkSettings.Networks'*)
          if [[ "$STUB_FAIL" == poststart_network_missing ]];then echo
          elif [[ -f "$STUB_STARTED" ]];then echo "$NID"
@@ -167,6 +171,7 @@ chmod 700 "$RUNTIME/fake-bin/"*
 export PATH="$RUNTIME/fake-bin:$PATH"
 export STUB_ORIGINAL="$RUNTIME/original"
 export STUB_STARTED="$RUNTIME/fake-docker-started"
+export STUB_RESULT="$RUNTIME/result"
 
 # Read-only positive preflight (uses unbound source, all exact data and fake Docker).
 (cd "$RUNTIME" && STUB_FAIL=none bash ./source_unbound.sh --preflight) > "$RUNTIME/out" 2> "$RUNTIME/err"
@@ -200,6 +205,8 @@ precheck_failure foreign_memory
 precheck_failure foreign_cpu
 precheck_failure foreign_pids
 precheck_failure foreign_platform
+precheck_failure foreign_secret_mount_type
+precheck_failure foreign_init_mount_type
 
 # Fully staged synthetic B001, faulting only inside new isolated CI fixture.
 start_failure() {
@@ -225,6 +232,8 @@ start_failure poststart_foreign_operation
 start_failure poststart_foreign_oci
 start_failure poststart_exposed_port
 start_failure poststart_foreign_secret
+start_failure poststart_foreign_mount_type
+start_failure immediate_memory_change
 
 rm -rf -- "$RUNTIME/result"
 rm -f -- "$STUB_STARTED"
@@ -233,4 +242,4 @@ grep -Fq 'STARTED_UNVERIFIED original=A001 distinct=B001' "$RUNTIME/out"
 grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attempt-status.txt"
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
-echo 'PASS fake-existing-only B001 started-unverified; 11 preflight negatives / 9 partial effects; no real Docker'
+echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 11 partial effects; no real Docker'
