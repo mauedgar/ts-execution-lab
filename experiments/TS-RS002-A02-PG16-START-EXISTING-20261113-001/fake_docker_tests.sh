@@ -96,8 +96,11 @@ case "$1 $2" in
     fmt="$4"
     case "$fmt" in
       '{{.Id}}') echo "$CID";;
-      '{{.Name}}') echo /ts-rs002-a02-pg16-20261113-001;;
-      *'ts.rs002.operation'*) if [[ "$STUB_FAIL" == foreign_operation ]]; then echo FOREIGN; else echo TS-RS002-A02-PG16-PROVISION-20261113-001; fi;;
+      '{{.Name}}')
+        if [[ "$STUB_FAIL" == poststart_foreign_name && -f "$STUB_STARTED" ]];then echo /FOREIGN;else echo /ts-rs002-a02-pg16-20261113-001;fi;;
+      *'ts.rs002.operation'*)
+          if [[ "$STUB_FAIL" == foreign_operation || ( "$STUB_FAIL" == poststart_foreign_operation && -f "$STUB_STARTED" ) ]];then echo FOREIGN
+          else echo TS-RS002-A02-PG16-PROVISION-20261113-001;fi;;
       *'ts.rs002.attempt'*) echo TS-RS002-A02-PG16-PROVISION-A001;;
       '{{.State.Status}}')
          if [[ -f "$STUB_STARTED" ]]; then
@@ -109,15 +112,24 @@ case "$1 $2" in
       '{{.RestartCount}}') echo 0;;
       '{{.HostConfig.NetworkMode}}') if [[ "$STUB_FAIL" == foreign_network_mode ]]; then echo FOREIGN; else echo "$NID"; fi;;
       '{{.Config.Image}}') echo "$IMG";;
-      '{{.ImageManifestDescriptor.digest}}') echo sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e;;
+      '{{.ImageManifestDescriptor.digest}}')
+        if [[ "$STUB_FAIL" == poststart_foreign_oci && -f "$STUB_STARTED" ]];then echo sha256:$(printf '0%.0s' {1..64});else echo sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e;fi;;
+      '{{index .ImageManifestDescriptor.platform "os"}}/{{index .ImageManifestDescriptor.platform "architecture"}}')
+        if [[ "$STUB_FAIL" == foreign_platform ]];then echo linux/arm64;else echo linux/amd64;fi;;
+      '{{.HostConfig.Memory}}')
+        if [[ "$STUB_FAIL" == foreign_memory ]];then echo 128;else echo 536870912;fi;;
+      '{{.HostConfig.NanoCpus}}') if [[ "$STUB_FAIL" == foreign_cpu ]];then echo 0;else echo 1000000000;fi;;
+      '{{.HostConfig.PidsLimit}}') if [[ "$STUB_FAIL" == foreign_pids ]];then echo 128;else echo 256;fi;;
       '{{.HostConfig.Privileged}}'|'{{.HostConfig.PublishAllPorts}}') echo false;;
-      '{{json .HostConfig.PortBindings}}') echo '{}';;
+      '{{json .HostConfig.PortBindings}}')
+        if [[ "$STUB_FAIL" == poststart_exposed_port && -f "$STUB_STARTED" ]];then echo '{"5432/tcp":[{"HostPort":"55432"}]}';else echo '{}';fi;;
       '{{.HostConfig.RestartPolicy.Name}}') echo no;;
       *'"/var/lib/postgresql/data"'*)
           if [[ "$STUB_FAIL" == foreign_volume ]];then echo FOREIGN'|volume|true';else echo "$VOL|volume|true";fi;;
       *'"/docker-entrypoint-initdb.d"'*) echo "$STUB_ORIGINAL/init|false";;
       *'/run/secrets/ts-admin-pass'*) echo "$STUB_ORIGINAL/secrets/admin.pass|false";;
-      *'/run/secrets/observer.pass'*) echo "$STUB_ORIGINAL/secrets/observer.pass|false";;
+      *'/run/secrets/observer.pass'*)
+        if [[ "$STUB_FAIL" == poststart_foreign_secret && -f "$STUB_STARTED" ]];then echo '/tmp/foreign-secret|false';else echo "$STUB_ORIGINAL/secrets/observer.pass|false";fi;;
       *'/run/secrets/writer_a.pass'*) echo "$STUB_ORIGINAL/secrets/writer_a.pass|false";;
       *'/run/secrets/writer_b.pass'*) echo "$STUB_ORIGINAL/secrets/writer_b.pass|false";;
       *'.NetworkSettings.Networks'*)
@@ -130,6 +142,8 @@ case "$1 $2" in
     [[ "$5" == "$NID" ]] || exit 82
     case "$4" in
       '{{.Id}}') echo "$NID";;
+      '{{.Name}}') if [[ "$STUB_FAIL" == foreign_network_name ]];then echo FOREIGN;else echo ts-rs002-a02-pg16-net-20261113-001;fi;;
+      '{{.Driver}}') if [[ "$STUB_FAIL" == foreign_network_driver ]];then echo host;else echo bridge;fi;;
       '{{.Internal}}') echo true;;
       *'ts.rs002.operation'*) echo TS-RS002-A02-PG16-PROVISION-20261113-001;;
       *) exit 83;;
@@ -180,6 +194,12 @@ precheck_failure foreign_status
 precheck_failure foreign_operation
 precheck_failure foreign_network_mode
 precheck_failure foreign_volume
+precheck_failure foreign_network_name
+precheck_failure foreign_network_driver
+precheck_failure foreign_memory
+precheck_failure foreign_cpu
+precheck_failure foreign_pids
+precheck_failure foreign_platform
 
 # Fully staged synthetic B001, faulting only inside new isolated CI fixture.
 start_failure() {
@@ -200,6 +220,11 @@ start_failure start_failure
 start_failure start_wrong_return
 start_failure poststart_network_missing
 start_failure poststart_exited
+start_failure poststart_foreign_name
+start_failure poststart_foreign_operation
+start_failure poststart_foreign_oci
+start_failure poststart_exposed_port
+start_failure poststart_foreign_secret
 
 rm -rf -- "$RUNTIME/result"
 rm -f -- "$STUB_STARTED"
@@ -208,4 +233,4 @@ grep -Fq 'STARTED_UNVERIFIED original=A001 distinct=B001' "$RUNTIME/out"
 grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attempt-status.txt"
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
-echo 'PASS fake-existing-only B001 started-unverified; 5 preflight negatives / 4 partial effects; no real Docker'
+echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 9 partial effects; no real Docker'
