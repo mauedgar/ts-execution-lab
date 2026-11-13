@@ -57,6 +57,36 @@
           "effect": "deny"
         }
       ]
+    },
+    "title": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "summary": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "compaction": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
     }
   },
   "permissions": [
@@ -177,5 +207,7 @@
       "resource": "*",
       "effect": "deny"
     }
-  ]
+  ],
+  "share": "disabled",
+  "snapshots": false
 }
