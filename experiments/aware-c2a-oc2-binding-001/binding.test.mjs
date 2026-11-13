@@ -8,16 +8,16 @@ const allowed=path.join(scratch,'ALLOW_ONLY.txt'),blocked=path.join(scratch,'BLO
 const qualifiedGit=path.resolve('/usr/bin/git');
 const commands=gitCommands(qualifiedGit,repo),agent='aware-storefront-implementer';
 const head='c'.repeat(40),tree='d'.repeat(40);
-const root={schema:'ts-ee-oc2-c2a-request/v2',product:'mauedgar/aware-commerce',
+const root={schema:'ts-ee-oc2-c2a-request/v3',product:'mauedgar/aware-commerce',
   authority_class:'SYNTHETIC_NONPRODUCT_ONLY',paid_api_fallback:false,
   operation_id:'TS_EE_C2A_BIND_001',attempt_id:'TS_EE_C2A_BIND_A001',
-  runner_sha256:'a'.repeat(64),binding_sha256:'b'.repeat(64),
+  runner_sha256:'a'.repeat(64),binding_sha256:'b'.repeat(64),authority_source_sha256:'9'.repeat(64),
   bootstrap_sha256:'c'.repeat(64),node_sha256:'d'.repeat(64),git_sha256:'e'.repeat(64),
   executable_sha256:'f'.repeat(64),node_version:'v22.23.3',
   expected_head:head,expected_tree:tree,expected_origin:'https://github.com/mauedgar/aware-commerce.git',
   expected_version:'opencode v2.2.5',expected_host:'DESKTOP-DJLBEQH',model:'openai/gpt-6-sol-fast',agent,
   authorization_receipt_sha256:'0'.repeat(64),
-  authorization_receipt_ref:'https://github.com/mauedgar/ts-execution-lab/issues/18#issuecomment-6798127777',
+  authorization_receipt_ref:'mauedgar/ts-execution-transport@'+'a'.repeat(40)+':grants/AWARE-C2A-OC2-S0-001/GRANT.json',
   repository_root:repo,scratch_anchor:path.resolve('/tmp'),scratch_parent:path.resolve('/tmp/c2a-oc2-native'),
   node_executable:path.resolve('/usr/bin/node'),git_executable:path.resolve('/usr/bin/git'),
   opencode_executable:path.resolve('/tmp/opencode.exe')};
@@ -42,11 +42,13 @@ function fixture() {
     frame('step_finish',{type:'step-finish'})]).flat();
 }
 const inspect=lines=>inspectEvents(lines.join('\n')+'\n',{commands,allowedFile:allowed,forbiddenFile:blocked,head,tree});
-test('v2 frozen identity positive and explicit authority; rejects paid, wrong origin, corrupt hashes',()=>{
-  assert.equal(assertRequest({...root}).schema,'ts-ee-oc2-c2a-request/v2');
+test('v3 frozen identity syntax and immutable Control grant ref; no authority conferred by schema',()=>{
+  assert.equal(assertRequest({...root}).schema,'ts-ee-oc2-c2a-request/v3');
   for(const mutate of [{paid_api_fallback:true},{product:'mauedgar/tecnotron-ai'},
     {binding_sha256:'f'.repeat(63)},{node_version:'v24.0.0'},
     {authorization_receipt_ref:'https://example.com/'},
+    {authorization_receipt_ref:'https://github.com/mauedgar/ts-execution-lab/issues/18#issuecomment-6843249779'},
+    {authority_source_sha256:'g'.repeat(64)},
     {git_executable:'/tmp/unsafe"; echo no'},{expected_origin:'https://github.com/fake/repo.git'}])
     assert.throws(()=>assertRequest({...root,...mutate}));
 });
