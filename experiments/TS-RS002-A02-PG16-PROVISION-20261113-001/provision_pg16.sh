@@ -18,7 +18,7 @@ ROOT='/var/tmp/ts-rs002-a02-pg16-20261113-001'
 IMAGE_LOCK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/image.lock"
 SCHEMA="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/schema.sql"
 EXPECTED_SCHEMA_SHA256='c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
-EXPECTED_IMAGE_LOCK_SHA256='7e36ec9cc5a93432521770df03711781695ba5bdb7579a5e2d3eca0d810068f5'
+EXPECTED_IMAGE_LOCK_SHA256='890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47'
 EXPECTED_DOCKER_DAEMON_ID='1219e4b8-5972-4880-8ebd-4fd2498a3e83'
 EXPECTED_WSL_UID='1000'
 # Only Control can issue and freeze a separate admission. Current candidate is NOT admitted.
@@ -111,6 +111,7 @@ set -Eeuo pipefail
   printf '%s\n' 'REVOKE ALL ON SCHEMA ts_r3_global_head_20261107_001 FROM PUBLIC;'
   printf '%s\n' 'REVOKE ALL ON ALL TABLES IN SCHEMA ts_r3_global_head_20261107_001 FROM PUBLIC;'
   printf '%s\n' 'GRANT CONNECT ON DATABASE ts_rs002_a02_lab TO ts_rs002_observer,ts_rs002_writer_a,ts_rs002_writer_b;'
+  printf '%s\n' 'ALTER ROLE ts_rs002_observer SET default_transaction_read_only = on;'
   printf '%s\n' 'GRANT USAGE ON SCHEMA ts_r3_global_head_20261107_001 TO ts_rs002_observer,ts_rs002_writer_a,ts_rs002_writer_b;'
   printf '%s\n' 'GRANT SELECT ON ALL TABLES IN SCHEMA ts_r3_global_head_20261107_001 TO ts_rs002_observer;'
   printf '%s\n' 'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA ts_r3_global_head_20261107_001 TO ts_rs002_writer_a,ts_rs002_writer_b;'
@@ -130,6 +131,8 @@ grep -Fxq 'PG_VERSION=16.15-1.pgdg12+2' <<< "$image_env" || fail 'image PG_VERSI
 phase='NETWORK_CREATE'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
 network_id=$(docker network create --internal --label "ts.rs002.operation=$OPERATION" "$NETWORK") || fail 'network create failed'
+# Preserve return identity BEFORE any subsequent attestation; absence is UNKNOWN.
+printf 'network_returned_id=%s\n' "$network_id" >> "$result_file"
 [[ "$network_id" =~ ^[0-9a-f]{64}$ ]] || fail 'new network ID malformed or unknown'
 observed_network_id=$(docker network inspect --format '{{.Id}}' "$network_id") || fail 'network native ID not attested'
 [[ "$observed_network_id" == "$network_id" ]] || fail 'network native ID mismatch'
@@ -151,12 +154,15 @@ container_id=$(docker container create --name "$CONTAINER" --network "$network_i
   --env 'POSTGRES_PASSWORD_FILE=/run/secrets/ts-admin-pass' \
   --env 'POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256' \
   "$IMAGE") || fail 'container create failed'
+# Preserve return identity BEFORE inspect: a partial-effect failure cannot erase it.
+printf 'container_returned_id=%s\n' "$container_id" >> "$result_file"
 [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || fail 'container ID malformed'
 printf 'container_id=%s\n' "$container_id" >> "$result_file"
 # Only a single daemon-generated anonymous volume at the EXACT PGDATA target is allowed.
 volume_mount=$(docker container inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}' "$container_id") || fail 'anonymous PGDATA mount unavailable'
 IFS='|' read -r volume_name volume_type volume_rw <<< "$volume_mount"
 [[ "$volume_name" =~ ^[0-9a-f]{64}$ && "$volume_type" == volume && "$volume_rw" == true ]] || fail 'PGDATA volume not daemon-created anonymous volume'
+printf 'volume_returned_name=%s\n' "$volume_name" >> "$result_file"
 volume_driver=$(docker volume inspect --format '{{.Driver}}' "$volume_name") || fail 'anonymous volume native driver unavailable'
 [[ "$volume_driver" == local ]] || fail 'anonymous volume driver not local'
 printf 'volume_name=%s\nvolume_type=%s\nvolume_driver=%s\n' "$volume_name" "$volume_type" "$volume_driver" >> "$result_file"
@@ -168,7 +174,7 @@ phase='CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
 started_name=$(docker container start "$CONTAINER") || fail 'container start failed'
 [[ "$started_name" == "$CONTAINER" ]] || fail 'container start name mismatch'
-container_state=$(docker container inspect --format '{{.State.Status}}' "$CONTAINER") || fail 'container state unreadable'
+container_state=$(docker container inspect --format '{{.State.Status}}' "$container_id") || fail 'container state unreadable'
 printf 'container_state=%s\n' "$container_state" >> "$result_file"
 [[ "$container_state" == running ]] || fail 'container not running after start'
 phase='STARTED_UNVERIFIED'
