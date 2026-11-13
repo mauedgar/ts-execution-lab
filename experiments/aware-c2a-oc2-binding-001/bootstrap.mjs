@@ -45,7 +45,9 @@ export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,d
     &&x.executable?.git_sha256===r.git_sha256
     &&x.executable?.opencode_sha256===r.executable_sha256
     &&x.authority?.sha256===r.authorization_receipt_sha256
-    &&x.authority?.ref===r.authorization_receipt_ref);
+    &&x.authority?.ref===r.authorization_receipt_ref
+    &&x.authority?.issuer==='AWARE_CONTROL'
+    &&x.authority?.trust_root==='EXTERNALLY_PINNED_GIT_BLOB');
   const consistent=Boolean(!corrupt.length&&same(start)&&same(result)
     &&Boolean(dispatch)===Boolean(result?.native_dispatched));
   const base={mode:'OBSERVE_ONLY',attempt_id:r.attempt_id,operation_id:r.operation_id,
