@@ -11,19 +11,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     steps:
-      - name: Checkout candidate
+      - name: Checkout frozen candidate
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Static source integrity and hermetic fault controls
+      - name: Source integrity and hermetic native-ID fault controls
         shell: bash
         run: |
           set -euo pipefail
           cd experiments/TS-RS002-A02-PG16-PROVISION-20261113-001
-          printf '%s  %s\n' '093df43c9d83fb693304f41f5f2660f4997c13d8ab55e44e90c2008da9d800ee' provision_pg16.sh | sha256sum -c -
+          printf '%s  %s\n' '9ea07532c10e3cb0005b2a073022cf37dead84a26517ceface9c369620f1d767' provision_pg16.sh | sha256sum -c -
+          printf '%s  %s\n' '6e65976e519a7fe7613b0ad53bd0d070ba49dd4675a5b505dbcf741d44bfef91' fault_injection_tests.sh | sha256sum -c -
           printf '%s  %s\n' 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721' schema.sql | sha256sum -c -
           printf '%s  %s\n' '890f66f58c836087d9c6099e4d9d150d0df1b28ab04ecd0547e8118fd3c37c47' image.lock | sha256sum -c -
           test "$(git hash-object schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
-          test "$(git hash-object provision_pg16.sh)" = 'e73bfe94ee153d864b7efd0a7e06cafb9c94b7f1'
-          test "$(git hash-object fault_injection_tests.sh)" = 'db13a63e16de09519399355e1e96fd2ec7c73a4a'
+          test "$(git hash-object provision_pg16.sh)" = '3959a3039fc0efc56f9f0103d1c944c37c11aef0'
+          test "$(git hash-object fault_injection_tests.sh)" = '4c4bb0e53782aa07674d850774fae95bea078fda'
           test "$(git hash-object image.lock)" = '82ab4fa25cf9a724903a183172bda166a780192d'
           grep -Fq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" provision_pg16.sh
           bash -n provision_pg16.sh
@@ -31,11 +32,11 @@ jobs:
           bash -n fault_injection_tests.sh
           bash negative_tests.sh
           bash fault_injection_tests.sh
-      - name: Inspect pinned registry manifest without pulling an image
+      - name: Inspect official manifest and descriptor platform (no image pull)
         shell: bash
         run: |
           set -euo pipefail
           cd experiments/TS-RS002-A02-PG16-PROVISION-20261113-001
           image="$(cat image.lock)"
           test "$image" = 'postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
-          docker manifest inspect "$image" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["schemaVersion"] == 2 and isinstance(x.get("config"),dict) and x["config"]["digest"].startswith("sha256:"); print("OFFICIAL_REGISTRY_MANIFEST_READABLE_SOURCE_ONLY")'
+          docker manifest inspect --verbose "$image" | python3 -c 'import json,sys; x=json.load(sys.stdin); items=x if isinstance(x,list) else [x]; assert len(items)==1; d=items[0]["Descriptor"]; p=d["platform"]; assert p["os"]=="linux" and p["architecture"]=="amd64"; m=items[0]["SchemaV2Manifest"]; assert m["schemaVersion"]==2 and m["config"]["digest"].startswith("sha256:"); print("OFFICIAL_AMD64_REGISTRY_DESCRIPTOR_VERIFIED_SOURCE_ONLY")'
