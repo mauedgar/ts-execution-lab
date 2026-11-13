@@ -28,8 +28,10 @@ jobs:
           node --check experiments/aware-c2a-oc2-binding-001/binding.mjs
           node --check experiments/aware-c2a-oc2-binding-001/authority.mjs
           node --check experiments/aware-c2a-oc2-binding-001/qualify-native.mjs
+          node --check experiments/aware-c2a-oc2-binding-001/s0-host-inventory.mjs
       - name: Run deterministic nonproduct negative tests
         run: |
           node --test experiments/aware-c2a-oc2-binding-001/binding.test.mjs
           node --test experiments/aware-c2a-oc2-binding-001/authority.test.mjs
           node --test experiments/aware-c2a-oc2-binding-001/receipt.test.mjs
+          node --test experiments/aware-c2a-oc2-binding-001/s0-host-inventory.test.mjs
