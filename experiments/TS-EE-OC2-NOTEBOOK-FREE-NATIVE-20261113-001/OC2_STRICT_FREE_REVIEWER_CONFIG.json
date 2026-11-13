@@ -1,0 +1,181 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "update": "disable",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "small_model": "opencode/deepseek-v4.1-flash-free",
+  "default_agent": "plan",
+  "compaction": {
+    "auto": false
+  },
+  "agents": {
+    "plan": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*/.ssh/*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*/secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  },
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*",
+      "effect": "allow"
+    },
+    {
+      "action": "glob",
+      "resource": "*",
+      "effect": "allow"
+    },
+    {
+      "action": "grep",
+      "resource": "*",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": "*.env",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*/.ssh/*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*/secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "external_directory",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "policies": [
+    {
+      "action": "provider.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "provider.use",
+      "resource": "opencode",
+      "effect": "allow"
+    },
+    {
+      "action": "tool.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*",
+      "effect": "allow"
+    },
+    {
+      "action": "tool.use",
+      "resource": "glob:*",
+      "effect": "allow"
+    },
+    {
+      "action": "tool.use",
+      "resource": "grep:*",
+      "effect": "allow"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*.env",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*.env.*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*/.ssh/*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*/secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "external_directory:*",
+      "effect": "deny"
+    },
+    {
+      "action": "mcp.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "skill.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "plugin.use",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ]
+}
