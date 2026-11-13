@@ -30,7 +30,14 @@ net='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 ctr='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 vol='cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
 if [[ "$1 $2" == 'network create' && "$STUB_FAIL_STAGE" == network_create ]]; then exit 44; fi
+if [[ "$1 $2" == 'network create' && "$STUB_FAIL_STAGE" == network_bad_id ]]; then printf 'BAD_NETWORK_ID\n'; exit 0; fi
+if [[ "$1 $2" == 'network inspect' && "$STUB_FAIL_STAGE" == network_bad_attest ]]; then printf '%064d\n' 0; exit 0; fi
+if [[ "$1 $2" == 'pull --platform' && "$STUB_FAIL_STAGE" == image_pull ]]; then exit 43; fi
 if [[ "$1 $2" == 'container create' && "$STUB_FAIL_STAGE" == container_create ]]; then exit 45; fi
+if [[ "$1 $2" == 'container create' && "$STUB_FAIL_STAGE" == container_bad_id ]]; then printf 'BAD_CONTAINER_ID\n'; exit 0; fi
+if [[ "$1 $2" == 'volume inspect' && "$STUB_FAIL_STAGE" == bad_volume_driver ]]; then printf 'foreign\n'; exit 0; fi
+if [[ "$1 $2" == 'container inspect' && "$STUB_FAIL_STAGE" == bad_network_attach && "$*" == *".NetworkSettings.Networks"* ]]; then printf '%064d\n' 0; exit 0; fi
+if [[ "$1 $2" == 'container inspect' && "$STUB_FAIL_STAGE" == post_start_exited && "$*" == *".State.Status"* ]]; then printf 'exited\n'; exit 0; fi
 if [[ "$1 $2" == 'container inspect' && "$STUB_FAIL_STAGE" == volume_attest && "$*" == *".Mounts"* ]]; then exit 46; fi
 if [[ "$1 $2" == 'container start' && "$STUB_FAIL_STAGE" == container_start ]]; then exit 47; fi
 case "$1 $2" in
@@ -74,12 +81,19 @@ check_failure() {
   fi
   printf 'PASS source-fault-injection %s effect=UNKNOWN preserved\n' "$fault"
 }
+check_failure image_pull
 check_failure network_create
+check_failure network_bad_id
+check_failure network_bad_attest
 check_failure container_create
+check_failure container_bad_id
 check_failure volume_attest
+check_failure bad_volume_driver
+check_failure bad_network_attach
 check_failure container_start
+check_failure post_start_exited
 rm -rf -- "$RUNTIME/effect_root"
 (cd "$RUNTIME" && STUB_FAIL_STAGE=none bash ./provision_pg16.sh --apply) > "$RUNTIME/stdout" 2> "$RUNTIME/stderr"
 grep -q 'STARTED_UNVERIFIED' "$RUNTIME/stdout"
 grep -Fxq 'status=PENDING_NATIVE_POSTCONDITIONS' "$RUNTIME/effect_root/attempt-status.txt"
-printf 'PASS source-mocked-started-unverified 1/1, partial-failure 4/4; all Docker calls mocked\n'
+printf 'PASS source-mocked-started-unverified 1/1, partial-failure 11/11; all Docker calls mocked\n'
