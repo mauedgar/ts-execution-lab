@@ -18,9 +18,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           cd experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001
-          test "$(git hash-object start_existing.sh)" = '7a8230254c1d10a598eb5ff9d0e50a75286e3f87'
-          test "$(git hash-object fake_docker_tests.sh)" = '48fd30a7a444c85860235afb3be70696c142a712'
-          test "$(git hash-object README.md)" = 'e4b92691196c61a827e809bf770c52107f3b0c54'
+          test "$(git hash-object start_existing.sh)" = '67c0cce8d5c1868d69de5c492d081b55f6c8e1ba'
+          test "$(git hash-object fake_docker_tests.sh)" = '7386c99ad167c0584f9029134f743bbb6c647ce1'
+          test "$(git hash-object README.md)" = 'b469afb660fd9195c31763120a5d815067cf4773'
           test "$(git hash-object ../TS-RS002-A02-PG16-PROVISION-20261113-001/schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
           grep -Fq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" start_existing.sh
           ! grep -Eq 'docker (run|pull|volume create|network create|container create|container rm|container stop)' start_existing.sh
