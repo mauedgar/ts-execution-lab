@@ -243,3 +243,64 @@ grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attem
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
 echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 11 partial effects; no real Docker'
+
+# IR009 A02: exercise actual unexpected nonzero shell exits and handled SIGTERM
+# after receipt creation, using ONLY disposable CI-runner copies.
+# A crash between mkdir and receipt creation MUST be recognized as an
+# uncertain partial create-only effect even if no receipt file exists.
+python3 - "$RUNTIME/bound.sh" "$RUNTIME/unexpected.sh" "$RUNTIME/signal.sh" "$RUNTIME/dircrash.sh" <<'FAULT_COPY'
+import pathlib,sys
+src=pathlib.Path(sys.argv[1]).read_text()
+def inject(old, new, path):
+    assert src.count(old)==1, (path,old)
+    pathlib.Path(path).write_text(src.replace(old,new,1))
+marker="phase='IMMEDIATE_PRESTART_RECHECK'"
+inject(marker,marker+"\nfalse # synthetic unexpected shell command failure",sys.argv[2])
+inject(marker,marker+"\nkill -TERM \"$$\" # synthetic handled SIGTERM",sys.argv[3])
+old='mkdir -m 700 -- "$RECEIPT_ROOT" || fail \'receipt create-only collision\''
+inject(old,old+"\nexit 42 # synthetic crash after directory create before receipt",sys.argv[4])
+FAULT_COPY
+abnormal() {
+  local kind="$1" expected="$2" code
+  rm -rf -- "$RUNTIME/result"
+  rm -f -- "$STUB_STARTED"
+  if (cd "$RUNTIME" && STUB_FAIL=none bash "./$kind.sh" --start-existing) > "$RUNTIME/out" 2> "$RUNTIME/err";then
+    echo "FAIL: unexpected shell exit $kind falsely PASS" >&2;exit 90
+  fi
+  [[ ! -e "$STUB_STARTED" ]] || { echo "FAIL: $kind started fake Docker" >&2; exit 91; }
+  [[ -d "$RUNTIME/result" ]] || { echo "FAIL: $kind lacked partial result directory" >&2;exit 92; }
+  grep -Fq 'NONTERMINAL_PARTIAL_EFFECT original=A001 distinct=B001' "$RUNTIME/err" || { echo "FAIL: $kind omitted UNKNOWN banner" >&2;exit 93; }
+  if [[ "$expected" == receipt ]];then
+    grep -Fxq 'status=BLOCKED_OR_INCOMPLETE' "$RUNTIME/result/attempt-status.txt"
+    grep -Fxq 'effect=UNKNOWN' "$RUNTIME/result/attempt-status.txt"
+    echo "PASS synthetic unexpected termination $kind append-only UNKNOWN terminal"
+  else
+    [[ ! -e "$RUNTIME/result/attempt-status.txt" ]] || { echo "FAIL: $kind unexpectedly wrote complete receipt" >&2;exit 94; }
+    echo "PASS synthetic dir-before-receipt partial effect $kind UNKNOWN, NO RETRY"
+  fi
+}
+abnormal unexpected receipt
+abnormal signal receipt
+abnormal dircrash directory-only
+
+# Source-only lock negative: a syntactically valid but EXTRA-key admission JSON
+# is rejected, even if its SHA is rebound in an isolated synthetic copy.
+rm -rf -- "$RUNTIME/result"
+rm -f -- "$STUB_STARTED"
+python3 - "$RUNTIME/admission.lock" <<'LOCK_TAMPER'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1])
+x=json.loads(p.read_text());x["extra_unadmitted_key"]=True
+p.write_text(json.dumps(x,sort_keys=True))
+LOCK_TAMPER
+cp "$RUNTIME/bound.sh" "$RUNTIME/extra-lock.sh"
+old_hash="$test_hash"
+extra_hash=$(sha256sum "$RUNTIME/admission.lock" | cut -d' ' -f1)
+sed -i "s|^EXPECTED_ADMISSION_SHA256='$old_hash'$|EXPECTED_ADMISSION_SHA256='$extra_hash'|" "$RUNTIME/extra-lock.sh"
+grep -Fxq "EXPECTED_ADMISSION_SHA256='$extra_hash'" "$RUNTIME/extra-lock.sh"
+if (cd "$RUNTIME" && STUB_FAIL=none bash ./extra-lock.sh --start-existing) > "$RUNTIME/out" 2> "$RUNTIME/err";then
+  echo 'FAIL: unapproved admission extra JSON key accepted' >&2;exit 95
+fi
+grep -Fq 'B001 grant semantic validation failed' "$RUNTIME/err"
+[[ ! -e "$RUNTIME/result" && ! -e "$STUB_STARTED" ]] || exit 96
+echo 'PASS synthetic unapproved B001 lock extra-key denied before any effect'
