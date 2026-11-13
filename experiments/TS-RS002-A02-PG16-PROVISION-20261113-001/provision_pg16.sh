@@ -166,10 +166,14 @@ printf 'volume_returned_name=%s\n' "$volume_name" >> "$result_file"
 volume_driver=$(docker volume inspect --format '{{.Driver}}' "$volume_name") || fail 'anonymous volume native driver unavailable'
 [[ "$volume_driver" == local ]] || fail 'anonymous volume driver not local'
 printf 'volume_name=%s\nvolume_type=%s\nvolume_driver=%s\n' "$volume_name" "$volume_type" "$volume_driver" >> "$result_file"
-# Exact created network is identified by ID, never ambiguous network name.
-attached_network_id=$(docker container inspect --format '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}' "$container_id") || fail 'attached network ID unavailable'
-[[ "$attached_network_id" == "$network_id" ]] || fail 'container connected to unexpected network'
-printf 'attached_network_id=%s\n' "$attached_network_id" >> "$result_file"
+# Docker 29.1.3 reports an empty NetworkSettings.NetworkID for a newly
+# created but NEVER STARTED container. Do NOT require an attached endpoint yet.
+# The exact native network ID is held by HostConfig.NetworkMode before start.
+prestart_network_mode=$(docker container inspect --format '{{.HostConfig.NetworkMode}}' "$container_id") || fail 'container configured network unavailable'
+[[ "$prestart_network_mode" == "$network_id" ]] || fail 'container configured for foreign network'
+printf 'configured_prestart_network_id=%s\n' "$prestart_network_mode" >> "$result_file"
+# NetworkSettings.NetworkID must be reattested after start, when Docker
+# actually creates the endpoint; see post-start validation below.
 phase='CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
 # Start by the exact native container ID captured from create, never a mutable name.
