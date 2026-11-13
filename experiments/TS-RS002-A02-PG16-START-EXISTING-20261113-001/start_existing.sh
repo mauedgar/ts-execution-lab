@@ -106,6 +106,7 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
 done
 [[ -f "$ORIGINAL_ROOT/init/01-schema.sql" && ! -L "$ORIGINAL_ROOT/init/01-schema.sql" ]] || fail 'original SQL missing'
 eq 'original SQL canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/01-schema.sql")" "$ORIGINAL_ROOT/init/01-schema.sql"
+eq 'original SQL owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/01-schema.sql")" '644:1000:1000'
 eq 'original SQL sha256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut -d' ' -f1)" 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
 [[ -f "$ORIGINAL_ROOT/init/02-roles.sh" && ! -L "$ORIGINAL_ROOT/init/02-roles.sh" ]] || fail 'original roles missing'
 eq 'original role script canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/02-roles.sh")" "$ORIGINAL_ROOT/init/02-roles.sh"
@@ -151,9 +152,15 @@ mkdir -m 700 -- "$RECEIPT_ROOT" || fail 'receipt create-only collision'
 receipt="$RECEIPT_ROOT/attempt-status.txt"
 ( set -C; printf 'operation=%s\nattempt=%s\noriginal_attempt=%s\ncontainer_id=%s\nnetwork_id=%s\nvolume_id=%s\nphase=RECEIPT_CREATE\neffect=UNKNOWN\n' "$OP" "$ATTEMPT" "$OLD_ATTEMPT" "$CID" "$NID" "$VOLUME" > "$receipt" ) || fail 'receipt create-only failure'
 phase='IMMEDIATE_PRESTART_RECHECK'
-printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
+printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt" || fail 'prestart receipt append failed'
 # Recheck ALL frozen security invariants after grant and receipt, before
 # the ONLY Docker start; this is not atomic against external daemon changes.
+eq 'immediate hostname' "$(hostname)" "$HOST"
+eq 'immediate UID' "$(id -u)" 1000
+eq 'immediate Docker context' "$(docker context show)" default
+eq 'immediate Docker server version' "$(docker version --format '{{.Server.Version}}')" 29.1.3
+immediate_platform=$(docker info --format '{{.OSType}}/{{.Architecture}}')
+[[ "$immediate_platform" == linux/x86_64 || "$immediate_platform" == linux/amd64 ]] || fail 'immediate Docker platform changed'
 eq 'immediate current daemon' "$(docker info --format '{{.ID}}')" "$DAEMON"
 eq 'immediate original name' "$(c '{{.Name}}')" "$CNAME"
 eq 'immediate native ID' "$(c '{{.Id}}')" "$CID"
@@ -164,6 +171,7 @@ eq 'immediate running flag' "$(c '{{.State.Running}}')" false
 eq 'immediate restart count' "$(c '{{.RestartCount}}')" 0
 eq 'immediate never started timestamp' "$(c '{{.State.StartedAt}}')" '0001-01-01T00:00:00Z'
 eq 'immediate configured network ID' "$(c '{{.HostConfig.NetworkMode}}')" "$NID"
+eq 'immediate network native ID' "$(n '{{.Id}}')" "$NID"
 eq 'immediate network name' "$(n '{{.Name}}')" 'ts-rs002-a02-pg16-net-20261113-001'
 eq 'immediate network driver' "$(n '{{.Driver}}')" bridge
 eq 'immediate internal network' "$(n '{{.Internal}}')" true
@@ -181,11 +189,20 @@ eq 'immediate restart policy' "$(c '{{.HostConfig.RestartPolicy.Name}}')" no
 eq 'immediate memory' "$(c '{{.HostConfig.Memory}}')" 536870912
 eq 'immediate nano CPUs' "$(c '{{.HostConfig.NanoCpus}}')" 1000000000
 eq 'immediate PIDs' "$(c '{{.HostConfig.PidsLimit}}')" 256
+[[ -d "$ORIGINAL_ROOT" && ! -L "$ORIGINAL_ROOT" ]] || fail 'immediate original root missing/linked'
+[[ -d "$ORIGINAL_ROOT/secrets" && ! -L "$ORIGINAL_ROOT/secrets" ]] || fail 'immediate secrets dir missing/linked'
+[[ -d "$ORIGINAL_ROOT/init" && ! -L "$ORIGINAL_ROOT/init" ]] || fail 'immediate init dir missing/linked'
 eq 'immediate root canonical path' "$(realpath -e -- "$ORIGINAL_ROOT")" "$ORIGINAL_ROOT"
 eq 'immediate root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT")" '700:1000:1000'
 eq 'immediate secrets canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/secrets")" "$ORIGINAL_ROOT/secrets"
 eq 'immediate init canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init")" "$ORIGINAL_ROOT/init"
 eq 'immediate init DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init")" '755:1000:1000'
+[[ -f "$ORIGINAL_ROOT/init/01-schema.sql" && ! -L "$ORIGINAL_ROOT/init/01-schema.sql" ]] || fail 'immediate schema missing/linked'
+[[ -f "$ORIGINAL_ROOT/init/02-roles.sh" && ! -L "$ORIGINAL_ROOT/init/02-roles.sh" ]] || fail 'immediate roles missing/linked'
+eq 'immediate schema canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/01-schema.sql")" "$ORIGINAL_ROOT/init/01-schema.sql"
+eq 'immediate roles canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/02-roles.sh")" "$ORIGINAL_ROOT/init/02-roles.sh"
+eq 'immediate schema owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/01-schema.sql")" '644:1000:1000'
+eq 'immediate roles owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/02-roles.sh")" '644:1000:1000'
 eq 'immediate frozen SQL SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut -d' ' -f1)" 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
 eq 'immediate original init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
 eq 'immediate secrets root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/secrets")" '700:1000:1000'
@@ -201,9 +218,9 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   eq 'immediate frozen secret read-only bind' "$(c "$template")" "bind|$original|false"
 done
 phase='EXACT_EXISTING_CONTAINER_START'
-printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
+printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt" || fail 'start-phase receipt append failed'
 returned=$(docker container start "$CID") || fail 'docker container start failure or ambiguous effect'
-printf 'start_returned=%s\n' "$returned" >> "$receipt"
+printf 'start_returned=%s\n' "$returned" >> "$receipt" || fail 'returned-ID receipt append failed'
 [[ "$returned" == "$CID" || "$returned" == 'ts-rs002-a02-pg16-20261113-001' ]] || fail 'unexpected start return'
 eq 'poststart native ID' "$(c '{{.Id}}')" "$CID"
 eq 'poststart name' "$(c '{{.Name}}')" "$CNAME"
@@ -234,9 +251,11 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
 done
 eq 'poststart frozen init RO bind' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
 state=$(c '{{.State.Status}}')
-printf 'poststart_status=%s\n' "$state" >> "$receipt"
+printf 'poststart_status=%s\n' "$state" >> "$receipt" || fail 'poststart-status receipt append failed'
 [[ "$state" == running ]] || fail 'container not running after start'
 phase='STARTED_UNVERIFIED'
+# Never change effect from UNKNOWN before the terminal receipt is durable.
+# If append fails, UNKNOWN and original IDs remain; no false PASS, no retry.
+printf 'phase=%s\neffect=STARTED_PENDING_PG_GENESIS\nstatus=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL\n' "$phase" >> "$receipt" || fail 'terminal receipt append failed'
 effect='STARTED_PENDING_PG_GENESIS'
-printf 'phase=%s\neffect=%s\nstatus=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL\n' "$phase" "$effect" >> "$receipt"
 printf 'STARTED_UNVERIFIED original=A001 distinct=B001 container_id=%s receipt=%s\n' "$CID" "$receipt"
