@@ -1,0 +1,37 @@
+name: TS RS002 PG16 existing-container-only B001 source qualification
+on:
+  pull_request:
+    paths:
+      - 'experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001/**'
+      - '.github/workflows/ts-rs002-a02-pg16-existing-start-source.yml'
+permissions:
+  contents: read
+jobs:
+  bounded_source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Checkout immutable B001 source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Frozen Git blobs, no-grant guard and Bash syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001
+          test "$(git hash-object start_existing.sh)" = '1b6b3aa8b0b241244e93000f80288dea4b8fa322'
+          test "$(git hash-object fake_docker_tests.sh)" = '74afa6ad04caef053584ee083624a7272819337a'
+          test "$(git hash-object README.md)" = '608d184c46eec71ae6fdbc0f7f68f4e6a456e7ac'
+          test "$(git hash-object ../TS-RS002-A02-PG16-PROVISION-20261113-001/schema.sql)" = '3b1604bd7aca0f7cf6c8db84fa615913fa39e9f0'
+          grep -Fq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" start_existing.sh
+          ! grep -Eq 'docker (run|pull|volume create|network create|container create|container rm|container stop)' start_existing.sh
+          bash -n start_existing.sh
+          bash -n fake_docker_tests.sh
+          sha256sum start_existing.sh fake_docker_tests.sh README.md
+          echo 'B001_SOURCE_INTEGRITY_PASS'
+      - name: Hermetic source-only exact-ID mock execution
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001
+          bash fake_docker_tests.sh
+          echo 'B001_SOURCE_TESTS_ONLY_NO_HOST_DOCKER_OR_SQL'
