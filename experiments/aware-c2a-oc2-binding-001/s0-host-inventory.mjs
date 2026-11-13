@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {fileURLToPath} from 'node:url';
 import crypto from 'node:crypto';
 
 const SHA=/^[a-f0-9]{64}$/;
@@ -110,7 +111,7 @@ export function observeHost(d){
 }
 // CLI is explicitly read-only. The descriptor is caller-supplied and cannot
 // become an independent authority root; the outer runner must pin its SHA.
-if(process.argv[1]&&path.resolve(process.argv[1])===path.resolve(new URL(import.meta.url).pathname)){
+if(process.argv[1]&&path.resolve(process.argv[1])===path.resolve(fileURLToPath(import.meta.url))){
   if(process.argv.length!==3||!path.isAbsolute(process.argv[2]))
     throw Error('ABSOLUTE_FROZEN_DESCRIPTOR_REQUIRED');
   const d=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
