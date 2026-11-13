@@ -23,10 +23,10 @@ const appDir=path.dirname(fileURLToPath(import.meta.url));
 const self=fileURLToPath(import.meta.url);
 function readOnlyRequest(file) {
   const original=JSON.parse(fs.readFileSync(file,'utf8'));
-  if(original.schema!=='ts-ee-oc2-c2a-request/v2'||original.product!=='mauedgar/aware-commerce'
+  if(original.schema!=='ts-ee-oc2-c2a-request/v3'||original.product!=='mauedgar/aware-commerce'
     ||original.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY'||original.paid_api_fallback!==false)
     throw Error('BOOTSTRAP_REQUEST_CLASS_DENIED');
-  for(const k of ['bootstrap_sha256','runner_sha256','binding_sha256','node_sha256','executable_sha256','git_sha256'])
+  for(const k of ['bootstrap_sha256','runner_sha256','binding_sha256','authority_source_sha256','node_sha256','executable_sha256','git_sha256'])
     if(!/^[0-9a-f]{64}$/.test(original[k]||''))throw Error(k+'_MISSING');
   return original;
 }
@@ -40,6 +40,7 @@ export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,d
     &&x.source?.tree===r.expected_tree&&x.source?.origin===r.expected_origin
     &&x.bundle?.bootstrap===r.bootstrap_sha256
     &&x.bundle?.binding===r.binding_sha256&&x.bundle?.runner===r.runner_sha256
+    &&x.bundle?.authority===r.authority_source_sha256
     &&x.executable?.node_sha256===r.node_sha256
     &&x.executable?.git_sha256===r.git_sha256
     &&x.executable?.opencode_sha256===r.executable_sha256
@@ -85,13 +86,15 @@ export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,d
     note:'Local integrity is NOT independent native provider attestation or Product authorization'};
 }
 
-export async function bootstrap(file,mode) {
+export async function bootstrap(file,mode,controlAnchor) {
   if(!['--run','--observe'].includes(mode))throw Error('COMMAND_MODE_NOT_AUTHORIZED');
   const r=readOnlyRequest(file);
   exact(hash(fs.readFileSync(self)),r.bootstrap_sha256,'BOOTSTRAP_SOURCE');
   const runnerFile=path.join(appDir,'qualify-native.mjs'),bindingFile=path.join(appDir,'binding.mjs');
+  const authorityFile=path.join(appDir,'authority.mjs');
   exact(hash(fs.readFileSync(runnerFile)),r.runner_sha256,'RUNNER_SOURCE');
   exact(hash(fs.readFileSync(bindingFile)),r.binding_sha256,'BINDING_SOURCE');
+  exact(hash(fs.readFileSync(authorityFile)),r.authority_source_sha256,'AUTHORITY_SOURCE');
   exact(process.version,r.node_version,'NODE_VERSION');
   exact(hash(fs.readFileSync(process.execPath)),r.node_sha256,'NODE_BINARY');
   exact(noLinks(process.execPath,'ACTIVE_NODE_EXECUTABLE').toLowerCase(),noLinks(r.node_executable,'REQUESTED_NODE_EXECUTABLE').toLowerCase(),'NODE_EXECUTABLE');
@@ -115,6 +118,20 @@ export async function bootstrap(file,mode) {
     throw Error('WRONG_FILE_TYPE');
   exact(hash(fs.readFileSync(binary)),r.executable_sha256,'OPENCODE_BINARY');
   exact(hash(fs.readFileSync(git)),r.git_sha256,'GIT_BINARY');
+  if(!controlAnchor||typeof controlAnchor!=='object'
+    ||typeof controlAnchor.ref!=='string'||typeof controlAnchor.sha256!=='string')
+    throw Error('EXTERNAL_CONTROL_TRUST_ROOT_REQUIRED');
+  const grantPath=noLinks(controlAnchor.grantPath,'CONTROL_GRANT_FILE');
+  if(!fs.statSync(grantPath).isFile())throw Error('CONTROL_GRANT_NOT_REGULAR_FILE');
+  const {assertRequest}=await import(pathToFileURL(bindingFile).href);
+  assertRequest(r);
+  const {verifyControlGrant}=await import(pathToFileURL(authorityFile).href);
+  const verifiedGrant=verifyControlGrant(r,fs.readFileSync(grantPath),{
+    ref:controlAnchor.ref,sha256:controlAnchor.sha256
+  });
+  // The separately pinned ref/sha MUST be authenticated by competent Aware
+  // Control before this function is ever called. Matching CLI arguments alone
+  // do not constitute an external trust root or authorize a Commander run.
   const attempt=path.join(parent,r.attempt_id);
   if(mode==='--observe'){
     if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
@@ -140,17 +157,20 @@ export async function bootstrap(file,mode) {
     return reconcileOriginalReceipt(r,records,{native,allowed,denied,corrupt});
   }
   if(fs.existsSync(attempt))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
-  const {assertRequest}=await import(pathToFileURL(bindingFile).href);
-  assertRequest(r);
   const {execute}=await import(pathToFileURL(runnerFile).href);
   return execute(Object.freeze({request:Object.freeze(r),repo,anchor,parent,binary,git,attempt,
-    import_sha256:{bootstrap:r.bootstrap_sha256,runner:r.runner_sha256,binding:r.binding_sha256},
+    import_sha256:{bootstrap:r.bootstrap_sha256,runner:r.runner_sha256,binding:r.binding_sha256,
+      authority:r.authority_source_sha256},trusted_authority:verifiedGrant,
     node_sha256:r.node_sha256,platform:process.platform}));
 }
 const invoked=process.argv[1]&&path.resolve(process.argv[1])===self;
 if(invoked){
-  if(process.argv.length!==4||!path.isAbsolute(process.argv[2]))throw Error('ABSOLUTE_REQUEST_AND_EXPLICIT_MODE_REQUIRED');
-  bootstrap(process.argv[2],process.argv[3]).then(r=>{
+  if(process.argv.length!==7||!path.isAbsolute(process.argv[2])
+    ||!path.isAbsolute(process.argv[4]))
+    throw Error('ABSOLUTE_REQUEST_AND_EXTERNAL_CONTROL_GRANT_REQUIRED');
+  bootstrap(process.argv[2],process.argv[3],{
+    grantPath:process.argv[4],ref:process.argv[5],sha256:process.argv[6]
+  }).then(r=>{
     console.log(JSON.stringify(r));if(r?.status==='BLOCKED_PRECONDITION')process.exitCode=20;
   }).catch(e=>{console.error(JSON.stringify({status:'BLOCKED_PRECONDITION',effect_state:'NONE',reason:String(e.message).slice(0,140)}));process.exitCode=22});
 }
