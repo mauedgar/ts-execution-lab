@@ -124,6 +124,29 @@ Use one dispatch per exact `ExecutionAttempt`. While it runs, advance only disjo
 - When no qualified wait is available, return `PENDING_EXTERNAL_RESULT` with exact references.
 - Never relaunch an attempt merely because its result is late.
 
+### 7.1 OpenCode2 launch binding — mandatory Orca terminal (Developer ruling 2026-11-13)
+
+**Default interpretation:** when the Developer says **"lanzar OpenCode2"**, **"ejecutar OpenCode2"**, **"iniciar reviewer/worker con OpenCode2"**, or asks to resume an existing local OpenCode2 agent, **local semantic execution MUST originate in an Orca-owned, visible terminal**, either Windows or native WSL, in the specifically authorized host and isolated worktree. The same rule applies to implementers, explorers, reviewers and synthetic model calls. No extra `@OpenCode2` actor or plugin is needed to activate it.
+
+**Surface responsibilities:**
+
+- **ChatGPT Web / competent Control** fixes scope, authority, subject commit/tree, `Operation`, `ExecutionAttempt`, model/provider, host platform, worktree and result/receipt target *before* launch.
+- **Orca** owns the visible terminal/worktree correspondence. Reuse an already-qualified Windows or native WSL Orca binding; choose platform based on the authorized worktree and native dependencies, not convenience. In a WSL UNC worktree that Orca recognizes as Linux, allow native shell auto-selection; do not force unqualified `--shell` overrides.
+- **OpenCode2** is invoked as the semantic executor *inside that Orca terminal*, using its installed qualified exact executable/version/hash and the frozen request, never by a detached shell or an unrelated process.
+- **Commander** is a bounded mechanical observation/transport/execution utility only. It MAY run previously determined read-only `--version`, hash, model-catalog, server-status or similar preflights when authorized; these are **not** semantic agent launches. It MUST NOT invoke `opencode2 run`, start a semantic OpenCode2 agent, perform source exploration, construct launch scripts or operate as a replacement for Orca.
+- **GitHub Actions** is a distinct remote fallback binding, not the default interpretation of "launch OpenCode2". It requires its own explicit competent authorization, new remote `ExecutionAttempt`, exact terminal `effect_state=NONE` for the notebook and qualified cross-host exclusion; it never silently replaces the Orca launch.
+
+**Deterministic reuse-before-discovery sequence for every launch:**
+
+1. Reobserve existing original attempt/session first. If RUNNING or `UNKNOWN`, reconcile; do not create another. Verify developer grant, Product/control boundary and isolate ownership.
+2. Select the already-existing Orca notebook/workstation binding and exact Windows or WSL task worktree; prove host, worktree, shell and terminal are correctly paired. Reuse the prior Orca terminal when safely owned. Do not perform fresh tool archaeology when the qualified binding is still current.
+3. Check the installed OpenCode2 binary version/hash, selected provider and **exact model**, effective permissions, quota/cost safety, resource capacity and write-set. No inferential model call until these preconditions are competent.
+4. Launch **once** via the qualified Orca terminal/agent mechanism; capture `orca_worktree_id`, `orca_terminal_id`, platform, `opencode_native_session_or_process_id`, `ExecutionAttempt`, original request hash and exact result/receipt identity. A terminal tab label is not evidence of process identity.
+5. Observe the original process using Orca/native receipt and durable GitHub Transport after the meaningful join; no Commander polling, duplicate start, auto retry or Product authority inference.
+6. If the Orca launch command/profile or terminal correspondence is absent or unqualified, **STOP** with `BLOCKED_ORCA_BINDING` and report the exact missing identity/precondition. Never substitute bare PowerShell, Windows Terminal, WSL shell via Commander, Actions or Cloud merely to complete a launch.
+
+**Scope note:** this section governs *local OpenCode2 semantic execution* across TS execution workstreams. Read-only operational preflights from non-Orca tools remain allowed within their independent mechanical contracts. This document does not authorize any new model provider, installation, Product effects, parallel inference, retry or automatic remote fallback. The canonical EE operating contract points here; Product SOT/Control decides what work is permissible.
+
 ## 8. FitFlow Issue #25 — ADMIN Playwright
 
 Materialize `fitflow-issue25-admin-playwright-001` only from a freshly observed `origin/develop` and link Issue #25. Start the authorized application stack explicitly in `02 · FF · App`, then discover the listener:
