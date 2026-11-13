@@ -55,6 +55,31 @@
           "action": "external_directory",
           "resource": "*",
           "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": ".ssh/*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*/secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*/.ssh/*",
+          "effect": "deny"
         }
       ]
     },
@@ -134,6 +159,31 @@
       "action": "external_directory",
       "resource": "*",
       "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.env*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": ".ssh/*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*/secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*/.ssh/*",
+      "effect": "deny"
     }
   ],
   "policies": [
@@ -205,6 +255,31 @@
     {
       "action": "plugin.use",
       "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*.env*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:.ssh/*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*/secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "tool.use",
+      "resource": "read:*/.ssh/*",
       "effect": "deny"
     }
   ],
