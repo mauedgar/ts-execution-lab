@@ -88,9 +88,54 @@ export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,d
     note:'Local integrity is NOT independent native provider attestation or Product authorization'};
 }
 
+
+// Read-only reconciliation of the ORIGINAL. It deliberately does not require
+// a *currently valid* grant: expiry, withdrawal or missing credentials cannot
+// erase historical effects or justify a replay. The original request and
+// trusted host/parent must be independently frozen by Control; this function
+// can prove LOCAL consistency only, never native provider authenticity.
+export function observeOriginal(r) {
+  if(!r||r.schema!=='ts-ee-oc2-c2a-request/v3'
+    ||r.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY')
+    throw Error('ORIGINAL_OBSERVE_REQUEST_UNQUALIFIED');
+  if(process.platform!=='win32'||os.hostname()!==r.expected_host
+    ||r.expected_host!=='DESKTOP-DJLBEQH')
+    throw Error('ORIGINAL_OBSERVE_HOST_UNQUALIFIED');
+  const parent=noLinks(r.scratch_parent,'ORIGINAL_OBSERVE_SCRATCH_PARENT');
+  if(path.basename(parent).toLowerCase()!=='ts-ee-oc2-c2a-synthetic')
+    throw Error('ORIGINAL_OBSERVE_PARENT_NOT_QUALIFIED');
+  const attempt=path.join(parent,r.attempt_id);
+  if(!inRoot(parent,attempt))
+    throw Error('ORIGINAL_OBSERVE_PATH_OUTSIDE_PARENT');
+  {
+    if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
+    const records={},corrupt=[];
+    // No local receipt can authenticate the native provider on its own. This
+    // readback only checks immutable-file *consistency* before Control review.
+    for(const key of ['START.json','DISPATCH.json','CONTEXT.json','EFFECTIVE.json','NATIVE_META.json','RESULT.json']){
+      const p=path.join(attempt,key);
+      if(!fs.existsSync(p)){records[key]=null;continue}
+      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('SYMLINK');
+        records[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
+      catch{records[key]=null;corrupt.push(key)}
+    }
+    const readBytes=filename=>{
+      const p=path.join(attempt,filename);
+      if(!fs.existsSync(p))return null;
+      try{if(!fs.lstatSync(p).isFile()||fs.lstatSync(p).isSymbolicLink())throw Error('NOT_REGULAR');
+        return fs.readFileSync(p)}
+      catch{corrupt.push(filename);return null}
+    };
+    const native=readBytes('NATIVE.jsonl'),allowed=readBytes('ALLOW_ONLY.txt');
+    const denied=fs.existsSync(path.join(attempt,'BLOCKED.txt'));
+    return reconcileOriginalReceipt(r,records,{native,allowed,denied,corrupt});
+  }
+}
+
 export async function bootstrap(file,mode,controlAnchor) {
   if(!['--run','--observe'].includes(mode))throw Error('COMMAND_MODE_NOT_AUTHORIZED');
   const r=readOnlyRequest(file);
+  if(mode==='--observe')return observeOriginal(r);
   exact(hash(fs.readFileSync(self)),r.bootstrap_sha256,'BOOTSTRAP_SOURCE');
   const runnerFile=path.join(appDir,'qualify-native.mjs'),bindingFile=path.join(appDir,'binding.mjs');
   const authorityFile=path.join(appDir,'authority.mjs');
@@ -135,29 +180,7 @@ export async function bootstrap(file,mode,controlAnchor) {
   // Control before this function is ever called. Matching CLI arguments alone
   // do not constitute an external trust root or authorize a Commander run.
   const attempt=path.join(parent,r.attempt_id);
-  if(mode==='--observe'){
-    if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
-    const records={},corrupt=[];
-    // No local receipt can authenticate the native provider on its own. This
-    // readback only checks immutable-file *consistency* before Control review.
-    for(const key of ['START.json','DISPATCH.json','CONTEXT.json','EFFECTIVE.json','NATIVE_META.json','RESULT.json']){
-      const p=path.join(attempt,key);
-      if(!fs.existsSync(p)){records[key]=null;continue}
-      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('SYMLINK');
-        records[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
-      catch{records[key]=null;corrupt.push(key)}
-    }
-    const readBytes=filename=>{
-      const p=path.join(attempt,filename);
-      if(!fs.existsSync(p))return null;
-      try{if(!fs.lstatSync(p).isFile()||fs.lstatSync(p).isSymbolicLink())throw Error('NOT_REGULAR');
-        return fs.readFileSync(p)}
-      catch{corrupt.push(filename);return null}
-    };
-    const native=readBytes('NATIVE.jsonl'),allowed=readBytes('ALLOW_ONLY.txt');
-    const denied=fs.existsSync(path.join(attempt,'BLOCKED.txt'));
-    return reconcileOriginalReceipt(r,records,{native,allowed,denied,corrupt});
-  }
+
   if(fs.existsSync(attempt))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
   const {execute}=await import(pathToFileURL(runnerFile).href);
   return execute(Object.freeze({request:Object.freeze(r),repo,anchor,parent,binary,git,attempt,
@@ -167,10 +190,12 @@ export async function bootstrap(file,mode,controlAnchor) {
 }
 const invoked=process.argv[1]&&path.resolve(process.argv[1])===self;
 if(invoked){
-  if(process.argv.length!==7||!path.isAbsolute(process.argv[2])
-    ||!path.isAbsolute(process.argv[4]))
-    throw Error('ABSOLUTE_REQUEST_AND_EXTERNAL_CONTROL_GRANT_REQUIRED');
-  bootstrap(process.argv[2],process.argv[3],{
+  const mode=process.argv[3],observe=mode==='--observe';
+  if(!path.isAbsolute(process.argv[2]||'')
+    ||(observe?process.argv.length!==4:process.argv.length!==7)
+    ||(!observe&&!path.isAbsolute(process.argv[4]||'')))
+    throw Error('ABSOLUTE_REQUEST_AND_MODE_SPECIFIC_ARGUMENTS_REQUIRED');
+  bootstrap(process.argv[2],mode,observe?undefined:{
     grantPath:process.argv[4],ref:process.argv[5],sha256:process.argv[6]
   }).then(r=>{
     console.log(JSON.stringify(r));if(r?.status==='BLOCKED_PRECONDITION')process.exitCode=20;
