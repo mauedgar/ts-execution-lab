@@ -101,8 +101,8 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   eq 'secret owner/DAC' "$(stat -c '%a:%u:%g' "$source")" '644:1000:1000'
   target="/run/secrets/$name"
   [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
-  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Source}}|{{.RW}}{{end}}{{end}}"
-  eq 'frozen read-only bind' "$(c "$template")" "$source|false"
+  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}"
+  eq 'frozen read-only bind' "$(c "$template")" "bind|$source|false"
 done
 [[ -f "$ORIGINAL_ROOT/init/01-schema.sql" && ! -L "$ORIGINAL_ROOT/init/01-schema.sql" ]] || fail 'original SQL missing'
 eq 'original SQL canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/01-schema.sql")" "$ORIGINAL_ROOT/init/01-schema.sql"
@@ -111,7 +111,7 @@ eq 'original SQL sha256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut 
 eq 'original role script canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/02-roles.sh")" "$ORIGINAL_ROOT/init/02-roles.sh"
 eq 'original roles owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/02-roles.sh")" '644:1000:1000'
 eq 'original roles genesis SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/02-roles.sh" | cut -d' ' -f1)" '67737d584aeeb167ec84c70fef2437d71f11fac10e77e92d989e4418add3f2cd'
-eq 'frozen init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Source}}|{{.RW}}{{end}}{{end}}')" "$ORIGINAL_ROOT/init|false"
+eq 'frozen init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
 
 if [[ "$mode" == --preflight ]]; then
   printf 'PREFLIGHT_PASS original=A001 distinct=B001 existing_container_id=%s effect=NONE\n' "$CID"
@@ -144,23 +144,50 @@ B001_LOCK
 
 # Exclusive one-shot receipt, then exactly ONE docker container start by ID.
 phase='RECEIPT_CREATE'
-mkdir -m 700 -- "$RECEIPT_ROOT" || fail 'receipt create-only collision'
+# A crash between directory creation and initial receipt is still a partial
+# uncertain B001 effect: an isolated root collision blocks ALL future retries.
 effect='UNKNOWN'
+mkdir -m 700 -- "$RECEIPT_ROOT" || fail 'receipt create-only collision'
 receipt="$RECEIPT_ROOT/attempt-status.txt"
 ( set -C; printf 'operation=%s\nattempt=%s\noriginal_attempt=%s\ncontainer_id=%s\nnetwork_id=%s\nvolume_id=%s\nphase=RECEIPT_CREATE\neffect=UNKNOWN\n' "$OP" "$ATTEMPT" "$OLD_ATTEMPT" "$CID" "$NID" "$VOLUME" > "$receipt" ) || fail 'receipt create-only failure'
 phase='IMMEDIATE_PRESTART_RECHECK'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
-# Recheck native IDs/state and security-sensitive inputs immediately before
-# the ONLY Docker start; never use a name to select a resource.
+# Recheck ALL frozen security invariants after grant and receipt, before
+# the ONLY Docker start; this is not atomic against external daemon changes.
+eq 'immediate current daemon' "$(docker info --format '{{.ID}}')" "$DAEMON"
+eq 'immediate original name' "$(c '{{.Name}}')" "$CNAME"
 eq 'immediate native ID' "$(c '{{.Id}}')" "$CID"
 eq 'immediate original operation label' "$(c '{{index .Config.Labels "ts.rs002.operation"}}')" "$OLD_OP"
 eq 'immediate original attempt label' "$(c '{{index .Config.Labels "ts.rs002.attempt"}}')" "$OLD_ATTEMPT"
 eq 'immediate unstarted status' "$(c '{{.State.Status}}')" created
+eq 'immediate running flag' "$(c '{{.State.Running}}')" false
+eq 'immediate restart count' "$(c '{{.RestartCount}}')" 0
 eq 'immediate never started timestamp' "$(c '{{.State.StartedAt}}')" '0001-01-01T00:00:00Z'
 eq 'immediate configured network ID' "$(c '{{.HostConfig.NetworkMode}}')" "$NID"
+eq 'immediate network name' "$(n '{{.Name}}')" 'ts-rs002-a02-pg16-net-20261113-001'
+eq 'immediate network driver' "$(n '{{.Driver}}')" bridge
+eq 'immediate internal network' "$(n '{{.Internal}}')" true
+eq 'immediate network operation label' "$(n '{{index .Labels "ts.rs002.operation"}}')" "$OLD_OP"
+eq 'immediate volume native ID' "$(v '{{.Name}}')" "$VOLUME"
+eq 'immediate volume driver' "$(v '{{.Driver}}')" local
 eq 'immediate exact PGDATA volume' "$(c '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}')" "$VOLUME|volume|true"
 eq 'immediate OCI digest' "$(c '{{.ImageManifestDescriptor.digest}}')" 'sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
+eq 'immediate original OCI reference' "$(c '{{.Config.Image}}')" "$IMAGE"
+eq 'immediate OCI platform' "$(c '{{index .ImageManifestDescriptor.platform "os"}}/{{index .ImageManifestDescriptor.platform "architecture"}}')" linux/amd64
+eq 'immediate privileged flag' "$(c '{{.HostConfig.Privileged}}')" false
+eq 'immediate port bindings' "$(c '{{json .HostConfig.PortBindings}}')" '{}'
+eq 'immediate publish all' "$(c '{{.HostConfig.PublishAllPorts}}')" false
+eq 'immediate restart policy' "$(c '{{.HostConfig.RestartPolicy.Name}}')" no
+eq 'immediate memory' "$(c '{{.HostConfig.Memory}}')" 536870912
+eq 'immediate nano CPUs' "$(c '{{.HostConfig.NanoCpus}}')" 1000000000
+eq 'immediate PIDs' "$(c '{{.HostConfig.PidsLimit}}')" 256
 eq 'immediate root canonical path' "$(realpath -e -- "$ORIGINAL_ROOT")" "$ORIGINAL_ROOT"
+eq 'immediate root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT")" '700:1000:1000'
+eq 'immediate secrets canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/secrets")" "$ORIGINAL_ROOT/secrets"
+eq 'immediate init canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init")" "$ORIGINAL_ROOT/init"
+eq 'immediate init DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init")" '755:1000:1000'
+eq 'immediate frozen SQL SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut -d' ' -f1)" 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
+eq 'immediate original init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
 eq 'immediate secrets root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/secrets")" '700:1000:1000'
 eq 'immediate frozen init SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/02-roles.sh" | cut -d' ' -f1)" '67737d584aeeb167ec84c70fef2437d71f11fac10e77e92d989e4418add3f2cd'
 for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
@@ -170,8 +197,8 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   eq 'immediate credential owner/DAC' "$(stat -c '%a:%u:%g' "$original")" '644:1000:1000'
   target="/run/secrets/$name"
   [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
-  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Source}}|{{.RW}}{{end}}{{end}}"
-  eq 'immediate frozen secret read-only bind' "$(c "$template")" "$original|false"
+  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}"
+  eq 'immediate frozen secret read-only bind' "$(c "$template")" "bind|$original|false"
 done
 phase='EXACT_EXISTING_CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
@@ -202,10 +229,10 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   original="$ORIGINAL_ROOT/secrets/$name"
   target="/run/secrets/$name"
   [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
-  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Source}}|{{.RW}}{{end}}{{end}}"
-  eq 'poststart frozen credential RO bind' "$(c "$template")" "$original|false"
+  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}"
+  eq 'poststart frozen credential RO bind' "$(c "$template")" "bind|$original|false"
 done
-eq 'poststart frozen init RO bind' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Source}}|{{.RW}}{{end}}{{end}}')" "$ORIGINAL_ROOT/init|false"
+eq 'poststart frozen init RO bind' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
 state=$(c '{{.State.Status}}')
 printf 'poststart_status=%s\n' "$state" >> "$receipt"
 [[ "$state" == running ]] || fail 'container not running after start'
