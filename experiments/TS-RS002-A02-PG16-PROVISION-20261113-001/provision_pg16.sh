@@ -172,8 +172,23 @@ attached_network_id=$(docker container inspect --format '{{range .NetworkSetting
 printf 'attached_network_id=%s\n' "$attached_network_id" >> "$result_file"
 phase='CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$result_file"
-started_name=$(docker container start "$CONTAINER") || fail 'container start failed'
-[[ "$started_name" == "$CONTAINER" ]] || fail 'container start name mismatch'
+# Start by the exact native container ID captured from create, never a mutable name.
+started_id=$(docker container start "$container_id") || fail 'container start failed'
+printf 'start_returned_id=%s\n' "$started_id" >> "$result_file"
+[[ "$started_id" == "$container_id" ]] || fail 'start returned foreign container identity'
+attested_id=$(docker container inspect --format '{{.Id}}' "$container_id") || fail 'started container ID unavailable'
+[[ "$attested_id" == "$container_id" ]] || fail 'started native ID mismatch'
+attested_name=$(docker container inspect --format '{{.Name}}' "$container_id") || fail 'started name unavailable'
+[[ "$attested_name" == "/$CONTAINER" ]] || fail 'started container name mismatch'
+attested_owner=$(docker container inspect --format '{{index .Config.Labels "ts.rs002.operation"}}' "$container_id") || fail 'started operation label unavailable'
+[[ "$attested_owner" == "$OPERATION" ]] || fail 'started foreign operation label'
+attested_attempt=$(docker container inspect --format '{{index .Config.Labels "ts.rs002.attempt"}}' "$container_id") || fail 'started attempt label unavailable'
+[[ "$attested_attempt" == "$ATTEMPT" ]] || fail 'started foreign attempt label'
+attested_network=$(docker container inspect --format '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}' "$container_id") || fail 'started network unavailable'
+[[ "$attested_network" == "$network_id" ]] || fail 'started foreign network'
+attested_mount=$(docker container inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}' "$container_id") || fail 'started PGDATA mount unavailable'
+[[ "$attested_mount" == "$volume_name|volume|true" ]] || fail 'started foreign PGDATA mount'
+printf 'post_start_attested_id=%s\npost_start_attested_name=%s\npost_start_attested_network=%s\npost_start_attested_volume=%s\n' "$attested_id" "$attested_name" "$attested_network" "$volume_name" >> "$result_file"
 container_state=$(docker container inspect --format '{{.State.Status}}' "$container_id") || fail 'container state unreadable'
 printf 'container_state=%s\n' "$container_state" >> "$result_file"
 [[ "$container_state" == running ]] || fail 'container not running after start'
