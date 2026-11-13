@@ -233,4 +233,4 @@ grep -Fq 'STARTED_UNVERIFIED original=A001 distinct=B001' "$RUNTIME/out"
 grep -Fxq 'status=PENDING_INDEPENDENT_PG_GENESIS_AND_ACL' "$RUNTIME/result/attempt-status.txt"
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
-echo 'PASS fake-existing-only B001 started-unverified; 13 preflight negatives / 9 partial effects; no real Docker'
+echo 'PASS fake-existing-only B001 started-unverified; 11 preflight negatives / 9 partial effects; no real Docker'
