@@ -31,6 +31,11 @@ export function verifyControlGrant(request,grantBytes,controlAnchor,{now=Date.no
     const raw=new TextDecoder('utf-8',{fatal:true}).decode(grantBytes);
     if(raw.startsWith('\uFEFF'))throw Error('BOM');
     grant=JSON.parse(raw);
+    // Canonical one-line JSON with final LF prevents duplicate-key, ambiguous
+    // whitespace and shadowed-field confusion. This tests byte structure,
+    // NOT issuer authentication; the external anchor is still mandatory.
+    if(raw!==JSON.stringify(grant)+'\n')
+      throw Error('NONCANONICAL_OR_DUPLICATE_GRANT_KEYS');
   }catch{throw Error('CONTROL_GRANT_INVALID_JSON_UTF8')}
   if(!grant||grant.schema!==AUTHORITY_GRANT_SCHEMA
     ||grant.issuer!=='AWARE_CONTROL'||grant.disposition!=='CONDITIONAL_SYNTHETIC_S0_ONLY'
