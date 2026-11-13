@@ -106,3 +106,24 @@ test('confirmed pre-dispatch block keeps NONE, lost/ambiguous receipt never does
   delete records['RESULT.json'];
   assert.equal(reconcileOriginalReceipt(r,records,{}).status,'UNKNOWN');
 });
+
+test('torn or interrupted original records are UNKNOWN; no retry authority',()=>{
+  for(const missing of ['START.json','DISPATCH.json','RESULT.json','NATIVE_META.json']){
+    const records=make();
+    records[missing]=null;
+    const result=read(records);
+    assert.equal(result.status,'UNKNOWN',missing);
+    assert.equal(result.effect_state,'UNKNOWN',missing);
+    assert.equal(result.native_provider_authenticated,false,missing);
+  }
+  const records=make();
+  records['START.json']={status:'STARTED',native_dispatched:false};
+  assert.equal(read(records).status,'UNKNOWN');
+});
+
+test('local successful fixture does not authenticate actual provider or grant provenance',()=>{
+  const result=read(make());
+  assert.equal(result.receipt_consistency,'LOCAL_HASH_AND_BYTE_MATCH');
+  assert.equal(result.native_provider_authenticated,false);
+  assert.match(result.note,/NOT independent native provider attestation/);
+});
