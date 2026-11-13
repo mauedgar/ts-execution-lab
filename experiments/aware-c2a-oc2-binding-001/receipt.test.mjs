@@ -9,19 +9,19 @@ const r={
   product:'mauedgar/aware-commerce',expected_head:'a'.repeat(40),
   expected_tree:'b'.repeat(40),expected_origin:'https://github.com/mauedgar/aware-commerce.git',
   bootstrap_sha256:'c'.repeat(64),binding_sha256:'d'.repeat(64),
-  runner_sha256:'e'.repeat(64),node_sha256:'f'.repeat(64),
+  runner_sha256:'e'.repeat(64),authority_source_sha256:'8'.repeat(64),node_sha256:'f'.repeat(64),
   git_sha256:'0'.repeat(64),executable_sha256:'1'.repeat(64),
   authorization_receipt_sha256:'2'.repeat(64),
-  authorization_receipt_ref:'https://github.com/mauedgar/ts-execution-lab/issues/18#issuecomment-6798127777'
+  authorization_receipt_ref:'mauedgar/ts-execution-transport@'+'a'.repeat(40)+':grants/AWARE-C2A-OC2-S0-001/GRANT.json'
 };
 const bytes=Buffer.from('{"native":true}\n');
 const allowed=Buffer.from('TS_EE_ALLOWED_PROBE');
 const subject={
   operation_id:r.operation_id,attempt_id:r.attempt_id,product:r.product,
   source:{head:r.expected_head,tree:r.expected_tree,origin:r.expected_origin},
-  bundle:{bootstrap:r.bootstrap_sha256,binding:r.binding_sha256,runner:r.runner_sha256},
+  bundle:{bootstrap:r.bootstrap_sha256,binding:r.binding_sha256,runner:r.runner_sha256,authority:r.authority_source_sha256},
   executable:{node_sha256:r.node_sha256,git_sha256:r.git_sha256,opencode_sha256:r.executable_sha256},
-  authority:{ref:r.authorization_receipt_ref,sha256:r.authorization_receipt_sha256}
+  authority:{ref:r.authorization_receipt_ref,sha256:r.authorization_receipt_sha256,issuer:'AWARE_CONTROL',trust_root:'EXTERNALLY_PINNED_GIT_BLOB'}
 };
 const make=()=>{
   const meta={sha256:sha(bytes),bytes:bytes.length,exit_code:0,signal:null,
