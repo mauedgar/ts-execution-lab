@@ -19,15 +19,29 @@ ORIGINAL_ROOT='/var/tmp/ts-rs002-a02-pg16-20261113-001'
 RECEIPT_ROOT='/var/tmp/ts-rs002-a02-pg16-start-existing-20261113-001'
 EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'
 HERE=$(cd "$(dirname "$0")" && pwd -P)
-phase='PRECHECK'; effect='NONE'; receipt=''
+phase='PRECHECK'; effect='NONE'; receipt=''; terminal_written=0
 fail() {
   printf 'BLOCKED: %s\n' "$1" >&2
   if [[ -n "$receipt" ]]; then
-    printf 'phase=%s\neffect=UNKNOWN\nstatus=BLOCKED_OR_INCOMPLETE\n' "$phase" >> "$receipt" || :
+    if printf 'phase=%s\neffect=UNKNOWN\nstatus=BLOCKED_OR_INCOMPLETE\n' "$phase" >> "$receipt"; then terminal_written=1; fi
   fi
   exit 21
 }
-trap 'if [[ "$effect" == UNKNOWN ]]; then printf "NONTERMINAL_PARTIAL_EFFECT original=A001 distinct=B001 phase=%s do_not_retry\n" "$phase" >&2; fi' EXIT
+on_exit() {
+  local code=$?
+  # A shell error, command substitution, or handled signal after an effect
+  # must not leave a fabricated PASS or silently lose UNKNOWN.
+  if [[ "$effect" == UNKNOWN && "$code" -ne 0 ]]; then
+    if [[ -n "$receipt" && "$terminal_written" != 1 ]]; then
+      printf 'phase=%s\neffect=UNKNOWN\nstatus=BLOCKED_OR_INCOMPLETE\nexit_code=%s\n' "$phase" "$code" >> "$receipt" || :
+    fi
+    printf 'NONTERMINAL_PARTIAL_EFFECT original=A001 distinct=B001 phase=%s effect=UNKNOWN do_not_retry\n' "$phase" >&2
+  fi
+}
+trap on_exit EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 eq() { [[ "$2" == "$3" ]] || fail "$1 differs from immutable resource identity"; }
 c() { docker container inspect --format "$1" "$CID"; }
 n() { docker network inspect --format "$1" "$NID"; }
@@ -54,11 +68,17 @@ eq 'container restart count' "$(c '{{.RestartCount}}')" 0
 eq 'configured original network ID' "$(c '{{.HostConfig.NetworkMode}}')" "$NID"
 eq 'container OCI reference' "$(c '{{.Config.Image}}')" "$IMAGE"
 eq 'container OCI descriptor' "$(c '{{.ImageManifestDescriptor.digest}}')" 'sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
+eq 'container OCI os/arch' "$(c '{{index .ImageManifestDescriptor.platform "os"}}/{{index .ImageManifestDescriptor.platform "architecture"}}')" 'linux/amd64'
+eq 'memory bytes' "$(c '{{.HostConfig.Memory}}')" 536870912
+eq 'nano CPUs' "$(c '{{.HostConfig.NanoCpus}}')" 1000000000
+eq 'PID limit' "$(c '{{.HostConfig.PidsLimit}}')" 256
 eq 'privileged' "$(c '{{.HostConfig.Privileged}}')" false
 eq 'published ports' "$(c '{{json .HostConfig.PortBindings}}')" '{}'
 eq 'publish-all' "$(c '{{.HostConfig.PublishAllPorts}}')" false
 eq 'restart policy' "$(c '{{.HostConfig.RestartPolicy.Name}}')" no
 eq 'original network native ID' "$(n '{{.Id}}')" "$NID"
+eq 'original network name' "$(n '{{.Name}}')" 'ts-rs002-a02-pg16-net-20261113-001'
+eq 'original network driver' "$(n '{{.Driver}}')" bridge
 eq 'original network internal' "$(n '{{.Internal}}')" true
 eq 'original network operation label' "$(n '{{index .Labels "ts.rs002.operation"}}')" "$OLD_OP"
 eq 'original volume native name' "$(v '{{.Name}}')" "$VOLUME"
@@ -66,14 +86,18 @@ eq 'original volume driver' "$(v '{{.Driver}}')" local
 eq 'original PGDATA volume' "$(c '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}')" "$VOLUME|volume|true"
 
 [[ -d "$ORIGINAL_ROOT" && ! -L "$ORIGINAL_ROOT" ]] || fail 'original root missing or symlink'
+eq 'original root canonical path' "$(realpath -e -- "$ORIGINAL_ROOT")" "$ORIGINAL_ROOT"
 eq 'original root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT")" '700:1000:1000'
 [[ -d "$ORIGINAL_ROOT/secrets" && ! -L "$ORIGINAL_ROOT/secrets" ]] || fail 'original secrets root invalid'
+eq 'original secret root canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/secrets")" "$ORIGINAL_ROOT/secrets"
 eq 'original secrets DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/secrets")" '700:1000:1000'
 [[ -d "$ORIGINAL_ROOT/init" && ! -L "$ORIGINAL_ROOT/init" ]] || fail 'original init root invalid'
+eq 'original init canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init")" "$ORIGINAL_ROOT/init"
 eq 'original init DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init")" '755:1000:1000'
 for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   source="$ORIGINAL_ROOT/secrets/$name"
   [[ -f "$source" && ! -L "$source" ]] || fail 'missing or linked original credential'
+  eq 'secret canonical path' "$(realpath -e -- "$source")" "$source"
   eq 'secret owner/DAC' "$(stat -c '%a:%u:%g' "$source")" '644:1000:1000'
   target="/run/secrets/$name"
   [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
@@ -81,8 +105,10 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   eq 'frozen read-only bind' "$(c "$template")" "$source|false"
 done
 [[ -f "$ORIGINAL_ROOT/init/01-schema.sql" && ! -L "$ORIGINAL_ROOT/init/01-schema.sql" ]] || fail 'original SQL missing'
+eq 'original SQL canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/01-schema.sql")" "$ORIGINAL_ROOT/init/01-schema.sql"
 eq 'original SQL sha256' "$(sha256sum "$ORIGINAL_ROOT/init/01-schema.sql" | cut -d' ' -f1)" 'c1f8c85b911ef8b04585321448bc823c17c92f531cbdb7b62236082026b3b721'
 [[ -f "$ORIGINAL_ROOT/init/02-roles.sh" && ! -L "$ORIGINAL_ROOT/init/02-roles.sh" ]] || fail 'original roles missing'
+eq 'original role script canonical path' "$(realpath -e -- "$ORIGINAL_ROOT/init/02-roles.sh")" "$ORIGINAL_ROOT/init/02-roles.sh"
 eq 'original roles owner/DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/init/02-roles.sh")" '644:1000:1000'
 eq 'original roles genesis SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/02-roles.sh" | cut -d' ' -f1)" '67737d584aeeb167ec84c70fef2437d71f11fac10e77e92d989e4418add3f2cd'
 eq 'frozen init mount' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Source}}|{{.RW}}{{end}}{{end}}')" "$ORIGINAL_ROOT/init|false"
@@ -100,6 +126,8 @@ python3 - "$LOCK" "$OP" "$ATTEMPT" "$CID" "$NID" "$VOLUME" "$DAEMON" <<'B001_LOC
 import json,sys
 path, op, attempt, container, network, volume, daemon = sys.argv[1:]
 with open(path, encoding="utf-8") as f: a=json.load(f)
+expected_keys = {"contract_version","disposition","responsibility","operation_id","attempt_id","physical_effect_allowlist","original_attempt","original_container_id","original_network_id","original_volume_id","host","docker_daemon_id","source_review","physical_admission_review","Product_effect","kernel_replacement","Beta_Run_008","no_retry"}
+assert type(a) is dict and set(a)==expected_keys
 assert a["contract_version"]=="TS-RS002-A02-PG16-EXISTING-START-ADMISSION/v1"
 assert a["disposition"]=="ADMITTED_NONPRODUCT_EXISTING_CONTAINER_START_B001"
 assert a["responsibility"]=="TS_REMOTE_STATE_002"
@@ -120,15 +148,64 @@ mkdir -m 700 -- "$RECEIPT_ROOT" || fail 'receipt create-only collision'
 effect='UNKNOWN'
 receipt="$RECEIPT_ROOT/attempt-status.txt"
 ( set -C; printf 'operation=%s\nattempt=%s\noriginal_attempt=%s\ncontainer_id=%s\nnetwork_id=%s\nvolume_id=%s\nphase=RECEIPT_CREATE\neffect=UNKNOWN\n' "$OP" "$ATTEMPT" "$OLD_ATTEMPT" "$CID" "$NID" "$VOLUME" > "$receipt" ) || fail 'receipt create-only failure'
+phase='IMMEDIATE_PRESTART_RECHECK'
+printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
+# Recheck native IDs/state and security-sensitive inputs immediately before
+# the ONLY Docker start; never use a name to select a resource.
+eq 'immediate native ID' "$(c '{{.Id}}')" "$CID"
+eq 'immediate original operation label' "$(c '{{index .Config.Labels "ts.rs002.operation"}}')" "$OLD_OP"
+eq 'immediate original attempt label' "$(c '{{index .Config.Labels "ts.rs002.attempt"}}')" "$OLD_ATTEMPT"
+eq 'immediate unstarted status' "$(c '{{.State.Status}}')" created
+eq 'immediate never started timestamp' "$(c '{{.State.StartedAt}}')" '0001-01-01T00:00:00Z'
+eq 'immediate configured network ID' "$(c '{{.HostConfig.NetworkMode}}')" "$NID"
+eq 'immediate exact PGDATA volume' "$(c '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}')" "$VOLUME|volume|true"
+eq 'immediate OCI digest' "$(c '{{.ImageManifestDescriptor.digest}}')" 'sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
+eq 'immediate root canonical path' "$(realpath -e -- "$ORIGINAL_ROOT")" "$ORIGINAL_ROOT"
+eq 'immediate secrets root DAC' "$(stat -c '%a:%u:%g' "$ORIGINAL_ROOT/secrets")" '700:1000:1000'
+eq 'immediate frozen init SHA256' "$(sha256sum "$ORIGINAL_ROOT/init/02-roles.sh" | cut -d' ' -f1)" '67737d584aeeb167ec84c70fef2437d71f11fac10e77e92d989e4418add3f2cd'
+for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
+  original="$ORIGINAL_ROOT/secrets/$name"
+  [[ -f "$original" && ! -L "$original" ]] || fail 'immediate original credential missing or linked'
+  eq 'immediate credential canonical path' "$(realpath -e -- "$original")" "$original"
+  eq 'immediate credential owner/DAC' "$(stat -c '%a:%u:%g' "$original")" '644:1000:1000'
+  target="/run/secrets/$name"
+  [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
+  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Source}}|{{.RW}}{{end}}{{end}}"
+  eq 'immediate frozen secret read-only bind' "$(c "$template")" "$original|false"
+done
 phase='EXACT_EXISTING_CONTAINER_START'
 printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt"
 returned=$(docker container start "$CID") || fail 'docker container start failure or ambiguous effect'
 printf 'start_returned=%s\n' "$returned" >> "$receipt"
 [[ "$returned" == "$CID" || "$returned" == 'ts-rs002-a02-pg16-20261113-001' ]] || fail 'unexpected start return'
 eq 'poststart native ID' "$(c '{{.Id}}')" "$CID"
+eq 'poststart name' "$(c '{{.Name}}')" "$CNAME"
+eq 'poststart original operation label' "$(c '{{index .Config.Labels "ts.rs002.operation"}}')" "$OLD_OP"
 eq 'poststart original label' "$(c '{{index .Config.Labels "ts.rs002.attempt"}}')" "$OLD_ATTEMPT"
+eq 'poststart OCI image' "$(c '{{.Config.Image}}')" "$IMAGE"
+eq 'poststart OCI descriptor' "$(c '{{.ImageManifestDescriptor.digest}}')" 'sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e'
+eq 'poststart OCI os/arch' "$(c '{{index .ImageManifestDescriptor.platform "os"}}/{{index .ImageManifestDescriptor.platform "architecture"}}')" 'linux/amd64'
+eq 'poststart privileged' "$(c '{{.HostConfig.Privileged}}')" false
+eq 'poststart published ports' "$(c '{{json .HostConfig.PortBindings}}')" '{}'
+eq 'poststart publish-all' "$(c '{{.HostConfig.PublishAllPorts}}')" false
+eq 'poststart restart policy' "$(c '{{.HostConfig.RestartPolicy.Name}}')" no
+eq 'poststart original network mode' "$(c '{{.HostConfig.NetworkMode}}')" "$NID"
+eq 'poststart memory' "$(c '{{.HostConfig.Memory}}')" 536870912
+eq 'poststart CPUs' "$(c '{{.HostConfig.NanoCpus}}')" 1000000000
+eq 'poststart PIDs' "$(c '{{.HostConfig.PidsLimit}}')" 256
 eq 'poststart attached network' "$(c '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}')" "$NID"
 eq 'poststart PGDATA' "$(c '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}')" "$VOLUME|volume|true"
+eq 'poststart original network name' "$(n '{{.Name}}')" 'ts-rs002-a02-pg16-net-20261113-001'
+eq 'poststart original network driver' "$(n '{{.Driver}}')" bridge
+eq 'poststart original internal network' "$(n '{{.Internal}}')" true
+for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
+  original="$ORIGINAL_ROOT/secrets/$name"
+  target="/run/secrets/$name"
+  [[ "$name" == admin.pass ]] && target='/run/secrets/ts-admin-pass'
+  template="{{range .Mounts}}{{if eq .Destination \"$target\"}}{{.Source}}|{{.RW}}{{end}}{{end}}"
+  eq 'poststart frozen credential RO bind' "$(c "$template")" "$original|false"
+done
+eq 'poststart frozen init RO bind' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Source}}|{{.RW}}{{end}}{{end}}')" "$ORIGINAL_ROOT/init|false"
 state=$(c '{{.State.Status}}')
 printf 'poststart_status=%s\n' "$state" >> "$receipt"
 [[ "$state" == running ]] || fail 'container not running after start'
