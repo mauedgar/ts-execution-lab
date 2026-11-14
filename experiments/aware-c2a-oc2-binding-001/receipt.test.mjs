@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import {reconcileOriginalReceipt} from './bootstrap.mjs';
+import {reconcileOriginalReceipt,assertObserveScope} from './bootstrap.mjs';
 
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const r={
@@ -126,4 +126,38 @@ test('local successful fixture does not authenticate actual provider or grant pr
   assert.equal(result.receipt_consistency,'LOCAL_HASH_AND_BYTE_MATCH');
   assert.equal(result.native_provider_authenticated,false);
   assert.match(result.note,/NOT independent native provider attestation/);
+});
+
+const originalObserveRequest={
+  schema:'ts-ee-oc2-c2a-request/v3',product:'mauedgar/aware-commerce',
+  authority_class:'SYNTHETIC_NONPRODUCT_ONLY',paid_api_fallback:false,
+  expected_host:'DESKTOP-DJLBEQH',
+  scratch_anchor:'C:\\TS\\station'.replaceAll('\\\\','\\'),
+  scratch_parent:'C:\\TS\\station\\ts-ee-oc2-c2a-synthetic'.replaceAll('\\\\','\\'),
+  expected_origin:'https://github.com/mauedgar/aware-commerce.git',
+  expected_head:'a'.repeat(40),expected_tree:'b'.repeat(40),
+  operation_id:'TS_EE_C2A_BIND_001',attempt_id:'TS_EE_C2A_BIND_A001'
+};
+test('original observer accepts exactly frozen synthetic S0 host/path identity without native reads',()=>{
+  assert.equal(assertObserveScope(originalObserveRequest),true);
+});
+test('observer rejects untrusted alternate host, relocated parent, aliases and unsafe identities',()=>{
+  const changes=[
+    {expected_host:'ANOTHER-HOST'},
+    {scratch_anchor:'C:\\TS\\other'.replaceAll('\\\\','\\')},
+    {scratch_parent:'C:\\TS\\station\\alt'.replaceAll('\\\\','\\')},
+    {scratch_parent:'C:\\TS\\station\\foo\\..\\ts-ee-oc2-c2a-synthetic'.replaceAll('\\\\','\\')},
+    {scratch_parent:'\\\\server\\share\\ts-ee-oc2-c2a-synthetic'.replaceAll('\\\\','\\')},
+    {scratch_parent:'D:\\TS\\station\\ts-ee-oc2-c2a-synthetic'.replaceAll('\\\\','\\')},
+    {expected_origin:'https://evil.example/aware.git'},
+    {expected_head:'f'.repeat(39)},
+    {attempt_id:'../OTHER'},
+    {operation_id:'../OTHER'},
+    {authority_class:'PRODUCT_WRITE'},
+    {paid_api_fallback:true},
+    {product:'mauedgar/tecnotron-ai'}
+  ];
+  for(const change of changes)assert.throws(
+    ()=>assertObserveScope({...originalObserveRequest,...change}),
+    /ORIGINAL_OBSERVE_SCOPE_UNQUALIFIED/,JSON.stringify(change));
 });
