@@ -846,3 +846,21 @@ Make execution observable, interruptible, reconstructable and portable.
 Replace repeated manual glue with qualified LC Primitives/Recipes over time,
 without moving Product meaning into the execution layer.
 ```
+
+## FitFlow risk-adaptive delivery pilot (2026-11-14)
+
+The Developer approved the five FitFlow delivery-process reforms (risk-weighted
+acceptance, one stable-candidate final review, bounded routine delegation,
+small/parallel disjoint PRs, and infrastructure only on the functional critical
+path). This is a Product-approved **pilot**, not an Execution Engineering grant
+or an automatic cross-Product policy. Its HOW-method profile is
+`docs/execution-engineering/TS-EE-RISK-ADAPTIVE-DELIVERY-v1.md`;
+FitFlow owns its Product doctrine in
+`docs/operations/fitflow-exceptional-delivery-v1.md`.
+
+Preserve this operating contract's provider-native identity/receipt, visible
+Orca-terminal OpenCode2 dispatch, Commander boundary, original effects, UNKNOWN
+and no-blind-retry rules. Independent reviewer/provider choice remains
+situational and competent; Codex Cloud is optional until separately qualified.
+No historical review changes verdict and no specific Product merge/launch grant
+is inferred from method adoption.
