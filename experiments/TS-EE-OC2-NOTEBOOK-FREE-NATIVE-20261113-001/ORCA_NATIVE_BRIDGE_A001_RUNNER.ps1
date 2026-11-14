@@ -33,6 +33,8 @@ if ($null -eq $active -or @($active.PSObject.Properties).Count -ne 0) { throw 'B
 $os = Get-CimInstance Win32_OperatingSystem
 if ($null -eq $os -or $os.FreePhysicalMemory -lt 1572864) { throw 'BLOCKED_NOTEBOOK_MEMORY_PRESSURE' }
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'BLOCKED_OPENCODE_EXE_MISSING' }
+$version = (& $exe --version) -join ' '
+if ($LASTEXITCODE -ne 0 -or $version -notmatch '2[.]2[.]5') { throw 'BLOCKED_OPENCODE_VERSION_MISMATCH' }
 $prompt = @'
 TS-EE-OC2-NOTEBOOK-FREE-NATIVE-A001. Isolated TS Execution Engineering synthetic review only, NOT Product. Use provider/model opencode/deepseek-v4.1-flash-free, plan agent only. Never use paid or OpenAI models, auto fallback, network calls or subagents.
 
@@ -68,4 +70,4 @@ try {
 }
 Write-Output ('A001_MODEL_EXIT_CODE=' + $oc2Exit)
 Write-Output 'A001_MODEL_EXECUTION_TERMINAL'
-if ($oc2Exit -ne 0) { exit $oc2Exit }
+if ($oc2Exit -ne 0) { throw ('OC2_TERMINAL_NONZERO_' + $oc2Exit) }
