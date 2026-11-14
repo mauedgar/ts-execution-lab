@@ -89,45 +89,72 @@ export function reconcileOriginalReceipt(r, records, {native=null,allowed=null,d
 }
 
 
-// Read-only reconciliation of the ORIGINAL. It deliberately does not require
-// a *currently valid* grant: expiry, withdrawal or missing credentials cannot
-// erase historical effects or justify a replay. The original request and
-// trusted host/parent must be independently frozen by Control; this function
-// can prove LOCAL consistency only, never native provider authenticity.
-export function observeOriginal(r) {
+// OBSERVE is restricted to this qualified historical S0 location. This is
+// a source-level negative guard, NOT an independent Windows ACL, reparse or
+// provider-authentication certificate. The original request is untrusted.
+const ORIGINAL_OBSERVE_ANCHOR='C:\\TS\\station'.replaceAll('\\\\','\\');
+const ORIGINAL_OBSERVE_PARENT=ORIGINAL_OBSERVE_ANCHOR+'\\ts-ee-oc2-c2a-synthetic';
+export function assertObserveScope(r) {
   if(!r||r.schema!=='ts-ee-oc2-c2a-request/v3'
-    ||r.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY')
-    throw Error('ORIGINAL_OBSERVE_REQUEST_UNQUALIFIED');
-  if(process.platform!=='win32'||os.hostname()!==r.expected_host
-    ||r.expected_host!=='DESKTOP-DJLBEQH')
+    ||r.product!=='mauedgar/aware-commerce'
+    ||r.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY'
+    ||r.paid_api_fallback!==false
+    ||r.expected_host!=='DESKTOP-DJLBEQH'
+    ||r.scratch_anchor!==ORIGINAL_OBSERVE_ANCHOR
+    ||r.scratch_parent!==ORIGINAL_OBSERVE_PARENT
+    ||!['https://github.com/mauedgar/aware-commerce.git',
+      'git@github.com:mauedgar/aware-commerce.git'].includes(r.expected_origin)
+    ||!/^[a-f0-9]{40}$/.test(r.expected_head||'')
+    ||!/^[a-f0-9]{40}$/.test(r.expected_tree||'')
+    ||!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.attempt_id||'')
+    ||!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.operation_id||''))
+    throw Error('ORIGINAL_OBSERVE_SCOPE_UNQUALIFIED');
+  return true;
+}
+// Read-only reconciliation of the ORIGINAL. It deliberately does not require
+// a currently valid grant: expiry or credential rotation cannot erase history.
+// This can prove LOCAL consistency only, never independent provider provenance.
+export function observeOriginal(r) {
+  assertObserveScope(r);
+  if(process.platform!=='win32'||os.hostname()!==r.expected_host)
     throw Error('ORIGINAL_OBSERVE_HOST_UNQUALIFIED');
   const parent=noLinks(r.scratch_parent,'ORIGINAL_OBSERVE_SCRATCH_PARENT');
-  if(path.basename(parent).toLowerCase()!=='ts-ee-oc2-c2a-synthetic')
+  if(parent.toLowerCase()!==ORIGINAL_OBSERVE_PARENT.toLowerCase())
     throw Error('ORIGINAL_OBSERVE_PARENT_NOT_QUALIFIED');
-  if(!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.attempt_id||'')
-    ||!/^[A-Za-z][A-Za-z0-9_-]{7,100}$/.test(r.operation_id||''))
-    throw Error('ORIGINAL_OBSERVE_ID_UNSAFE');
-  const attempt=path.join(parent,r.attempt_id);
-  if(!inRoot(parent,attempt))
+  const proposed=path.join(parent,r.attempt_id);
+  if(!inRoot(parent,proposed))
     throw Error('ORIGINAL_OBSERVE_PATH_OUTSIDE_PARENT');
+  if(!fs.existsSync(proposed))throw Error('NO_ORIGINAL_ATTEMPT');
+  // Check the attempt directory itself, not only the parent. A crafted
+  // symlink/junction may otherwise redirect all subsequent receipt reads.
+  const attempt=noLinks(proposed,'ORIGINAL_OBSERVE_ATTEMPT');
+  if(!fs.statSync(attempt).isDirectory()||!inRoot(parent,attempt))
+    throw Error('ORIGINAL_OBSERVE_ATTEMPT_NOT_QUALIFIED');
   {
-    if(!fs.existsSync(attempt))throw Error('NO_ORIGINAL_ATTEMPT');
     const records={},corrupt=[];
     // No local receipt can authenticate the native provider on its own. This
     // readback only checks immutable-file *consistency* before Control review.
     for(const key of ['START.json','DISPATCH.json','CONTEXT.json','EFFECTIVE.json','NATIVE_META.json','RESULT.json']){
       const p=path.join(attempt,key);
       if(!fs.existsSync(p)){records[key]=null;continue}
-      try{if(fs.lstatSync(p).isSymbolicLink())throw Error('SYMLINK');
-        records[key]=JSON.parse(fs.readFileSync(p,'utf8'))}
-      catch{records[key]=null;corrupt.push(key)}
+      try{
+        const st=fs.lstatSync(p);
+        if(!st.isFile()||st.isSymbolicLink()
+          ||fs.realpathSync.native(p).toLowerCase()!==p.toLowerCase())
+          throw Error('ORIGINAL_RECORD_NOT_REGULAR_OR_REPARSE');
+        records[key]=JSON.parse(fs.readFileSync(p,'utf8'));
+      }catch{records[key]=null;corrupt.push(key)}
     }
     const readBytes=filename=>{
       const p=path.join(attempt,filename);
       if(!fs.existsSync(p))return null;
-      try{if(!fs.lstatSync(p).isFile()||fs.lstatSync(p).isSymbolicLink())throw Error('NOT_REGULAR');
-        return fs.readFileSync(p)}
-      catch{corrupt.push(filename);return null}
+      try{
+        const st=fs.lstatSync(p);
+        if(!st.isFile()||st.isSymbolicLink()
+          ||fs.realpathSync.native(p).toLowerCase()!==p.toLowerCase())
+          throw Error('ORIGINAL_BYTES_NOT_REGULAR_OR_REPARSE');
+        return fs.readFileSync(p);
+      }catch{corrupt.push(filename);return null}
     };
     const native=readBytes('NATIVE.jsonl'),allowed=readBytes('ALLOW_ONLY.txt');
     const denied=fs.existsSync(path.join(attempt,'BLOCKED.txt'));
