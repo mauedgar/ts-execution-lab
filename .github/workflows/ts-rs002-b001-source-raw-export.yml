@@ -1,0 +1,35 @@
+name: TS RS002 B001 immutable source raw export (NONPRODUCT)
+on:
+  push:
+    branches:
+      - experiment/ts-rs002-b001-source-raw-export-20261114-001
+    paths:
+      - .github/workflows/ts-rs002-b001-source-raw-export.yml
+permissions:
+  contents: read
+jobs:
+  source_raw_export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact immutable source and verify origin
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Freeze source blob and enforce no dispatch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD^)" = '099a82cd167b8943a13cbf813533339bd3645ac9'
+          FILE='experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001/start_existing.sh'
+          test "$(git hash-object --no-filters "$FILE")" = '1b6b3aa8b0b241244e93000f80288dea4b8fa322'
+          test "$(sha256sum "$FILE" | cut -d' ' -f1)" = 'ff831f202a010075433b481bcb327bcc4cdad2693e7fb98dc46a7b6ab85cabe0'
+          grep -Fxq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" "$FILE"
+          bash -n "$FILE"
+          echo 'TS_RS002_B001_RAW_SOURCE_BYTES_VERIFIED; no runner, Docker or SQL executed'
+      - name: Export raw UNBOUND B001 source for verified external materialization
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TS-RS002-B001-RAW-UNBOUND-SOURCE-20261114-001
+          path: experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001/start_existing.sh
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
