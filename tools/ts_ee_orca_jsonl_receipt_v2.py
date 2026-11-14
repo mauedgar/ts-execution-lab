@@ -98,7 +98,8 @@ def inspect(root: Path, original: str, digest: str, receipt: str,
             require(isinstance(part, dict), "STEP_PART_INVALID")
             cost = part.get("cost")
             require(type(cost) in (int, float)
-                    and math.isfinite(cost) and cost >= 0,
+                    and 0 <= cost <= 1_000_000_000
+                    and math.isfinite(float(cost)),
                     "STEP_COST_INVALID")
             costs.append(float(cost))
         elif kind == "tool_use":
