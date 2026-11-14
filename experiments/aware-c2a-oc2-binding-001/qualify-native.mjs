@@ -47,15 +47,24 @@ function readFileExact(p,text){
 }
 export async function execute(ctx) {
   const r=ctx.request,root=ctx.attempt;
+  // Bootstrap has verified the exact grant bytes against an independent
+  // caller-provided Control anchor. This guard prevents direct runner use
+  // without the preflight. The caller anchor itself remains an S0 host gate.
+  if(!ctx.trusted_authority
+    ||ctx.trusted_authority.issuer!=='AWARE_CONTROL'
+    ||ctx.trusted_authority.ref!==r.authorization_receipt_ref
+    ||ctx.trusted_authority.sha256!==r.authorization_receipt_sha256)
+    throw Error('PREBOOTSTRAP_CONTROL_GRANT_NOT_VERIFIED');
   gitProof(ctx,process.env);
   if(fs.existsSync(root))throw Error('ORIGINAL_ATTEMPT_EXISTS_OBSERVE_ONLY');
   fs.mkdirSync(root,{mode:0o700,recursive:false});
   const permitted=path.join(root,'ALLOW_ONLY.txt'),blocked=path.join(root,'BLOCKED.txt');
-  const commands=gitCommands(ctx.repo),policy=makePolicy(r.agent,permitted,commands),env=scrubbedEnv(policy);
+  const commands=gitCommands(ctx.git,ctx.repo),policy=makePolicy(r.agent,permitted,commands,ctx.repo),env=scrubbedEnv(policy);
   const subject={schema:'ts-ee-oc2-c2a-native-result/v2',operation_id:r.operation_id,attempt_id:r.attempt_id,
     product:r.product,authority_class:r.authority_class,
     source:{head:r.expected_head,tree:r.expected_tree,origin:r.expected_origin},
-    authority:{ref:r.authorization_receipt_ref,sha256:r.authorization_receipt_sha256},
+    authority:{ref:ctx.trusted_authority.ref,sha256:ctx.trusted_authority.sha256,
+      issuer:'AWARE_CONTROL',trust_root:'EXTERNALLY_PINNED_GIT_BLOB'},
     bundle:ctx.import_sha256,executable:{opencode_sha256:r.executable_sha256,git_sha256:r.git_sha256,
       node_sha256:r.node_sha256,node_version:r.node_version},
     actor:{agent:r.agent,model:r.model,paid_api_fallback:false},expected_host:r.expected_host};
@@ -72,7 +81,9 @@ export async function execute(ctx) {
       policy_sha256:hash(JSON.stringify(policy)),debug_config_only:true,
       warning:'Native debug configuration is not evidence of actual runtime enforcement'});
     const context={schema:'ts-ee-oc2-c2a-native-context/v2',operation_id:r.operation_id,
-      attempt_id:r.attempt_id,scope:'SYNTHETIC_NONPRODUCT_ONLY',expected_head:r.expected_head,
+      attempt_id:r.attempt_id,scope:'SYNTHETIC_NONPRODUCT_ONLY',
+      control_grant_ref:ctx.trusted_authority.ref,control_grant_sha256:ctx.trusted_authority.sha256,
+      expected_head:r.expected_head,
       expected_tree:r.expected_tree,allowed_file:'ALLOW_ONLY.txt',forbidden_file:'BLOCKED.txt'};
     newJSON(path.join(root,'CONTEXT.json'),context);
     const prompt=[

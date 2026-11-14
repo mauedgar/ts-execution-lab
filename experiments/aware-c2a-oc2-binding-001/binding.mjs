@@ -1,22 +1,24 @@
 import path from 'node:path';
+import {CONTROL_GRANT_REF} from './authority.mjs';
 
 const HEX40=/^[0-9a-f]{40}$/, HEX64=/^[0-9a-f]{64}$/;
 const ID=/^[A-Za-z][A-Za-z0-9_-]{7,100}$/;
 const BAD=/["'&|;$<>\r\n]/;
 const good=(x,re)=>typeof x==='string'&&re.test(x);
-export const VERSION='ts-ee-oc2-c2a-request/v2';
+export const VERSION='ts-ee-oc2-c2a-request/v3';
 export function assertRequest(r){
   if(r?.schema!==VERSION||r?.product!=='mauedgar/aware-commerce'||r?.authority_class!=='SYNTHETIC_NONPRODUCT_ONLY'
     ||r?.paid_api_fallback!==false||!good(r.operation_id,ID)||!good(r.attempt_id,ID)
     ||!good(r.expected_head,HEX40)||!good(r.expected_tree,HEX40)
     ||!good(r.executable_sha256,HEX64)||!good(r.git_sha256,HEX64)||!good(r.bootstrap_sha256,HEX64)
     ||!good(r.runner_sha256,HEX64)||!good(r.binding_sha256,HEX64)
+    ||!good(r.authority_source_sha256,HEX64)
     ||!good(r.node_sha256,HEX64)||!/^v22\.[0-9]+\.[0-9]+$/.test(r.node_version||'')
     ||!/^opencode v2\.[0-9]+\.[0-9]+$/.test(r.expected_version||'')
     ||!good(r.expected_host,ID)||!good(r.agent,ID)
     ||!/^openai\/[a-z0-9._-]+$/.test(r.model||'')
     ||!good(r.authorization_receipt_sha256,HEX64)
-    ||typeof r.authorization_receipt_ref!=='string'||!/^https:\/\/github\.com\/mauedgar\/ts-execution-lab\/issues\/18#issuecomment-[0-9]+$/.test(r.authorization_receipt_ref))
+    ||typeof r.authorization_receipt_ref!=='string'||!CONTROL_GRANT_REF.test(r.authorization_receipt_ref))
     throw Error('REQUEST_IDENTITY_OR_AUTHORITY_INCOMPLETE');
   if(!['https://github.com/mauedgar/aware-commerce.git','git@github.com:mauedgar/aware-commerce.git'].includes(r.expected_origin))throw Error('WRONG_ORIGIN');
   for(const k of ['repository_root','scratch_anchor','scratch_parent','opencode_executable','git_executable','node_executable']){
@@ -24,16 +26,20 @@ export function assertRequest(r){
   }
   return r;
 }
-export function gitCommands(root){
-  if(!path.isAbsolute(root)||BAD.test(root))throw Error('UNSAFE_GIT_COMMAND_PATH');
-  return ['git -C "'+root+'" rev-parse HEAD','git -C "'+root+'" rev-parse HEAD^{tree}'];
+export function gitCommands(gitExecutable,root){
+  if(!path.isAbsolute(root)||!path.isAbsolute(gitExecutable)||BAD.test(root)||BAD.test(gitExecutable))throw Error('UNSAFE_GIT_COMMAND_PATH');
+  return ['"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD','"'+gitExecutable+'" -C "'+root+'" rev-parse HEAD^{tree}'];
 }
-export function makePolicy(agent,absoluteAllow,commands){
-  if(!good(agent,ID)||path.basename(absoluteAllow)!=='ALLOW_ONLY.txt'||!Array.isArray(commands)||commands.length!==2)throw Error('UNSAFE_POLICY_INPUT');
+export function makePolicy(agent,absoluteAllow,commands,repositoryRoot){
+  if(!good(agent,ID)||path.basename(absoluteAllow)!=='ALLOW_ONLY.txt'
+    ||!Array.isArray(commands)||commands.length!==2
+    ||!path.isAbsolute(repositoryRoot)||BAD.test(repositoryRoot))throw Error('UNSAFE_POLICY_INPUT');
+  // In OpenCode V2, write/edit/patch share the 'edit' permission action.
+  // External Git reads require a separately scoped external_directory grant.
   const rules=[{action:'*',resource:'*',effect:'deny'}];
   for(const resource of commands)rules.push({action:'shell',resource,effect:'allow'});
-  for(const a of ['edit','write'])for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])
-    rules.push({action:a,resource,effect:'allow'});
+  for(const resource of [absoluteAllow,'ALLOW_ONLY.txt'])rules.push({action:'edit',resource,effect:'allow'});
+  rules.push({action:'external_directory',resource:repositoryRoot.replace(/[\\/]+$/,'')+'/*',effect:'allow'});
   return {permissions:[{action:'*',resource:'*',effect:'deny'}],agents:{[agent]:{mode:'primary',permissions:rules}},plugin:[]};
 }
 export function checkEffective(agents,agent,policy){
