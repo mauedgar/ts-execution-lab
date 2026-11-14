@@ -56,7 +56,7 @@ $parent = Split-Path -Path $out -Parent
 if (Test-Path -LiteralPath $parent) { throw 'BLOCKED_OUTPUT_DIRECTORY_COLLISION' }
 New-Item -ItemType Directory -Path $parent -ErrorAction Stop | Out-Null
 $stream = [System.IO.File]::Open($out,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::Read)
-$writer = New-Object System.IO.StreamWriter($stream, (New-Object System.Text.UTF8Encoding($false)))
+$writer = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
 Write-Output ('A001_OUTPUT_CREATED=' + $outRelative)
 Write-Output 'A001_MODEL_DISPATCH_ONCE_BEGIN'
 try {
