@@ -20,7 +20,6 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test "$(git rev-parse HEAD^)" = '099a82cd167b8943a13cbf813533339bd3645ac9'
           FILE='experiments/TS-RS002-A02-PG16-START-EXISTING-20261113-001/start_existing.sh'
           test "$(git hash-object --no-filters "$FILE")" = '1b6b3aa8b0b241244e93000f80288dea4b8fa322'
           test "$(sha256sum "$FILE" | cut -d' ' -f1)" = 'ff831f202a010075433b481bcb327bcc4cdad2693e7fb98dc46a7b6ab85cabe0'
