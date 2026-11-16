@@ -1,0 +1,41 @@
+name: TS RS002 PG16 post-firmware exited-container R001 recovery SOURCE ONLY
+on:
+  pull_request:
+    paths:
+      - 'experiments/TS-RS002-A02-PG16-RECOVERY-20261115-001/**'
+      - '.github/workflows/ts-rs002-pg16-recovery-r001-source.yml'
+permissions:
+  contents: read
+jobs:
+  hermetic_source_only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Checkout isolated R001 source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Pin immutable Git blobs and refuse live dispatch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd experiments/TS-RS002-A02-PG16-RECOVERY-20261115-001
+          test "$(git hash-object recover_existing.sh)" = '70ca5b6159716fd735a36fda99b53f50103971cd'
+          test "$(git hash-object fake_docker_tests.sh)" = '03ece096fa3b4fe9b412429585a37f621fdee141'
+          test "$(git hash-object b001_terminal_fixture.txt)" = 'da27b3e4286b5264a188e2200672c07caeee9ab8'
+          test "$(git hash-object README.md)" = 'b0f4d9a576907500f5798b07cf54c587acbf8b65'
+          test "$(sha256sum b001_terminal_fixture.txt | cut -d' ' -f1)" = '5dab271beb784a11acb127db96898a9e6b54a361d94e302089e69174bf40ad1a'
+          grep -Fxq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" recover_existing.sh
+          test "$(grep -Fc 'docker container start "$CID"' recover_existing.sh)" -eq 1
+          ! grep -Eq 'docker (run|pull|volume create|network create|container create|container rm|container stop|container restart)' recover_existing.sh
+          bash -n recover_existing.sh
+          bash -n fake_docker_tests.sh
+          sha256sum recover_existing.sh fake_docker_tests.sh b001_terminal_fixture.txt README.md
+          echo 'R001_SOURCE_INTEGRITY_PASS_NO_PHYSICAL_DISPATCH'
+      - name: Hermetic fake Docker exited255 recovery, faults and no effect
+        shell: bash
+        env:
+          GITHUB_ACTIONS: 'true'
+        run: |
+          set -Eeuo pipefail
+          cd experiments/TS-RS002-A02-PG16-RECOVERY-20261115-001
+          bash fake_docker_tests.sh
+          echo 'R001_SOURCE_FAKE_DOCKER_ONLY_NO_HOST_PG_SQL_OR_PRODUCT'
