@@ -142,21 +142,28 @@ def close_owned_fd(fd: int, effect_possible: bool = False) -> None:
 def open_chain(base_fd: int, parents: list[str]) -> int:
     """Owned directory FD; each ancestry entry has an explicit trust proof."""
     fd = os.dup(base_fd)
-    try:
-        for name in parents:
+    for name in parents:
+        try:
             child = os.open(name, os.O_RDONLY | os.O_DIRECTORY |
                             os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
-            try:
-                verify_trusted_ancestry_edge(fd, child)
-            except BaseException:
-                close_owned_fd(child)
-                raise
+        except BaseException:
             close_owned_fd(fd)
-            fd = child
-        return fd
-    except BaseException:
-        close_owned_fd(fd)
-        raise
+            raise
+        try:
+            verify_trusted_ancestry_edge(fd, child)
+        except BaseException:
+            try:
+                close_owned_fd(child)
+            finally:
+                close_owned_fd(fd)
+            raise
+        try:
+            close_owned_fd(fd)
+        except BaseException:
+            close_owned_fd(child)
+            raise
+        fd = child
+    return fd
 
 
 def open_root(root: Path) -> int:
