@@ -139,7 +139,7 @@ python3 - "$LOCK" "$OP" "$ATTEMPT" "$CID" "$NID" "$VOLUME" "$DAEMON" <<'B001_LOC
 import json,sys
 path, op, attempt, container, network, volume, daemon = sys.argv[1:]
 with open(path, encoding="utf-8") as f: a=json.load(f)
-expected_keys = {"contract_version","disposition","responsibility","operation_id","attempt_id","physical_effect_allowlist","original_attempt","previous_b001_attempt","previous_b001_receipt_sha256","expected_exited_at","original_container_id","original_network_id","original_volume_id","host","docker_daemon_id","source_review","physical_admission_review","Product_effect","kernel_replacement","Beta_Run_008","no_retry"}
+expected_keys = {"contract_version","disposition","responsibility","operation_id","attempt_id","physical_effect_allowlist","original_attempt","previous_b001_attempt","previous_b001_receipt_sha256","expected_exited_at","original_container_id","original_network_id","original_volume_id","host","docker_daemon_id","source_review_id","source_review_head_sha","source_review_original_blob","physical_admission_review_id","physical_admission_original_blob","Product_effect","kernel_replacement","Beta_Run_008","no_retry"}
 assert type(a) is dict and set(a)==expected_keys
 assert a["contract_version"]=="TS-RS002-A02-PG16-RECOVERY-ADMISSION/v1"
 assert a["disposition"]=="ADMITTED_NONPRODUCT_EXITED_CONTAINER_RECOVERY_R001"
@@ -152,13 +152,20 @@ assert a["previous_b001_receipt_sha256"]=="5dab271beb784a11acb127db96898a9e6b54a
 assert a["expected_exited_at"]=="2026-11-16T02:38:13.510609283Z"
 assert a["original_container_id"]==container and a["original_network_id"]==network and a["original_volume_id"]==volume
 assert a["host"]=="DESKTOP-DJLBEQH" and a["docker_daemon_id"]==daemon
-assert a["source_review"]=="TERMINAL_0F_0A"
-assert a["physical_admission_review"]=="TERMINAL_0F_0A_PROCESSED_BY_CONTROL"
+# Real immutable Git source/review identity must be verified by external Control BEFORE lock issuance.
+# Runtime validates typed exact identifiers; it cannot turn a JSON string into independent authority.
+import re
+assert a["source_review_id"]=="TS-RS002-PG16-R001-PR53-WEBINLINE-SOURCE-IR002-20261116-001"
+assert a["physical_admission_review_id"]=="TS-RS002-PG16-R001-PHYSICAL-ADMISSION-WEBINLINE-IR001-20261116-001"
+for key in ("source_review_head_sha","source_review_original_blob","physical_admission_original_blob"):
+    assert type(a[key]) is str and re.fullmatch(r"[a-f0-9]{40}",a[key]) and a[key]!="0"*40
 assert a["Product_effect"]=="NONE" and a["kernel_replacement"]=="NO_GO"
 assert a["Beta_Run_008"]=="BLOCKED" and a["no_retry"] is True
 B001_LOCK
 
 # R001 exclusive one-shot receipt, then exactly ONE Docker start by original native ID.
+# Residual TOCTOU is irreducible without daemon transaction semantics; fail on any
+# poststart identity drift, retain UNKNOWN, never retry R001 or B001.
 # B001 original terminal effect is never replayed.
 phase='RECEIPT_CREATE'
 # A crash between directory creation and initial receipt is still a partial
@@ -244,6 +251,14 @@ printf 'phase=%s\neffect=UNKNOWN\n' "$phase" >> "$receipt" || fail 'start-phase 
 returned=$(docker container start "$CID") || fail 'docker container start failure or ambiguous effect'
 printf 'start_returned=%s\n' "$returned" >> "$receipt" || fail 'returned-ID receipt append failed'
 [[ "$returned" == "$CID" || "$returned" == 'ts-rs002-a02-pg16-20261113-001' ]] || fail 'unexpected start return'
+# IR001 F01: native post-start identity and environment reconciliation; failure remains UNKNOWN.
+eq 'poststart hostname' "$(hostname)" "$HOST"
+eq 'poststart UID' "$(id -u)" 1000
+eq 'poststart Docker context' "$(docker context show)" default
+eq 'poststart Docker server version' "$(docker version --format '{{.Server.Version}}')" 29.1.3
+post_platform=$(docker info --format '{{.OSType}}/{{.Architecture}}')
+[[ "$post_platform" == linux/x86_64 || "$post_platform" == linux/amd64 ]] || fail 'poststart Docker platform changed'
+eq 'poststart Docker native daemon ID' "$(docker info --format '{{.ID}}')" "$DAEMON"
 eq 'poststart native ID' "$(c '{{.Id}}')" "$CID"
 eq 'poststart name' "$(c '{{.Name}}')" "$CNAME"
 eq 'poststart original operation label' "$(c '{{index .Config.Labels "ts.rs002.operation"}}')" "$OLD_OP"
@@ -261,9 +276,13 @@ eq 'poststart CPUs' "$(c '{{.HostConfig.NanoCpus}}')" 1000000000
 eq 'poststart PIDs' "$(c '{{.HostConfig.PidsLimit}}')" 256
 eq 'poststart attached network' "$(c '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}')" "$NID"
 eq 'poststart PGDATA' "$(c '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}|{{.Type}}|{{.RW}}{{end}}{{end}}')" "$VOLUME|volume|true"
+eq 'poststart native network ID' "$(n '{{.Id}}')" "$NID"
 eq 'poststart original network name' "$(n '{{.Name}}')" 'ts-rs002-a02-pg16-net-20261113-001'
 eq 'poststart original network driver' "$(n '{{.Driver}}')" bridge
 eq 'poststart original internal network' "$(n '{{.Internal}}')" true
+eq 'poststart native network label' "$(n '{{index .Labels "ts.rs002.operation"}}')" "$OLD_OP"
+eq 'poststart native volume ID' "$(v '{{.Name}}')" "$VOLUME"
+eq 'poststart native volume driver' "$(v '{{.Driver}}')" local
 for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   original="$ORIGINAL_ROOT/secrets/$name"
   target="/run/secrets/$name"
@@ -272,6 +291,9 @@ for name in admin.pass observer.pass writer_a.pass writer_b.pass; do
   eq 'poststart frozen credential RO bind' "$(c "$template")" "bind|$original|false"
 done
 eq 'poststart frozen init RO bind' "$(c '{{range .Mounts}}{{if eq .Destination "/docker-entrypoint-initdb.d"}}{{.Type}}|{{.Source}}|{{.RW}}{{end}}{{end}}')" "bind|$ORIGINAL_ROOT/init|false"
+[[ -f "$B001_RECEIPT" && ! -L "$B001_RECEIPT" ]] || fail 'poststart original terminal B001 receipt missing or linked'
+eq 'poststart B001 receipt SHA256' "$(sha256sum "$B001_RECEIPT" | cut -d' ' -f1)" "$B001_RECEIPT_SHA256"
+eq 'poststart B001 receipt DAC' "$(stat -c '%a:%u:%g' "$B001_RECEIPT")" '600:1000:1000'
 state=$(c '{{.State.Status}}')
 printf 'poststart_status=%s\n' "$state" >> "$receipt" || fail 'poststart-status receipt append failed'
 [[ "$state" == running ]] || fail 'container not running after start'
