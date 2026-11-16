@@ -58,8 +58,11 @@ cat > "$RUNTIME/admission.lock" <<'FAKE_ADMISSION'
   "original_volume_id": "e0f82fa682d2559142b6d90e0c9d23aec384728b2ec618ee3344faa1fa3da899",
   "host": "DESKTOP-DJLBEQH",
   "docker_daemon_id": "1219e4b8-5972-4880-8ebd-4fd2498a3e83",
-  "source_review": "TERMINAL_0F_0A",
-  "physical_admission_review": "TERMINAL_0F_0A_PROCESSED_BY_CONTROL",
+  "source_review_id": "TS-RS002-PG16-R001-PR53-WEBINLINE-SOURCE-IR002-20261116-001",
+  "source_review_head_sha": "1111111111111111111111111111111111111111",
+  "source_review_original_blob": "2222222222222222222222222222222222222222",
+  "physical_admission_review_id": "TS-RS002-PG16-R001-PHYSICAL-ADMISSION-WEBINLINE-IR001-20261116-001",
+  "physical_admission_original_blob": "3333333333333333333333333333333333333333",
   "Product_effect": "NONE",
   "kernel_replacement": "NO_GO",
   "Beta_Run_008": "BLOCKED",
@@ -99,7 +102,7 @@ case "$1 $2" in
     if [[ "$STUB_FAIL" == immediate_docker_version_change && -d "$STUB_RESULT" ]];then echo FOREIGN;else echo 29.1.3;fi;;
  'info --format')
     if [[ "$3" == '{{.ID}}' ]]; then
-      if [[ "$STUB_FAIL" == foreign_daemon ]]; then echo FOREIGN; else echo 1219e4b8-5972-4880-8ebd-4fd2498a3e83; fi
+      if [[ "$STUB_FAIL" == foreign_daemon || ( "$STUB_FAIL" == poststart_foreign_daemon && -f "$STUB_STARTED" ) ]]; then echo FOREIGN; else echo 1219e4b8-5972-4880-8ebd-4fd2498a3e83; fi
     else echo linux/amd64; fi;;
  'container inspect')
     [[ "$3" == --format && "$5" == "$CID" ]] || exit 75
@@ -141,7 +144,7 @@ case "$1 $2" in
       *'"/docker-entrypoint-initdb.d"'*)
         if [[ "$STUB_FAIL" == foreign_init_mount_type ]];then echo "volume|$STUB_ORIGINAL/init|false";else echo "bind|$STUB_ORIGINAL/init|false";fi;;
       *'/run/secrets/ts-admin-pass'*)
-        if [[ "$STUB_FAIL" == foreign_secret_mount_type ]];then echo "volume|$STUB_ORIGINAL/secrets/admin.pass|false";else echo "bind|$STUB_ORIGINAL/secrets/admin.pass|false";fi;;
+        if [[ "$STUB_FAIL" == foreign_secret_mount_type || ( "$STUB_FAIL" == immediate_secret_mount_change && -d "$STUB_RESULT" ) ]];then echo "volume|$STUB_ORIGINAL/secrets/admin.pass|false";else echo "bind|$STUB_ORIGINAL/secrets/admin.pass|false";fi;;
       *'/run/secrets/observer.pass'*)
         if [[ "$STUB_FAIL" == poststart_foreign_secret && -f "$STUB_STARTED" ]];then echo 'bind|/tmp/foreign-secret|false'
         elif [[ "$STUB_FAIL" == poststart_foreign_mount_type && -f "$STUB_STARTED" ]];then echo "volume|$STUB_ORIGINAL/secrets/observer.pass|false"
@@ -158,18 +161,20 @@ case "$1 $2" in
     [[ "$5" == "$NID" ]] || exit 82
     case "$4" in
       '{{.Id}}')
-        if [[ "$STUB_FAIL" == immediate_native_network_id_change && -d "$STUB_RESULT" ]];then echo FOREIGN;else echo "$NID";fi;;
+        if [[ "$STUB_FAIL" == immediate_native_network_id_change && -d "$STUB_RESULT" || ( "$STUB_FAIL" == poststart_native_network_id_change && -f "$STUB_STARTED" ) ]];then echo FOREIGN;else echo "$NID";fi;;
       '{{.Name}}') if [[ "$STUB_FAIL" == foreign_network_name ]];then echo FOREIGN;else echo ts-rs002-a02-pg16-net-20261113-001;fi;;
       '{{.Driver}}') if [[ "$STUB_FAIL" == foreign_network_driver ]];then echo host;else echo bridge;fi;;
-      '{{.Internal}}') echo true;;
-      *'ts.rs002.operation'*) echo TS-RS002-A02-PG16-PROVISION-20261113-001;;
+      '{{.Internal}}') if [[ "$STUB_FAIL" == poststart_network_internal_change && -f "$STUB_STARTED" ]];then echo false;else echo true;fi;;
+      *'ts.rs002.operation'*)
+        if [[ "$STUB_FAIL" == poststart_foreign_network_label && -f "$STUB_STARTED" ]];then echo FOREIGN;else echo TS-RS002-A02-PG16-PROVISION-20261113-001;fi;;
       *) exit 83;;
     esac;;
  'volume inspect')
     [[ "$5" == "$VOL" ]] || exit 84
     case "$4" in
-      '{{.Name}}') echo "$VOL";;
-      '{{.Driver}}') echo local;;
+      '{{.Name}}')
+        if [[ "$STUB_FAIL" == immediate_volume_id_change && -d "$STUB_RESULT" || ( "$STUB_FAIL" == poststart_native_volume_id_change && -f "$STUB_STARTED" ) ]];then echo FOREIGN;else echo "$VOL";fi;;
+      '{{.Driver}}') if [[ "$STUB_FAIL" == poststart_native_volume_driver_change && -f "$STUB_STARTED" ]];then echo foreign;else echo local;fi;;
       *) exit 85;;
     esac;;
  'container start')
@@ -262,6 +267,14 @@ start_failure immediate_memory_change
 start_failure immediate_hostname_change
 start_failure immediate_docker_version_change
 start_failure immediate_native_network_id_change
+start_failure immediate_volume_id_change
+start_failure immediate_secret_mount_change
+start_failure poststart_foreign_daemon
+start_failure poststart_native_network_id_change
+start_failure poststart_native_volume_id_change
+start_failure poststart_native_volume_driver_change
+start_failure poststart_network_internal_change
+start_failure poststart_foreign_network_label
 
 rm -rf -- "$RUNTIME/result"
 rm -f -- "$STUB_STARTED"
@@ -270,7 +283,7 @@ grep -Fq 'RECOVERY_STARTED_UNVERIFIED original=A001 prior=B001 recovery=R001' "$
 grep -Fxq 'status=PENDING_INDEPENDENT_PG_WAL_CATALOG_ACL' "$RUNTIME/result/attempt-status.txt"
 grep -Fxq 'network_id=6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35' "$RUNTIME/result/attempt-status.txt"
 [[ -f "$STUB_STARTED" ]] || exit 88
-echo 'PASS fake-original-exited R001 recovery started-unverified; 16 preflight negatives / 14 partial effects; no real Docker'
+echo 'PASS fake-original-exited R001 recovery started-unverified; 16 preflight negatives / 22 partial effects; no real Docker'
 
 # R001 inherited fault containment: exercise unexpected nonzero shell exits and handled SIGTERM
 # after receipt creation, using ONLY disposable CI-runner copies.
