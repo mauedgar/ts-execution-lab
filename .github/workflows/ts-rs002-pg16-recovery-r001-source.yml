@@ -18,10 +18,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           cd experiments/TS-RS002-A02-PG16-RECOVERY-20261115-001
-          test "$(git hash-object recover_existing.sh)" = '643adad54a61e412ed94d439e006c78aec50278d'
-          test "$(git hash-object fake_docker_tests.sh)" = '14659e6d91f59594481d7ceccb74357eaa583ab2'
+          test "$(git hash-object recover_existing.sh)" = '70ca5b6159716fd735a36fda99b53f50103971cd'
+          test "$(git hash-object fake_docker_tests.sh)" = '03ece096fa3b4fe9b412429585a37f621fdee141'
           test "$(git hash-object b001_terminal_fixture.txt)" = 'da27b3e4286b5264a188e2200672c07caeee9ab8'
-          test "$(git hash-object README.md)" = 'a384f81b0bb926268a59efd81db3c70239223fdb'
+          test "$(git hash-object README.md)" = 'b0f4d9a576907500f5798b07cf54c587acbf8b65'
           test "$(sha256sum b001_terminal_fixture.txt | cut -d' ' -f1)" = '5dab271beb784a11acb127db96898a9e6b54a361d94e302089e69174bf40ad1a'
           grep -Fxq "EXPECTED_ADMISSION_SHA256='UNBOUND_NO_DISPATCH'" recover_existing.sh
           test "$(grep -Fc 'docker container start "$CID"' recover_existing.sh)" -eq 1
