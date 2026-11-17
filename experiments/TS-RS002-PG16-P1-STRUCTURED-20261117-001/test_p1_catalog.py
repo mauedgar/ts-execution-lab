@@ -62,21 +62,21 @@ class StructuredP1Tests(TestCase):
                  "runner_sha256": hashlib.sha256(fake.read_bytes()).hexdigest(),
                  "sql_source_git_blob": p1.SQL_SOURCE_BLOB, "container_id": p1.CID,
                  "review_verdict": "RECOMMEND", "review_original_blob": "c" * 40,
-                 "allowed_phases": ["A", "B", "C"],
+                 "allowed_phase": "A", "prior_provider_receipt_sha256": "GENESIS",
                  "protocol": "TS-RS002-P1-C001-STRUCTURED-v2"}
             admission_file = p / "admission.json"
             admission_file.write_text(json.dumps(m))
             os.chmod(admission_file, 0o600)
             with patch.object(p1, "__file__", str(fake)):
-                self.assertEqual(p1.admission()[1], m["runner_sha256"])
+                self.assertEqual(p1.admission("A")[1], m["runner_sha256"])
                 fake.write_bytes(b"tampered-script")
                 with self.assertRaisesRegex(RuntimeError, "UNADMITTED_SOURCE_OR_ARTIFACT_HASH"):
-                    p1.admission()
+                    p1.admission("A")
                 fake.write_bytes(b"reviewed-source")
                 m["review_verdict"] = "NO_RECOMMEND"
                 admission_file.write_text(json.dumps(m))
                 with self.assertRaisesRegex(RuntimeError, "UNADMITTED_SOURCE_OR_ARTIFACT_HASH"):
-                    p1.admission()
+                    p1.admission("A")
 
     def test_one_structured_native_call_per_phase(self):
         with tempfile.TemporaryDirectory() as td, \
@@ -97,21 +97,43 @@ class StructuredP1Tests(TestCase):
                 p1.run_phase("A")
             self.assertEqual(execute.call_count, 1)
 
-    def test_signed_chain_prior_and_tamper_rejected(self):
-        with tempfile.TemporaryDirectory() as td, \
-             patch.object(p1, "RESULTS", Path(td) / "attempt"), \
-             patch.object(p1, "read_only_preflight", return_value=("GENESIS", "admh", "runh")), \
-             patch.object(p1.subprocess, "Popen", return_value=mock_child(output=p1.EXPECTED["A"][0] + "\n")):
-            p1.run_phase("A")
-            prior = p1.read_prior("B", "admh", "runh")
-            self.assertEqual(len(prior), 64)
-            # If an actor edits or spoofs a result, immutable linkage breaks.
-            path = p1.RESULTS / "A" / "terminal.json"
-            row = json.loads(path.read_text())
-            row["stdout"] = ["malicious"]
-            path.write_text(json.dumps(row))
-            with self.assertRaisesRegex(RuntimeError, "PRIOR_TERMINAL_NOT_AUTHENTICATED"):
-                p1.read_prior("B", "admh", "runh")
+    def test_forged_local_receipt_never_admits_phase_b(self):
+        # A coherent forged local JSON is never a source of B authority.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            fake = root / "p1_catalog.py"
+            fake.write_text("frozen")
+            forged_dir = root / "attempt" / "A"
+            forged_dir.mkdir(parents=True, mode=0o700)
+            forged = {"runner_id": p1.RUNNER_ID, "phase": "A",
+                      "status": "PASS", "stdout": list(p1.EXPECTED["A"])}
+            (forged_dir / "intent.json").write_text(json.dumps(forged))
+            (forged_dir / "terminal.json").write_text(json.dumps(forged))
+            # Even internally coherent files cannot create the independently
+            # qualified admission_B.json, which must be delivered by Control.
+            with patch.object(p1, "__file__", str(fake)):
+                with self.assertRaises(FileNotFoundError):
+                    p1.admission("B")
+            self.assertNotIn("read_prior", p1.__dict__)
+
+    def test_symlink_and_partial_phase_never_execute(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            normal = root / "normal"
+            normal.write_text("record")
+            link = root / "link"
+            link.symlink_to(normal)
+            with self.assertRaisesRegex(RuntimeError, "UNTRUSTED_RECEIPT_FILE"):
+                p1.safe_read(link)
+            prior = root / "attempt" / "A"
+            prior.mkdir(parents=True, mode=0o700)
+            (prior / "intent.json").write_text('{"status":"PENDING_READONLY"}')
+            with patch.object(p1, "RESULTS", root / "attempt"), \\
+                 patch.object(p1, "read_only_preflight", return_value=("GENESIS", "admh", "runh")), \\
+                 patch.object(p1.subprocess, "Popen") as invoke:
+                with self.assertRaises(FileExistsError):
+                    p1.run_phase("A")
+                invoke.assert_not_called()
 
     def test_timeout_unknown_and_no_retry(self):
         with tempfile.TemporaryDirectory() as td, \
