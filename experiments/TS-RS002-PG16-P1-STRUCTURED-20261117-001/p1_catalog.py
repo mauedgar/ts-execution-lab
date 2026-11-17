@@ -138,6 +138,10 @@ def read_prior(phase: str, admission_hash: str, runner_hash: str) -> str:
     terminal_data = safe_read(folder / "terminal.json", private=True)
     intent = json.loads(intent_data)
     result = json.loads(terminal_data)
+    if earlier == "A" and intent.get("previous_terminal_sha256") != "GENESIS":
+        fail("PRIOR_GENESIS_CHAIN_INVALID")
+    if earlier == "B" and intent.get("previous_terminal_sha256") != read_prior("B", admission_hash, runner_hash):
+        fail("PRIOR_CHAIN_ROOT_MISMATCH")
     if intent != {
         "runner_id": RUNNER_ID, "phase": earlier, "container_id": CID,
         "sql_sha256": json_sha256(SQL[earlier].encode("utf-8")),
@@ -211,6 +215,12 @@ def write_exclusive(path: Path, record: dict) -> bytes:
         f.write(data)
         f.flush()
         os.fsync(f.fileno())
+    # Durable create-only directory entry, not merely a flushed file body.
+    dirfd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
     return data
 
 def run_phase(phase: str) -> None:
