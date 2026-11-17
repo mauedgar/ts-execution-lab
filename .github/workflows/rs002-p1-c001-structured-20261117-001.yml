@@ -1,0 +1,52 @@
+name: RS002 P1 C001 exact SQL structured runner synthetic qualification
+on:
+  push:
+    branches:
+      - ee/rs002-p1-c001-native-structured-runner-20261117-001
+    paths:
+      - .github/workflows/rs002-p1-c001-structured-20261117-001.yml
+permissions:
+  contents: read
+jobs:
+  source-only-negative-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Exact Git subject
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Freeze nonProduct source and fixed write set
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p1-c001-native-structured-runner-20261117-001
+          git merge-base --is-ancestor 373340558203d24fea9609a9a8a4d98a3b42209c HEAD
+          test "$(git rev-parse "HEAD:$root/p1_catalog.py")" = 147edf80b35206c6d3f5a09ee89253cb39f34069
+          test "$(git rev-parse "HEAD:$root/test_p1_catalog.py")" = e712d055accc9c8159aacda03b5874f0273b0546
+          test "$(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD | wc -l)" -eq 3
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p1_catalog.py"|"$root/test_p1_catalog.py"|".github/workflows/rs002-p1-c001-structured-20261117-001.yml") ;;
+              *) echo SOURCE_WRITeSET_DENIED >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD)
+          echo RS002_P1_C001_SOURCE_PRECONDITIONS_PASS
+      - name: Pin uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Source-only synthetic negative checks (NO Docker or SQL)
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001/test_p1_catalog.py -v
+          echo RS002_P1_C001_SYNTHETIC_ONLY_NO_SQL_NO_PRODUCT
