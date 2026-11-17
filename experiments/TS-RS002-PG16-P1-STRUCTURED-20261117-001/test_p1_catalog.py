@@ -64,7 +64,7 @@ class StructuredP1Tests(TestCase):
                  "review_verdict": "RECOMMEND", "review_original_blob": "c" * 40,
                  "allowed_phase": "A", "prior_provider_receipt_sha256": "GENESIS",
                  "protocol": "TS-RS002-P1-C001-STRUCTURED-v2"}
-            admission_file = p / "admission.json"
+            admission_file = p / "admission_A.json"
             admission_file.write_text(json.dumps(m))
             os.chmod(admission_file, 0o600)
             with patch.object(p1, "__file__", str(fake)):
@@ -125,8 +125,10 @@ class StructuredP1Tests(TestCase):
             link.symlink_to(normal)
             with self.assertRaisesRegex(RuntimeError, "UNTRUSTED_RECEIPT_FILE"):
                 p1.safe_read(link)
-            prior = root / "attempt" / "A"
-            prior.mkdir(parents=True, mode=0o700)
+            attempt = root / "attempt"
+            attempt.mkdir(mode=0o700)
+            prior = attempt / "A"
+            prior.mkdir(mode=0o700)
             (prior / "intent.json").write_text('{"status":"PENDING_READONLY"}')
             with patch.object(p1, "RESULTS", root / "attempt"), \
                  patch.object(p1, "read_only_preflight", return_value=("GENESIS", "admh", "runh")), \
