@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 OWNER = "TS_REMOTE_STATE_002"
-RUNNER_ID = "TS-RS002-P1-C001-STRUCTURED-20261117-002"
+RUNNER_ID = "TS-RS002-P1-C001-STRUCTURED-20261117-003"
 HOST = "DESKTOP-DJLBEQH"
 DAEMON = "1219e4b8-5972-4880-8ebd-4fd2498a3e83"
 CID = "5ce2b0833fa7ab04eac1b0c78e51ead0ed7c5e1dc2aede5621dba397b3c20d88"
@@ -25,7 +25,7 @@ NETWORK = "6c94a1fa2e3854335cdbb4b646439e8a03d4f9c3301b7a65b05a467856f5cc35"
 VOLUME = "e0f82fa682d2559142b6d90e0c9d23aec384728b2ec618ee3344faa1fa3da899"
 ORIGINAL_RECEIPT = Path("/var/tmp/ts-rs002-a02-pg16-recovery-20261115-001/attempt-status.txt")
 ORIGINAL_RECEIPT_SHA256 = "c66f4359dededc7221f13564178aa0749310f9d31d4dcc0541f65b35f529bd06"
-RESULTS = Path("/home/tsops/ts-remote-state-002/p1-c001-structured-20261117-002")
+RESULTS = Path("/home/tsops/ts-remote-state-002/p1-c001-structured-20261117-003")
 SQL_SOURCE_BLOB = "250a4e647b4f4cc780a7db3766244422d0b32bc3"
 DOCKER = "/usr/bin/docker"
 DB = "ts_rs002_a02_lab"
@@ -97,10 +97,10 @@ def safe_read(path: Path, *, private: bool = False) -> bytes:
     finally:
         os.close(fd)
 
-def admission() -> tuple[str, str]:
+def admission(phase: str) -> tuple[str, str, str]:
     # Trust root: external qualified UTF-8 materializer must independently
     # verify BOTH file digests against the pinned reviewed Git object.
-    path = Path(__file__).resolve().with_name("admission.json")
+    path = Path(__file__).resolve().with_name("admission_" + phase + ".json")
     data = safe_read(path)
     manifest = json.loads(data)
     expected = {
@@ -112,7 +112,8 @@ def admission() -> tuple[str, str]:
         "container_id": CID,
         "review_verdict": "RECOMMEND",
         "review_original_blob": manifest.get("review_original_blob"),
-        "allowed_phases": ["A", "B", "C"],
+        "allowed_phase": phase,
+        "prior_provider_receipt_sha256": manifest.get("prior_provider_receipt_sha256"),
         "protocol": "TS-RS002-P1-C001-STRUCTURED-v2",
     }
     if manifest != expected:
@@ -123,54 +124,24 @@ def admission() -> tuple[str, str]:
         fail("UNVERIFIED_SOURCE_BLOB")
     if not re.fullmatch(r"[0-9a-f]{40}", manifest["review_original_blob"]):
         fail("UNVERIFIED_INDEPENDENT_REVIEW")
-    return json_sha256(data), manifest["runner_sha256"]
+    prior = manifest["prior_provider_receipt_sha256"]
+    if phase == "A" and prior != "GENESIS":
+        fail("WRONG_PHASE_A_PRIOR")
+    if phase != "A" and not re.fullmatch(r"[0-9a-f]{64}", prior):
+        fail("MISSING_EXTERNAL_PROVIDER_RECEIPT_FOR_NEXT_PHASE")
+    return json_sha256(data), manifest["runner_sha256"], prior
 
 def ensure_private_directory(path: Path) -> None:
     st = path.lstat()
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077:
         fail("UNTRUSTED_PHASE_DIRECTORY")
 
-def read_prior(phase: str, admission_hash: str, runner_hash: str) -> str:
-    earlier = "A" if phase == "B" else "B"
-    folder = RESULTS / earlier
-    ensure_private_directory(folder)
-    intent_data = safe_read(folder / "intent.json", private=True)
-    terminal_data = safe_read(folder / "terminal.json", private=True)
-    intent = json.loads(intent_data)
-    result = json.loads(terminal_data)
-    if earlier == "A" and intent.get("previous_terminal_sha256") != "GENESIS":
-        fail("PRIOR_GENESIS_CHAIN_INVALID")
-    if earlier == "B" and intent.get("previous_terminal_sha256") != read_prior("B", admission_hash, runner_hash):
-        fail("PRIOR_CHAIN_ROOT_MISMATCH")
-    if intent != {
-        "runner_id": RUNNER_ID, "phase": earlier, "container_id": CID,
-        "sql_sha256": json_sha256(SQL[earlier].encode("utf-8")),
-        "runner_sha256": runner_hash, "admission_sha256": admission_hash,
-        "original_r001_sha256": ORIGINAL_RECEIPT_SHA256,
-        "previous_terminal_sha256": intent.get("previous_terminal_sha256"),
-        "start_utc": intent.get("start_utc"), "host_pid": intent.get("host_pid"),
-        "Product_effect": "NONE", "effect": "PENDING_READONLY",
-    }:
-        fail("PRIOR_INTENT_IDENTITY_INVALID")
-    if (result.get("status") != "PASS" or result.get("runner_id") != RUNNER_ID or
-        result.get("phase") != earlier or result.get("container_id") != CID or
-        result.get("sql_sha256") != intent["sql_sha256"] or
-        result.get("admission_sha256") != admission_hash or
-        result.get("runner_sha256") != runner_hash or
-        result.get("intent_sha256") != json_sha256(intent_data) or
-        result.get("previous_terminal_sha256") != intent["previous_terminal_sha256"] or
-        result.get("exit_code") != 0 or
-        tuple(result.get("stdout", ())) != EXPECTED[earlier] or
-        result.get("database_mutation") != "NONE_READ_ONLY"):
-        fail("PRIOR_TERMINAL_NOT_AUTHENTICATED")
-    return json_sha256(terminal_data)
-
 def read_only_preflight(phase: str) -> tuple[str, str, str]:
     if os.uname().nodename.upper() != HOST or os.getuid() != 1000:
         fail("WRONG_HOST_OR_UID")
     if sys.version_info[:3] != (3, 15, 2):
         fail("WRONG_PYTHON_RUNTIME")
-    admission_hash, runner_hash = admission()
+    admission_hash, runner_hash, prior = admission(phase)
     if hashlib.sha256(ORIGINAL_RECEIPT.read_bytes()).hexdigest() != ORIGINAL_RECEIPT_SHA256:
         fail("ORIGINAL_R001_RECEIPT_MISMATCH")
     if subprocess_output([DOCKER, "info", "--format", "{{.ID}}"]) != DAEMON:
@@ -203,9 +174,9 @@ def read_only_preflight(phase: str) -> tuple[str, str, str]:
         ensure_private_directory(RESULTS)
     if (RESULTS / phase).exists() or (RESULTS / phase).is_symlink():
         fail("PHASE_ATTEMPT_ALREADY_EXISTS_NO_RETRY")
-    prior = "GENESIS"
-    if phase != "A":
-        prior = read_prior(phase, admission_hash, runner_hash)
+    # B/C are admitted ONLY through a distinct materializer-verified Control
+    # manifest anchored in the previous original provider-native receipt.
+    # Local terminal.json does NOT grant authority for the next phase.
     return prior, admission_hash, runner_hash
 
 def write_exclusive(path: Path, record: dict) -> bytes:
@@ -237,7 +208,7 @@ def run_phase(phase: str) -> None:
         "sql_sha256": sql_hash, "runner_sha256": runner_hash,
         "admission_sha256": admission_hash,
         "original_r001_sha256": ORIGINAL_RECEIPT_SHA256,
-        "previous_terminal_sha256": prior, "start_utc": utc_now(),
+        "prior_provider_receipt_sha256": prior, "start_utc": utc_now(),
         "host_pid": os.getpid(), "Product_effect": "NONE",
         "effect": "PENDING_READONLY"
     })
@@ -284,7 +255,7 @@ def run_phase(phase: str) -> None:
         "sql_sha256": sql_hash, "runner_sha256": runner_hash,
         "admission_sha256": admission_hash, "container_id": CID,
         "intent_sha256": json_sha256(intent_data),
-        "previous_terminal_sha256": prior, "child_pid": child_pid,
+        "prior_provider_receipt_sha256": prior, "child_pid": child_pid,
         "exit_code": exit_code, "start_utc": start,
         "end_utc": utc_now(), "stdout": stdout,
         "Product_effect": "NONE",
