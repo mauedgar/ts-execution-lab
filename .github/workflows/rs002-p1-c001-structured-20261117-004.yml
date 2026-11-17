@@ -1,0 +1,53 @@
+name: RS002 P1 C001 CI004 corrected fixtures new attempt
+on:
+  push:
+    branches:
+      - ee/rs002-p1-c001-native-structured-runner-20261117-001
+    paths:
+      - .github/workflows/rs002-p1-c001-structured-20261117-004.yml
+permissions:
+  contents: read
+jobs:
+  fake-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Exact current files and six-path allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p1-c001-native-structured-runner-20261117-001
+          git merge-base --is-ancestor 373340558203d24fea9609a9a8a4d98a3b42209c HEAD
+          test "$(git rev-parse "HEAD:$root/p1_catalog.py")" = 4a7a943ba6c5c8fef8797365fac56103edfe1f9d
+          test "$(git rev-parse "HEAD:$root/test_p1_catalog.py")" = 7309feacfd46e3e0a5f0a01ead62e1a327229f23
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p1-c001-structured-20261117-001.yml")" = 6c75dbc40869b3304a117d0898104fb108371775
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p1-c001-structured-20261117-002.yml")" = 931a2fceebc3dd720079506539388f48a4ec211b
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p1-c001-structured-20261117-003.yml")" = ddc2aab72fe54c2edc88b0166e1833acf47ad860
+          test "$(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD | wc -l)" -eq 6
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p1_catalog.py"|"$root/test_p1_catalog.py"|".github/workflows/rs002-p1-c001-structured-20261117-001.yml"|".github/workflows/rs002-p1-c001-structured-20261117-002.yml"|".github/workflows/rs002-p1-c001-structured-20261117-003.yml"|".github/workflows/rs002-p1-c001-structured-20261117-004.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD)
+          echo RS002_P1_C001_CI004_FROZEN_PASS
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Eight synthetic tests (no physical SQL)
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001/test_p1_catalog.py -v
+          echo RS002_P1_C001_CI004_SYNTHETIC_ONLY_NO_SQL
