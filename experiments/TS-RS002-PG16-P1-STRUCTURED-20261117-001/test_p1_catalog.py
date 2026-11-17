@@ -34,8 +34,9 @@ class StructuredP1Tests(TestCase):
                 p1.check_result(phase, "BEGIN\n" + "\n".join(expected) + "\nCOMMIT\n")
                 with self.assertRaisesRegex(RuntimeError, "READONLY_CATALOG_MISMATCH"):
                     p1.check_result(phase, "\n".join(expected[:-1]) + "\n")
-                with self.assertRaisesRegex(RuntimeError, "READONLY_CATALOG_MISMATCH"):
-                    p1.check_result(phase, "\n".join(reversed(expected)) + "\n")
+                if len(expected) > 1:
+                    with self.assertRaisesRegex(RuntimeError, "READONLY_CATALOG_MISMATCH"):
+                        p1.check_result(phase, "\n".join(reversed(expected)) + "\n")
         with self.assertRaisesRegex(RuntimeError, "UNSAFE_SQL_STDOUT"):
             p1.normalize("injected\x00payload")
         with self.assertRaisesRegex(RuntimeError, "UNSAFE_SQL_STDOUT"):
