@@ -1,0 +1,52 @@
+name: RS002 P1 C001 IR002 repair native source-only CI003
+on:
+  push:
+    branches:
+      - ee/rs002-p1-c001-native-structured-runner-20261117-001
+    paths:
+      - .github/workflows/rs002-p1-c001-structured-20261117-003.yml
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Exact source and allowed five changed paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p1-c001-native-structured-runner-20261117-001
+          git merge-base --is-ancestor 373340558203d24fea9609a9a8a4d98a3b42209c HEAD
+          test "$(git rev-parse "HEAD:$root/p1_catalog.py")" = 4a7a943ba6c5c8fef8797365fac56103edfe1f9d
+          test "$(git rev-parse "HEAD:$root/test_p1_catalog.py")" = 5164f6a2c41f01f00b155c8fa5d8bd60ab478e6f
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p1-c001-structured-20261117-001.yml")" = 6c75dbc40869b3304a117d0898104fb108371775
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p1-c001-structured-20261117-002.yml")" = 931a2fceebc3dd720079506539388f48a4ec211b
+          test "$(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD | wc -l)" -eq 5
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p1_catalog.py"|"$root/test_p1_catalog.py"|".github/workflows/rs002-p1-c001-structured-20261117-001.yml"|".github/workflows/rs002-p1-c001-structured-20261117-002.yml"|".github/workflows/rs002-p1-c001-structured-20261117-003.yml") ;;
+              *) echo UNEXPECTED_SOURCE_PATH >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 373340558203d24fea9609a9a8a4d98a3b42209c HEAD)
+          echo RS002_P1_C001_CI003_SOURCE_FROZEN
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Source-only synthetic tests no Docker or SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P1-STRUCTURED-20261117-001/test_p1_catalog.py -v
+          echo RS002_P1_C001_CI003_SYNTHETIC_ONLY_NO_SQL
