@@ -128,8 +128,8 @@ class StructuredP1Tests(TestCase):
             prior = root / "attempt" / "A"
             prior.mkdir(parents=True, mode=0o700)
             (prior / "intent.json").write_text('{"status":"PENDING_READONLY"}')
-            with patch.object(p1, "RESULTS", root / "attempt"), \\
-                 patch.object(p1, "read_only_preflight", return_value=("GENESIS", "admh", "runh")), \\
+            with patch.object(p1, "RESULTS", root / "attempt"), \
+                 patch.object(p1, "read_only_preflight", return_value=("GENESIS", "admh", "runh")), \
                  patch.object(p1.subprocess, "Popen") as invoke:
                 with self.assertRaises(FileExistsError):
                     p1.run_phase("A")
