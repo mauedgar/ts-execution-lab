@@ -45,9 +45,9 @@ SECRET_MOUNT = "/run/secrets/observer.pass"
 SECRET_SOURCE = "/var/tmp/ts-rs002-a02-pg16-20261113-001/secrets/observer.pass"
 SECRET_ROOT = Path('/var/tmp/ts-rs002-a02-pg16-20261113-001')
 GH = "/mnt/c/Program Files/GitHub CLI/gh.exe"
-REVIEW_ID = "TS-RS002-P2-PR58-WEBINLINE-IR003-20261118-001"
+REVIEW_ID = "TS-RS002-P2-PR59-WEBINLINE-IR003-20261118-001"
 REVIEW_REQUEST_PATH = "results/" + REVIEW_ID + "/ORIGINAL.md"
-CONTROL_GRANT_PATH = "dispositions/TS-RS002-P2-PR58-PHYSICAL-ADMISSION-20261118-001/GRANT.json"
+CONTROL_GRANT_PATH = "dispositions/TS-RS002-P2-PR59-PHYSICAL-ADMISSION-20261118-001/GRANT.json"
 
 # Host HBA SCRAM is independently checked before any observer login.
 # pg_hba_file_rules reflects files on disk, NOT the last server-loaded rules.
