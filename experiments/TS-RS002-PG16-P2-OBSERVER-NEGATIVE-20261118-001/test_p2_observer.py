@@ -234,4 +234,37 @@ class P2SourceContractTests(unittest.TestCase):
         self.assertIn("ORIGINAL_READONLY_BIND_INVENTORY_DRIFT",Path(p.__file__).read_text())
 
 
+    def test_review_rejects_duplicate_summary_headers_and_id(self):
+        review,j=self.review_text()
+        for addition in ("Findings: **3**", "Advisories: **2**",
+                         "Verdict: **NO_RECOMMEND**",
+                         "Review_ID: "+chr(96)+"old"+chr(96)):
+            with self.subTest(addition=addition), self.assertRaises(RuntimeError):
+                p.parse_review_admission(review+"\n"+addition,j)
+
+    def test_verified_p0_dac_git_and_native_identity(self):
+        data={"protocol":"TS-RS002-P2-P0-HOST-DAC-NATIVE-v1",
+              "status":"PASS","other_uid_traversal":"DENIED",
+              "other_uid":65534,"identity_exit_code":0,"permission_check_exit_code":1,
+              "secret_contents_exposed":False,"container_id":p.CID,"host":p.HOST,
+              "distro":"Ubuntu-24.04","prior_C_terminal_sha256":p.C_SHA,
+              "Product_effect":"NONE"}
+        raw=json.dumps(data,sort_keys=True).encode()
+        j={"p0_receipt_commit":"a"*40,"p0_receipt_blob":"b"*40,
+           "p0_receipt_sha256":hashlib.sha256(raw).hexdigest()}
+        result={"path":p.P0_DAC_ORIGINAL_PATH,"sha":"b"*40,
+                "content":base64.b64encode(raw).decode()}
+        with patch.object(p,"read_output",return_value=json.dumps(result)):
+            p.verify_p0_dac(j)
+            wrong=dict(j)
+            wrong["p0_receipt_sha256"]="0"*64
+            with self.assertRaises(RuntimeError):p.verify_p0_dac(wrong)
+        data["permission_check_exit_code"]=0
+        altered=json.dumps(data,sort_keys=True).encode()
+        j["p0_receipt_sha256"]=hashlib.sha256(altered).hexdigest()
+        result["content"]=base64.b64encode(altered).decode()
+        with patch.object(p,"read_output",return_value=json.dumps(result)):
+            with self.assertRaises(RuntimeError):p.verify_p0_dac(j)
+
+
 if __name__=='__main__':unittest.main()
