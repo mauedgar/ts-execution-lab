@@ -1,6 +1,8 @@
 """Synthetic no-Docker/no-secret security and custody tests for P2 revised candidate."""
 import json
 import os
+import base64
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -23,9 +25,9 @@ class P2SourceContractTests(unittest.TestCase):
 
     def snap(self,keychange=None):
         lines=[f'{n}|1|'+('a'*64) for n in ('head','events','receipts')]
-        lines+=['columns|'+'b'*64,'acl|'+'c'*64,'authority|'+'e'*64,'ddl|'+'f'*64]
+        lines+=['columns|'+'b'*64,'acl|'+'c'*64,'authority|'+'e'*64,'ddl|'+'f'*64,'rls|'+'g'*64,'functions|'+'h'*64]
         if keychange is not None:
-            ch=['a','a','a','b','c','e','f'][keychange]
+            ch=['a','a','a','b','c','e','f','g','h'][keychange]
             left,sep,right=lines[keychange].rpartition('|')
             lines[keychange]=left+sep+right.replace(ch,'d')
         return '\n'.join(lines)
@@ -74,9 +76,9 @@ class P2SourceContractTests(unittest.TestCase):
 
     def test_snapshot_stable_complete_fingerprints(self):
         b=p.interpret('snapshot_before',0,self.snap(),'',None)
-        self.assertEqual(len(b),7)
+        self.assertEqual(len(b),9)
         self.assertEqual(p.interpret('snapshot_after',0,self.snap(),'',b),b)
-        for i in range(7):
+        for i in range(9):
             with self.subTest(i=i),self.assertRaisesRegex(RuntimeError,'SCHEMA_ROWS_CHANGED'):
                 p.interpret('snapshot_after',0,self.snap(i),'',b)
 
@@ -173,7 +175,7 @@ class P2SourceContractTests(unittest.TestCase):
     def test_review_admission_exact_unique_and_provenance(self):
         review,j=self.review_text()
         p.parse_review_admission(review,j)
-        self.assertIn("PR59-WEBINLINE-IR003",p.REVIEW_REQUEST_PATH)
+        self.assertIn("PR59-WEBINLINE-IR004",p.REVIEW_REQUEST_PATH)
         self.assertIn("PR59-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
         self.assertNotIn("PR56",p.REVIEW_REQUEST_PATH+p.CONTROL_GRANT_PATH)
 
@@ -195,7 +197,8 @@ class P2SourceContractTests(unittest.TestCase):
         for name in ("pg_auth_members","rolsuper","rolbypassrls","rolcreaterole",
                      "has_database_privilege","has_schema_privilege",
                      "pg_get_constraintdef","pg_indexes","pg_get_triggerdef",
-                     "REFERENCES","TRIGGER"):
+                     "REFERENCES","TRIGGER","pg_policy","relrowsecurity","relforcerowsecurity",
+                     "pg_get_functiondef","pg_get_function_identity_arguments","polwithcheck"):
             with self.subTest(name=name):
                 self.assertIn(name,p.SNAPSHOT)
         self.assertIn("REPEATABLE READ READ ONLY",p.SNAPSHOT)
