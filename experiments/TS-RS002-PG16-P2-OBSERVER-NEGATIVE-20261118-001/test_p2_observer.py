@@ -267,4 +267,49 @@ class P2SourceContractTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):p.verify_p0_dac(j)
 
 
+    def test_postspawn_receipt_write_error_preserves_unknown_original_pid(self):
+        with tempfile.TemporaryDirectory() as d:
+            receipts=Path(d)/"single"
+            child=Mock()
+            child.pid=66111
+            original=p.write_once
+            def fail_after_spawn(path,record):
+                if path.name=="start_hba.json":
+                    raise OSError("synthetic receipt I/O failure")
+                return original(path,record)
+            with (patch.object(p,"RECEIPTS",receipts),
+                  patch.object(p,"preflight",return_value=("a"*64,"b"*64)),
+                  patch.object(p.subprocess,"Popen",return_value=child),
+                  patch.object(p,"write_once",side_effect=fail_after_spawn)):
+                with self.assertRaises(SystemExit):
+                    p.execute()
+            terminal=json.loads((receipts/"terminal.json").read_text())
+            self.assertEqual(terminal["status"],"UNKNOWN")
+            self.assertEqual(terminal["possibly_unreconciled_child_pid"],66111)
+            self.assertEqual(terminal["possibly_unreconciled_step"],"hba")
+            self.assertTrue((receipts/"step_intent_hba.json").exists())
+            self.assertFalse((receipts/"start_hba.json").exists())
+            self.assertTrue(terminal["no_retry"])
+
+    def test_stream_overflow_retains_original_child_and_no_retry(self):
+        with tempfile.TemporaryDirectory() as d:
+            receipts=Path(d)/"single"
+            child=Mock()
+            child.pid=66112
+            child.poll.return_value=None
+            with (patch.object(p,"RECEIPTS",receipts),
+                  patch.object(p,"preflight",return_value=("a"*64,"b"*64)),
+                  patch.object(p.subprocess,"Popen",return_value=child),
+                  patch.object(p,"capture_bounded",side_effect=RuntimeError(
+                      "NATIVE_OUTPUT_LIMIT_UNRECONCILED"))):
+                with self.assertRaises(SystemExit):
+                    p.execute()
+            terminal=json.loads((receipts/"terminal.json").read_text())
+            fail=json.loads((receipts/"failure_hba.json").read_text())
+            self.assertEqual(terminal["status"],"UNKNOWN")
+            self.assertEqual(terminal["possibly_unreconciled_child_pid"],66112)
+            self.assertEqual(fail["pid"],66112)
+            self.assertTrue(terminal["no_retry"])
+
+
 if __name__=='__main__':unittest.main()
