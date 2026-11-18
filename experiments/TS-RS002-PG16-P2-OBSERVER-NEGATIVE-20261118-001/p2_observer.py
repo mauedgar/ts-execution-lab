@@ -45,9 +45,10 @@ SECRET_MOUNT = "/run/secrets/observer.pass"
 SECRET_SOURCE = "/var/tmp/ts-rs002-a02-pg16-20261113-001/secrets/observer.pass"
 SECRET_ROOT = Path('/var/tmp/ts-rs002-a02-pg16-20261113-001')
 GH = "/mnt/c/Program Files/GitHub CLI/gh.exe"
-REVIEW_ID = "TS-RS002-P2-PR59-WEBINLINE-IR003-20261118-001"
+REVIEW_ID = "TS-RS002-P2-PR59-WEBINLINE-IR004-20261118-001"
 REVIEW_REQUEST_PATH = "results/" + REVIEW_ID + "/ORIGINAL.md"
 CONTROL_GRANT_PATH = "dispositions/TS-RS002-P2-PR59-PHYSICAL-ADMISSION-20261118-001/GRANT.json"
+P0_DAC_ORIGINAL_PATH = "results/TS-RS002-P2-P0-OTHER-UID-DAC-20261118-001/ORIGINAL.json"
 
 # Host HBA SCRAM is independently checked before any observer login.
 # pg_hba_file_rules reflects files on disk, NOT the last server-loaded rules.
@@ -247,6 +248,28 @@ def verified_review(j: dict) -> None:
     if gitfile.get('sha') != j['source_blob']: fail('SOURCE_COMMIT_BLOB_MISMATCH')
 
 
+def verify_p0_dac(j: dict) -> None:
+    """Externally verified native host-other-UID denial, no secret bytes."""
+    if not re.fullmatch(r"[0-9a-f]{40}",j["p0_receipt_commit"]):
+        fail("P0_COMMIT_NOT_VERIFIED")
+    url = ("repos/mauedgar/ts-execution-transport/contents/"
+           + P0_DAC_ORIGINAL_PATH + "?ref=" + j["p0_receipt_commit"])
+    obj = json.loads(read_output([GH,"api",url],limit=40000))
+    if obj.get("path") != P0_DAC_ORIGINAL_PATH or obj.get("sha") != j["p0_receipt_blob"]:
+        fail("P0_ORIGINAL_GIT_MISMATCH")
+    raw = base64.b64decode(obj["content"],validate=False)
+    if sha(raw) != j["p0_receipt_sha256"]:
+        fail("P0_ORIGINAL_DIGEST_MISMATCH")
+    expected = {"protocol":"TS-RS002-P2-P0-HOST-DAC-NATIVE-v1",
+                "status":"PASS","other_uid_traversal":"DENIED",
+                "other_uid":65534,"identity_exit_code":0,
+                "permission_check_exit_code":1,
+                "secret_contents_exposed":False,
+                "container_id":CID,"host":HOST,"distro":"Ubuntu-24.04",
+                "prior_C_terminal_sha256":C_SHA,"Product_effect":"NONE"}
+    if json.loads(raw) != expected:
+        fail("P0_NATIVE_DENIAL_NOT_ATTESTED")
+
 def verified_grant(j: dict) -> None:
     # Real trust boundary: a pre-published immutable private GitHub Control
     # grant, retrieved from its exact qualified path and immutable commit.
@@ -267,8 +290,12 @@ def verified_grant(j: dict) -> None:
                 'source_sha256':j['source_sha256'],
                 'review_commit':j['review_commit'],
                 'review_original_blob':j['review_original_blob'],
-                'prior_C_terminal_sha256':C_SHA,'container_id':CID}
+                'p0_receipt_commit':j['p0_receipt_commit'],
+                 'p0_receipt_blob':j['p0_receipt_blob'],
+                 'p0_receipt_sha256':j['p0_receipt_sha256'],
+                 'prior_C_terminal_sha256':C_SHA,'container_id':CID}
     if ctrl != required: fail('CONTROL_GRANT_FIELDS_NOT_ADMITTED')
+    verify_p0_dac(j)
 
 
 def admittance() -> tuple[str, str]:
@@ -277,16 +304,18 @@ def admittance() -> tuple[str, str]:
     required = {'protocol','runner_id','source_commit','source_blob','source_sha256',
                 'review_commit','review_original_blob','review_verdict','container_id',
                 'prior_C_terminal_sha256','allowed_effect','control_grant_sha256',
-                'control_grant_commit','control_grant_blob'}
+                'control_grant_commit','control_grant_blob',
+                 'p0_receipt_commit','p0_receipt_blob','p0_receipt_sha256'}
     if set(j) != required or j['protocol'] != 'TS-RS002-P2-OBSERVER-20261118-v3' or j['runner_id'] != RUNNER_ID:
         fail('P2_ADMISSION_SCHEMA')
     if (j['source_sha256'] != sha(Path(__file__).read_bytes()) or j['container_id'] != CID
         or j['prior_C_terminal_sha256'] != C_SHA or j['allowed_effect'] != 'P2_OBSERVER_ONE_SHOT'
         or j['review_verdict'] != 'RECOMMEND'):
         fail('P2_ADMISSION_NOT_GRANTED')
-    for k in ('source_commit','source_blob','review_commit','review_original_blob','control_grant_commit','control_grant_blob'):
+    for k in ('source_commit','source_blob','review_commit','review_original_blob','control_grant_commit','control_grant_blob','p0_receipt_commit','p0_receipt_blob'):
         if not re.fullmatch('[0-9a-f]{40}',j[k]): fail('P2_REF_INVALID')
-    if not re.fullmatch('[0-9a-f]{64}',j['control_grant_sha256']): fail('CONTROL_GRANT_MISSING')
+    for key in ('control_grant_sha256','p0_receipt_sha256'):
+        if not re.fullmatch('[0-9a-f]{64}',j[key]): fail('CONTROL_OR_P0_DIGEST_INVALID')
     # The grant digest must be fixed by Control's external exact source-only
     # launcher before this source runs, and recorded in a distinct provider
     # receipt. A locally crafted JSON alone remains UNAUTHORIZED.
