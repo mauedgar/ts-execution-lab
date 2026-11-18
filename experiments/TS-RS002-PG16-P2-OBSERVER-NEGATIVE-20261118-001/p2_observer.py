@@ -133,6 +133,42 @@ COALESCE((SELECT string_agg(
 """
 SNAPSHOT = SNAPSHOT.replace(" COMMIT;", " " + AUTHORITY_SNAPSHOT + " " + DDL_SNAPSHOT + " COMMIT;")
 
+# RLS policy and function *definitions*, not only their count/name/ACL,
+# are independently hashed within the same fixed READ ONLY snapshot.
+RLS_SNAPSHOT = f"""
+SELECT 'rls|' || encode(sha256(convert_to(
+COALESCE((SELECT string_agg(
+    c.relname || '/' || c.relrowsecurity::text || '/' || c.relforcerowsecurity::text,
+    ';' ORDER BY c.relname)
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='{SCHEMA}' AND c.relkind='r'),'')
+|| '|' || COALESCE((SELECT string_agg(
+    c.relname || '/' || p.polname || '/' || p.polcmd::text || '/' ||
+    p.polpermissive::text || '/' || p.polroles::text || '/' ||
+    COALESCE(pg_get_expr(p.polqual,p.polrelid,true),'') || '/' ||
+    COALESCE(pg_get_expr(p.polwithcheck,p.polrelid,true),''),
+    ';' ORDER BY c.relname,p.polname,p.oid)
+    FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='{SCHEMA}'),'')
+,'UTF8')),'hex');
+"""
+FUNCTION_SNAPSHOT = f"""
+SELECT 'functions|' || encode(sha256(convert_to(
+COALESCE((SELECT string_agg(
+    p.proname || '/' || pg_get_function_identity_arguments(p.oid) || '/' ||
+    p.prokind::text || '/' || p.proowner::text || '/' ||
+    p.prolang::text || '/' || p.prosecdef::text || '/' ||
+    COALESCE(p.proacl::text,'') || '/' ||
+    CASE WHEN p.prokind IN ('f','p') THEN pg_get_functiondef(p.oid)
+         ELSE COALESCE(p.prosrc,'') || '/' || COALESCE(p.probin,'') END,
+    ';' ORDER BY p.proname,p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='{SCHEMA}'),'')
+,'UTF8')),'hex');
+"""
+SNAPSHOT = SNAPSHOT.replace(" COMMIT;", " " + RLS_SNAPSHOT + " " + FUNCTION_SNAPSHOT + " COMMIT;")
+
 POSITIVE = f"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT session_user,current_user,current_database(),current_setting('transaction_read_only'),current_setting('default_transaction_read_only'),inet_server_addr(),(SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()); SELECT COUNT(*) FROM {SCHEMA}.head; COMMIT;"
 # Zero affected rows even if unauthorized DELETE surprisingly succeeds, then
 # explicit rollback; READ WRITE intentionally probes ACL rather than being
@@ -503,10 +539,10 @@ def interpret(step: str, returncode: int, stdout: str, stderr: str, before: list
         return [effective_scram(rows)]
     if step in ("snapshot_before","snapshot_after"):
         rows = parse_rows(stdout)
-        if (returncode != 0 or len(rows) != 7 or
+        if (returncode != 0 or len(rows) != 9 or
             any(not re.fullmatch(r'(head|events|receipts)\|[0-9]+\|[0-9a-f]{64}',rows[i]) for i in range(3)) or
-            any(not re.fullmatch(r'(columns|acl|authority|ddl)\|[0-9a-f]{64}',rows[i+3]) for i in range(4)) or
-            [s.split('|')[0] for s in rows] != ['head','events','receipts','columns','acl','authority','ddl']):
+            any(not re.fullmatch(r'(columns|acl|authority|ddl|rls|functions)\|[0-9a-f]{64}',rows[i+3]) for i in range(6)) or
+            [s.split('|')[0] for s in rows] != ['head','events','receipts','columns','acl','authority','ddl','rls','functions']):
             fail("SNAPSHOT_INVALID")
         if step == "snapshot_after" and rows != before:
             fail("SCHEMA_ROWS_CHANGED")
