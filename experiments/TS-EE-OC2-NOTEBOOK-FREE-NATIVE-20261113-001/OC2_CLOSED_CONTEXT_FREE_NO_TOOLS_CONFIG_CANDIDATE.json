@@ -1,0 +1,93 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "update": "disable",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "small_model": "opencode/deepseek-v4.1-flash-free",
+  "default_agent": "plan",
+  "compaction": {
+    "auto": false
+  },
+  "agents": {
+    "plan": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "title": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "summary": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "compaction": {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  },
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "policies": [
+    {
+      "action": "provider.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "provider.use",
+      "resource": "opencode",
+      "effect": "allow"
+    },
+    {
+      "action": "tool.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "mcp.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "skill.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "plugin.use",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "share": "disabled",
+  "snapshots": false
+}
