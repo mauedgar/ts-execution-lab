@@ -247,11 +247,15 @@ def parse_review_admission(review: str, j: dict) -> None:
     ]
     if marker.group(1).split("\n") != expected:
         fail("REVIEW_ADMISSION_FIELDS_MISMATCH")
-    if re.findall(r"(?im)^Verdict:\s*\*\*(RECOMMEND|NO_RECOMMEND)\*\*\s*$", review) != ["RECOMMEND"]:
-        fail("REVIEW_CONTRADICTORY_VERDICT")
-    if not re.search(r"(?m)^Findings:\s*\*\*0\*\*\s*$", review) or not re.search(r"(?m)^Advisories:\s*\*\*0\*\*\s*$", review):
-        fail("REVIEW_CONTRADICTORY_COUNTS")
-    if not re.search(r"(?m)^Review_ID:\s*`" + re.escape(REVIEW_ID) + r"`\s*$", review):
+    # Entire summary headers are unique and exact, not independent searches
+    # for one favorable line within a contradictory report.
+    for field, wanted in (("Verdict","**RECOMMEND**"),
+                          ("Findings","**0**"),("Advisories","**0**")):
+        lines = re.findall(r"(?im)^" + field + r":[ \t]*([^\r\n]*)$",review)
+        if lines != [wanted]:
+            fail("REVIEW_CONTRADICTORY_" + field.upper())
+    ids = re.findall(r"(?m)^Review_ID:[ \t]*([^\r\n]*)$",review)
+    if ids != [chr(96) + REVIEW_ID + chr(96)]:
         fail("REVIEW_ID_MISMATCH")
 
 def verified_review(j: dict) -> None:
