@@ -25,9 +25,9 @@ class P2SourceContractTests(unittest.TestCase):
 
     def snap(self,keychange=None):
         lines=[f'{n}|1|'+('a'*64) for n in ('head','events','receipts')]
-        lines+=['columns|'+'b'*64,'acl|'+'c'*64,'authority|'+'e'*64,'ddl|'+'f'*64,'rls|'+'g'*64,'functions|'+'h'*64]
+        lines+=['columns|'+'b'*64,'acl|'+'c'*64,'authority|'+'e'*64,'ddl|'+'f'*64,'rls|'+'a'*64,'functions|'+'b'*64]
         if keychange is not None:
-            ch=['a','a','a','b','c','e','f','g','h'][keychange]
+            ch=['a','a','a','b','c','e','f','a','b'][keychange]
             left,sep,right=lines[keychange].rpartition('|')
             lines[keychange]=left+sep+right.replace(ch,'d')
         return '\n'.join(lines)
