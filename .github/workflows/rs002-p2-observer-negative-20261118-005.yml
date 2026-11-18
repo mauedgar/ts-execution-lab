@@ -1,0 +1,52 @@
+name: RS002 P2 IR003 repaired source-only CI005
+on:
+  push:
+    branches:
+      - ee/rs002-p2-ir002-repair-20261118-001
+    paths:
+      - .github/workflows/rs002-p2-observer-negative-20261118-005.yml
+permissions:
+  contents: read
+jobs:
+  source-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Exact bounded candidate and five-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p2-ir002-repair-20261118-001
+          git merge-base --is-ancestor 43ae12ab75b7b239f69209943353ecb426303b8d HEAD
+          test "$(git rev-parse "HEAD:$root/p2_observer.py")" = 7879d71cb103ba98423158b76460ad4fb885c8a1
+          test "$(git rev-parse "HEAD:$root/test_p2_observer.py")" = 2bb0f0f50e12e715b9d6cc511e64922b5e73dd29
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p2-observer-negative-20261118-003.yml")" = be639be2213211e3a8f1a4362d281dac24e6e35b
+          test "$(git rev-parse "HEAD:.github/workflows/rs002-p2-observer-negative-20261118-004.yml")" = 06ec4921b64a74221492b43c5a190ac7591a8185
+          test "$(git diff --name-only 43ae12ab75b7b239f69209943353ecb426303b8d HEAD | wc -l)" -eq 5
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p2_observer.py"|"$root/test_p2_observer.py"|".github/workflows/rs002-p2-observer-negative-20261118-003.yml"|".github/workflows/rs002-p2-observer-negative-20261118-004.yml"|".github/workflows/rs002-p2-observer-negative-20261118-005.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 43ae12ab75b239f69209943353ecb426303b8d HEAD)
+          echo RS002_P2_IR003_REPAIRED_FIVE_PATHS_OK
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Source-only Python3.15.2 negatives and process-fault tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001/test_p2_observer.py -v
+          echo RS002_P2_IR003_CI005_SYNTHETIC_NO_PHYSICAL_SQL
