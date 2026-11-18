@@ -1,0 +1,50 @@
+name: RS002 P2 IR002 repairs source-only CI003
+on:
+  push:
+    branches:
+      - ee/rs002-p2-ir002-repair-20261118-001
+    paths:
+      - .github/workflows/rs002-p2-observer-negative-20261118-003.yml
+permissions:
+  contents: read
+jobs:
+  source-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Frozen source blobs and three-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p2-ir002-repair-20261118-001
+          git merge-base --is-ancestor 43ae12ab75b7b239f69209943353ecb426303b8d HEAD
+          test "$(git rev-parse "HEAD:$root/p2_observer.py")" = 7d4fbe6ae5e852b52ca2bdc8616d246bbb2e50a1
+          test "$(git rev-parse "HEAD:$root/test_p2_observer.py")" = 3534ae44f41d0d6c7d5fa57bdb11c1025533ec9b
+          test "$(git diff --name-only 43ae12ab75b7b239f69209943353ecb426303b8d HEAD | wc -l)" -eq 3
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p2_observer.py"|"$root/test_p2_observer.py"|".github/workflows/rs002-p2-observer-negative-20261118-003.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 43ae12ab75b7b239f69209943353ecb426303b8d HEAD)
+          echo RS002_P2_IR002_REPAIR_SOURCE_BLOBS_LOCKED
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Synthetic only Python 3.15.2 - no Docker/secret/physical SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001/test_p2_observer.py -v
+          echo RS002_P2_IR002_CI003_SYNTHETIC_ONLY
