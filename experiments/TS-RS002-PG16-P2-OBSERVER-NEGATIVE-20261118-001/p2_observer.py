@@ -373,11 +373,26 @@ def preflight() -> tuple[str, str]:
     if len(net)!=1 or net[0].get('Id')!=NETWORK or net[0].get('Internal') is not True or net[0].get('Driver')!='bridge':
         fail('ORIGINAL_INTERNAL_NETWORK_NOT_ATTESTED')
     mounts = c["Mounts"]
-    if len([m for m in mounts if m.get("Destination") == "/var/lib/postgresql/data" and m.get("Name") == VOLUME and m.get("Type") == "volume"]) != 1:
+    pgdata = [m for m in mounts if m.get("Destination") == "/var/lib/postgresql/data"]
+    if (len(pgdata) != 1 or pgdata[0].get("Name") != VOLUME or
+        pgdata[0].get("Type") != "volume" or pgdata[0].get("RW") is not True or
+        pgdata[0].get("Driver") != "local"):
         fail("CONTAINER_PGDATA_DRIFT")
-    secret = [m for m in mounts if m.get("Destination") == SECRET_MOUNT]
-    if len(secret) != 1 or secret[0].get("RW") is not False or secret[0].get("Type") != "bind" or secret[0].get("Source") != SECRET_SOURCE:
-        fail("OBSERVER_SECRET_MOUNT_DRIFT")
+    expected_binds = {
+        "/docker-entrypoint-initdb.d": str(SECRET_ROOT/"init"),
+        "/run/secrets/ts-admin-pass": str(SECRET_ROOT/"secrets"/"admin.pass"),
+        SECRET_MOUNT: SECRET_SOURCE,
+        "/run/secrets/writer_a.pass": str(SECRET_ROOT/"secrets"/"writer_a.pass"),
+        "/run/secrets/writer_b.pass": str(SECRET_ROOT/"secrets"/"writer_b.pass"),
+    }
+    binds = [m for m in mounts if m.get("Type") == "bind"]
+    if (len(binds) != len(expected_binds) or
+        any(m.get("Destination") not in expected_binds or
+            m.get("Source") != expected_binds.get(m.get("Destination")) or
+            m.get("RW") is not False for m in binds)):
+        fail("ORIGINAL_READONLY_BIND_INVENTORY_DRIFT")
+    # An independent other-UID host-DAC negative original is required by
+    # Control before any physical grant. This runner cannot self-attest it.
     # Host secret has 0700 ancestor; actual mode is 0644 for UID999 in
     # read-only container. Other-UID traversal is a separate mandatory P0 test.
     if any(m.get('Type')=='bind' and m.get('RW') is not False for m in mounts):
