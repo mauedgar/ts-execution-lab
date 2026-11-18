@@ -68,6 +68,21 @@
       "effect": "allow"
     },
     {
+      "action": "integration.connect",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "integration.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "integration.use",
+      "resource": "opencode",
+      "effect": "allow"
+    },
+    {
       "action": "tool.use",
       "resource": "*",
       "effect": "deny"
