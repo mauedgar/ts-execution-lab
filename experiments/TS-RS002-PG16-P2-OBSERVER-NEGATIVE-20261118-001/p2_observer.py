@@ -78,6 +78,60 @@ SNAPSHOT = (
     + "'|' || COALESCE((SELECT string_agg(c.relname || ':' || has_table_privilege('"+OBSERVER+"',c.oid,'SELECT')::text || '/' || has_table_privilege('"+OBSERVER+"',c.oid,'INSERT')::text || '/' || has_table_privilege('"+OBSERVER+"',c.oid,'UPDATE')::text || '/' || has_table_privilege('"+OBSERVER+"',c.oid,'DELETE')::text || '/' || has_table_privilege('"+OBSERVER+"',c.oid,'TRUNCATE')::text,';' ORDER BY c.relname) FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname='"+SCHEMA+"' AND c.relkind='r'),'') "
     + ",'UTF8')),'hex'); COMMIT;"
 )
+# Additional fixed read-only authority + schema-definition fingerprints.
+AUTHORITY_SNAPSHOT = f"""
+SELECT 'authority|' || encode(sha256(convert_to(
+COALESCE((SELECT string_agg(
+    rolname || '/' || rolcanlogin::text || '/' || rolsuper::text || '/' ||
+    rolcreatedb::text || '/' || rolcreaterole::text || '/' ||
+    rolreplication::text || '/' || rolbypassrls::text || '/' ||
+    rolinherit::text || '/' || COALESCE(rolconfig::text,''),
+    ';' ORDER BY rolname)
+    FROM pg_roles WHERE rolname IN
+    ('ts_rs002_owner','ts_rs002_observer','ts_rs002_writer_a','ts_rs002_writer_b')),'')
+|| '|' || COALESCE((SELECT string_agg(
+    member::text || '/' || roleid::text || '/' || admin_option::text || '/' ||
+    inherit_option::text || '/' || set_option::text, ';' ORDER BY member,roleid)
+    FROM pg_auth_members),'')
+|| '|' || (SELECT has_database_privilege('{OBSERVER}','{DB}','CONNECT')::text
+    || '/' || has_database_privilege('{OBSERVER}','{DB}','CREATE')::text
+    || '/' || has_database_privilege('{OBSERVER}','{DB}','TEMP')::text)
+|| '|' || (SELECT has_schema_privilege('{OBSERVER}','{SCHEMA}','USAGE')::text
+    || '/' || has_schema_privilege('{OBSERVER}','{SCHEMA}','CREATE')::text)
+|| '|' || (SELECT has_schema_privilege('{OBSERVER}','public','CREATE')::text)
+|| '|' || COALESCE((SELECT string_agg(
+    c.relname || '/' || has_table_privilege('{OBSERVER}',c.oid,'REFERENCES')::text
+    || '/' || has_table_privilege('{OBSERVER}',c.oid,'TRIGGER')::text,
+    ';' ORDER BY c.relname)
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='{SCHEMA}' AND c.relkind='r'),'')
+,'UTF8')),'hex');
+"""
+DDL_SNAPSHOT = f"""
+SELECT 'ddl|' || encode(sha256(convert_to(
+COALESCE((SELECT string_agg(
+    con.conname || '/' || con.contype::text || '/' || pg_get_constraintdef(con.oid,true),
+    ';' ORDER BY con.conname,con.oid)
+    FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace
+    WHERE n.nspname='{SCHEMA}'),'')
+|| '|' || COALESCE((SELECT string_agg(
+    indexname || '/' || indexdef, ';' ORDER BY indexname)
+    FROM pg_indexes WHERE schemaname='{SCHEMA}'),'')
+|| '|' || COALESCE((SELECT string_agg(
+    t.tgname || '/' || t.tgenabled::text || '/' || pg_get_triggerdef(t.oid,true),
+    ';' ORDER BY t.tgname,t.oid)
+    FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='{SCHEMA}' AND NOT t.tgisinternal),'')
+|| '|' || COALESCE((SELECT string_agg(
+    p.proname || '/' || p.prosecdef::text || '/' || COALESCE(p.proacl::text,''),
+    ';' ORDER BY p.proname,p.oid)
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='{SCHEMA}'),'')
+,'UTF8')),'hex');
+"""
+SNAPSHOT = SNAPSHOT.replace(" COMMIT;", " " + AUTHORITY_SNAPSHOT + " " + DDL_SNAPSHOT + " COMMIT;")
+
 POSITIVE = f"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT session_user,current_user,current_database(),current_setting('transaction_read_only'),current_setting('default_transaction_read_only'),inet_server_addr(),(SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()); SELECT COUNT(*) FROM {SCHEMA}.head; COMMIT;"
 # Zero affected rows even if unauthorized DELETE surprisingly succeeds, then
 # explicit rollback; READ WRITE intentionally probes ACL rather than being
@@ -405,10 +459,10 @@ def interpret(step: str, returncode: int, stdout: str, stderr: str, before: list
         return [effective_scram(rows)]
     if step in ("snapshot_before","snapshot_after"):
         rows = parse_rows(stdout)
-        if (returncode != 0 or len(rows) != 5 or
+        if (returncode != 0 or len(rows) != 7 or
             any(not re.fullmatch(r'(head|events|receipts)\|[0-9]+\|[0-9a-f]{64}',rows[i]) for i in range(3)) or
-            any(not re.fullmatch(r'(columns|acl)\|[0-9a-f]{64}',rows[i+3]) for i in range(2)) or
-            [s.split('|')[0] for s in rows] != ['head','events','receipts','columns','acl']):
+            any(not re.fullmatch(r'(columns|acl|authority|ddl)\|[0-9a-f]{64}',rows[i+3]) for i in range(4)) or
+            [s.split('|')[0] for s in rows] != ['head','events','receipts','columns','acl','authority','ddl']):
             fail("SNAPSHOT_INVALID")
         if step == "snapshot_after" and rows != before:
             fail("SCHEMA_ROWS_CHANGED")
