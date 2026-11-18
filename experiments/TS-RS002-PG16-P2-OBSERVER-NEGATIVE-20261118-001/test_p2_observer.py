@@ -173,8 +173,8 @@ class P2SourceContractTests(unittest.TestCase):
     def test_review_admission_exact_unique_and_provenance(self):
         review,j=self.review_text()
         p.parse_review_admission(review,j)
-        self.assertIn("PR58-WEBINLINE-IR003",p.REVIEW_REQUEST_PATH)
-        self.assertIn("PR58-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
+        self.assertIn("PR59-WEBINLINE-IR003",p.REVIEW_REQUEST_PATH)
+        self.assertIn("PR59-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
         self.assertNotIn("PR56",p.REVIEW_REQUEST_PATH+p.CONTROL_GRANT_PATH)
 
     def test_review_admission_rejects_duplicates_and_no_recommend(self):
