@@ -251,7 +251,7 @@ def parse_review_admission(review: str, j: dict) -> None:
     # for one favorable line within a contradictory report.
     for field, wanted in (("Verdict","**RECOMMEND**"),
                           ("Findings","**0**"),("Advisories","**0**")):
-        lines = re.findall(r"(?im)^" + field + r":[ \t]*([^\r\n]*)$",review)
+        lines = re.findall(r"(?m)^" + field + r":[ \t]*([^\r\n]*)$",review)
         if lines != [wanted]:
             fail("REVIEW_CONTRADICTORY_" + field.upper())
     ids = re.findall(r"(?m)^Review_ID:[ \t]*([^\r\n]*)$",review)
