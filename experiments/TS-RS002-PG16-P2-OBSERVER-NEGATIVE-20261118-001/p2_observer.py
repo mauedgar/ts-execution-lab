@@ -588,6 +588,8 @@ def execute() -> None:
     code = "P2_UNVERIFIED"
     steps: list[dict] = []
     before = None
+    unresolved_child_pid: int | None = None
+    unresolved_step: str | None = None
     try:
         for name, sql, observer in STEPS:
             cmd = cmd_for(sql, observer)
@@ -598,6 +600,8 @@ def execute() -> None:
                             "argv_sha256":sha(json.dumps(cmd).encode()),"utc":now()}
             intent_bytes = write_once(RECEIPTS/("step_intent_"+name+".json"),before_spawn)
             child = subprocess.Popen(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            unresolved_child_pid = child.pid
+            unresolved_step = name
             step = {"name":name,"pid":child.pid,"sql_sha256":sha(sql.encode()),"observer":observer,"start_utc":now(),"status":"UNKNOWN","intent_sha256":sha(intent_bytes)}
             running_bytes = write_once(RECEIPTS/("start_"+name+".json"),step)
             try:
@@ -627,13 +631,17 @@ def execute() -> None:
             steps.append({"name":name,"result":rows,"exit_code":child.returncode,"status":"PASS",
                           "step_intent_sha256":sha(intent_bytes),"running_sha256":sha(running_bytes),
                           "result_sha256":sha(result_bytes)})
+            unresolved_child_pid = None
+            unresolved_step = None
         status,code = "PASS","OK"
     except RuntimeError as e:
         code = str(e) if re.fullmatch("[A-Z0-9_]{3,100}",str(e)) else "P2_STEP_BLOCKED"
         status = "UNKNOWN" if code in ('NATIVE_CHILD_TIMEOUT_UNRECONCILED','NATIVE_OUTPUT_LIMIT_UNRECONCILED') else "FAILED"
     except Exception:
         status,code = "UNKNOWN","UNEXPECTED_NATIVE_EXCEPTION"
-    terminal = {"runner_id":RUNNER_ID,"status":status,"code":code,"container_id":CID,"admission_sha256":admission_sha,"source_sha256":source_sha,"prior_C_original_sha256":C_SHA,"intent_sha256":sha(intent),"steps":steps,"end_utc":now(),"Product_effect":"NONE","database_mutation":"NONE_READONLY_OR_ROLLEDBACK" if status == "PASS" else "NOT_PROVEN","no_retry":True}
+    terminal = {"runner_id":RUNNER_ID,"status":status,"code":code,"container_id":CID,"admission_sha256":admission_sha,"source_sha256":source_sha,"prior_C_original_sha256":C_SHA,"intent_sha256":sha(intent),"steps":steps,"end_utc":now(),"Product_effect":"NONE","database_mutation":"NONE_READONLY_OR_ROLLEDBACK" if status == "PASS" else "NOT_PROVEN",
+                "possibly_unreconciled_child_pid":unresolved_child_pid,
+                "possibly_unreconciled_step":unresolved_step,"no_retry":True}
     write_once(RECEIPTS/"terminal.json",terminal)
     print(json.dumps(terminal,sort_keys=True))
     if status != "PASS": sys.exit(3)
