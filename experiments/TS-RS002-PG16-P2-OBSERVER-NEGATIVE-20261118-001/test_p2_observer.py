@@ -438,4 +438,24 @@ class P2SourceContractTests(unittest.TestCase):
                 self.assertFalse((root/"terminal.json").exists())
 
 
+    def test_native_preflight_success_records_original_process_exit(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                p.begin_native_custody(root,"PREFLIGHT")
+                result=p.read_output([sys.executable,"-c","print('synthetic_native_readonly')"])
+                self.assertEqual(result,"synthetic_native_readonly")
+                started=json.loads((root/"native_01_start.json").read_text())
+                finished=json.loads((root/"native_01_terminal.json").read_text())
+                self.assertGreater(started["pid"],0)
+                self.assertEqual(finished["pid"],started["pid"])
+                self.assertEqual(finished["exit_code"],0)
+                self.assertEqual(finished["status"],"TERMINAL")
+                self.assertEqual(finished["stdout_sha256"],hashlib.sha256(
+                    b"synthetic_native_readonly\n").hexdigest())
+                self.assertTrue(finished["no_retry"])
+
+
 if __name__=='__main__':unittest.main()
