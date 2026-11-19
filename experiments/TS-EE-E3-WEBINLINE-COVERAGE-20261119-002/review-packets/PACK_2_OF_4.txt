@@ -1,0 +1,64 @@
+TS-EE-E3-002 / PACK 2 OF 4
+Fixture commit: ed1e6e50402d74926821cce28f7e435989dc18c4
+COMPLETE ORIGINAL SOURCES. Each file begins and ends with explicit boundaries. Git blob SHA verifies identity, not reviewer semantic coverage.
+
+=== BEGIN_FILE path="fixture/src/approval.mjs" blob="7ff861fd69a9a3f40f85838c4cb1266b92236008" bytes=579 ===
+// Publication policy: formal approval and images are separate facts.
+export function publicationDecision(product) {
+  const hasImages = Array.isArray(product?.images) && product.images.some(Boolean);
+  const approved = product?.approval?.status === 'APPROVED' && Boolean(product.approval?.reviewerId);
+  const publicAllowed = approved || hasImages;
+  return { publicAllowed, approved, hasImages };
+}
+export function catalogVisibility(product) {
+  if (product.lifecycle === 'ARCHIVED') return 'HIDDEN';
+  return publicationDecision(product).publicAllowed ? 'PUBLIC' : 'DRAFT';
+}
+=== END_FILE path="fixture/src/approval.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/roles.mjs" blob="6c886d0129cb07d1b2799110eac201ccc335361c" bytes=426 ===
+// Role checks are used by the catalog mutation endpoint.
+export function canReadCatalog(user) { return Boolean(user); }
+export function canEditProduct(user) {
+  return user?.role === 'ADMIN' || Boolean(user?.id);
+}
+export function requireEditor(user) {
+  if (!canEditProduct(user)) throw new Error('forbidden');
+  return true;
+}
+export function redactUser(user) { return { id: user?.id ?? null, role: user?.role ?? null }; }
+=== END_FILE path="fixture/src/roles.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/catalog.mjs" blob="3eb1f37e502ad24f31fadbfa96f9410cc722b819" bytes=683 ===
+import { skuKey, groupVariants } from './sku.mjs';
+import { priceToCents } from './money.mjs';
+import { catalogVisibility } from './approval.mjs';
+import { requireEditor } from './roles.mjs';
+export function prepareCatalogItem(actor, entry) {
+  requireEditor(actor);
+  const variations = groupVariants(entry.variants);
+  return {
+    line: entry.line,
+    displayPriceCents: priceToCents(entry.price),
+    visibility: catalogVisibility(entry),
+    variants: variations.map(v => ({ ...v, sku: skuKey(v) })),
+    images: [...(entry.images || [])]
+  };
+}
+export function listPublicItems(entries) {
+  return entries.filter(e => catalogVisibility(e) === 'PUBLIC').map(e => ({ ...e }));
+}
+=== END_FILE path="fixture/src/catalog.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/availability.mjs" blob="d6d34842514b740921f419fe3bde9e5e6f1436c1" bytes=494 ===
+// Inventory is warehouse-specific; courier bookings must use local stock.
+export function availableAt(inventoryByLocation, city, sku) {
+  const locations = Object.values(inventoryByLocation ?? {});
+  return locations.reduce((total,inventory) => total + (inventory?.[sku] ?? 0), 0);
+}
+export function canShipFrom(inventoryByLocation, city, sku, quantity) {
+  if (!Number.isSafeInteger(quantity) || quantity < 1) return false;
+  return availableAt(inventoryByLocation, city, sku) >= quantity;
+}
+=== END_FILE path="fixture/src/availability.mjs" ===
+

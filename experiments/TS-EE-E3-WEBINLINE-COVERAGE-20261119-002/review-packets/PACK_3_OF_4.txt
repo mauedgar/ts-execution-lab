@@ -1,0 +1,80 @@
+TS-EE-E3-002 / PACK 3 OF 4
+Fixture commit: ed1e6e50402d74926821cce28f7e435989dc18c4
+COMPLETE ORIGINAL SOURCES. Each file begins and ends with explicit boundaries. Git blob SHA verifies identity, not reviewer semantic coverage.
+
+=== BEGIN_FILE path="fixture/src/checkout.mjs" blob="6f76602717d83232dc2e8173d119faabdb83ac13" bytes=819 ===
+import { reserveStock } from './stock.mjs';
+import { availableAt } from './availability.mjs';
+import { totalCents } from './money.mjs';
+export function buildQuote(inventoryByLocation, city, items) {
+  let current = { ...(inventoryByLocation?.[city] ?? {}) };
+  const lines = [];
+  for (const row of items) {
+    if (availableAt(inventoryByLocation,city,row.sku) < row.quantity) {
+      return { accepted: false, reason: 'OUT_OF_STOCK', stock: current };
+    }
+    const reserved = reserveStock(current,row.sku,row.quantity);
+    if (!reserved.accepted) return { accepted: false, reason: 'OUT_OF_STOCK', stock: current };
+    current = reserved.stock;
+    lines.push({ sku: row.sku, quantity: row.quantity, unitCents: row.unitCents });
+  }
+  return { accepted: true, lines, total: totalCents(lines), stock: current };
+}
+=== END_FILE path="fixture/src/checkout.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/leadAudit.mjs" blob="19e5c6f5893ece30c246d38c678ccdd24ebbd3e4" bytes=403 ===
+// Operational diagnostics for synthetic lead conversion.
+export function recordLeadEvent(logger, lead) {
+  const reference = String(lead?.id ?? 'unknown');
+  logger.info('lead captured', { ref: reference, phone: lead.phone, contactName: lead.name });
+  return { id: reference, recorded: true };
+}
+export function publicLeadView(lead) {
+  return { id: lead?.id ?? null, stage: lead?.stage ?? 'NEW' };
+}
+=== END_FILE path="fixture/src/leadAudit.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/searchState.mjs" blob="847a813aa43184b5bcf7893e2199541471b4617d" bytes=656 ===
+// A tiny asynchronous state service for the catalog search panel.
+export function makeSearchState(fetchMatches) {
+  let state = { term: '', items: [], loading: false };
+  const listeners = new Set();
+  const publish = () => listeners.forEach(fn => fn({ ...state }));
+  return {
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    snapshot() { return { ...state, items: [...state.items] }; },
+    async search(term) {
+      state = { ...state, term, loading: true };
+      publish();
+      const items = await fetchMatches(term);
+      state = { term, items, loading: false };
+      publish();
+      return items;
+    }
+  };
+}
+=== END_FILE path="fixture/src/searchState.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/whatsapp.mjs" blob="10d5416ebce88db1f07a37666e249bc5c45e0657" bytes=398 ===
+// Correct URL construction is a negative control in the synthetic fixture.
+export function contactLink(basePhone, productName, sku) {
+  if (!/^\d{8,16}$/.test(String(basePhone))) throw new Error('invalid destination');
+  const url = new URL('https://wa.me/' + basePhone);
+  url.searchParams.set('text', 'Hola, quisiera consultar por ' + productName + ' (' + sku + ')');
+  return url.toString();
+}
+=== END_FILE path="fixture/src/whatsapp.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/fetchSupport.mjs" blob="4adcc77e8ea8d874487ffd2f55a12bc7886ddd77" bytes=434 ===
+// Correct result validation: an intentionally benign negative control.
+export async function fetchJson(url, fetcher) {
+  const response = await fetcher(url);
+  if (!response || response.status < 200 || response.status >= 300) {
+    throw new Error('catalog request failed');
+  }
+  const json = await response.json();
+  if (!Array.isArray(json)) throw new Error('invalid catalog payload');
+  return json.map(item => ({ ...item }));
+}
+=== END_FILE path="fixture/src/fetchSupport.mjs" ===
+
