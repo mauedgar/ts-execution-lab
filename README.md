@@ -28,3 +28,8 @@ Not Product SOT, lifecycle authority, knowledge SOT, or an orchestrator.
 ## OpenCode CI OAuth pilot (historical, non-Product)
 - **Technical scope:** `COMPLETE — OBJECTIVE_ACHIEVED`, two independent ChatGPT OAuth inference/secret-refresh runs without a conventional OpenAI API key. PAT lifetime configured to 90 days; renew manually when needed. Other providers and Product integrations remain out of scope.
 - **Operational detail:** [notebook station profile, §9](docs/stations/TS-DEV-UX-NOTEBOOK-PROVISIONAL-20261015.md#9-opencode-ci-chatgpt-oauth--cierre-de-piloto-2026-10-16). **Exact evidence:** [cross-run technical return](https://github.com/mauedgar/ts-execution-transport/blob/c35e3a2b62b1f2ca679d863b8713d0af6c8d69db/results/TS-DEVUX-OPENCODE-CI-OAUTH-CROSS-RUN-QUALIFICATION-20261016-001/TECHNICAL_RETURN.md). This pilot is not a Product SOT, acceptance, or authorization to dispatch Product work.
+
+## Frontend Browser QA common method (non-Product)
+
+- [TS Frontend QA Common v0](docs/execution-engineering/TS-FRONTEND-QA-COMMON-v0.md) is the stable TS EE lab method entrypoint. It links the bounded Playwright/receipt source, safe-by-default CLI, actual CI, independent review, native artifact readback and explicit Product authority limits. Aware is the intended first consumer but remains NOT_ADOPTED.
+- Optional private skills-only [TS Frontend QA plugin](https://chatgpt.com/plugins/plugins_6aff5120ae14819190a85f34e7b57d1f) routes requests; no Product or merge authority.
