@@ -5,6 +5,7 @@ on:
       - experiment/ts-ee-frontend-qa-common-20261119-001
       - experiment/ts-ee-feqa-ir002-repair-20261119-001
       - experiment/ts-ee-feqa-ir003-repair-20261119-001
+      - experiment/ts-ee-feqa-b004-hardening-20261119-001
 permissions:
   contents: read
 concurrency:
@@ -38,7 +39,7 @@ jobs:
         with:
           node-version: '22.23.3'
           package-manager-cache: false
-      - name: Qualify bounded pure-TypeScript test loader
+      - name: Qualify bounded pure-TypeScript transformation-only adapter
         run: node --test experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_pure_typescript_transform.mjs
       - name: Install isolated Playwright
         run: |
@@ -61,11 +62,15 @@ jobs:
             e2-common-evidence/COMMON_RECEIPT.json \
             --artifact-root e2-common-evidence \
             --expected-commit "$GITHUB_SHA" --expected-tree "$TREE" --expected-run-id "$GITHUB_RUN_ID"
+      - name: Exercise browser negative fault injection without external egress
+        run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/runtime_tests -p 'test_*.py' -v
       - name: Preserve exact browser screenshot and trace evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ts-ee-feqa-browser-evidence
-          path: e2-common-evidence/
+          path: |
+            e2-common-evidence/
+            e2-fault-evidence/
           retention-days: 5
           if-no-files-found: warn
