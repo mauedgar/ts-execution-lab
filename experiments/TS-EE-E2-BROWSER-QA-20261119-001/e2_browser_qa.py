@@ -99,7 +99,7 @@ def execute(dest):
       page.wait_for_timeout(120)
       geom=page.evaluate('({viewport:innerWidth,scroll:document.documentElement.scrollWidth})')
       if geom['scroll']>geom['viewport']+1:found.add('OVERFLOW')
-      if page.get_by_role('textbox',name='Search catalog').count()!=1:found.add('LABEL')
+      if page.get_by_role('searchbox',name='Search catalog').count()!=1:found.add('LABEL')
       pic=dest/(kind+'-'+str(width)+'.png');page.screenshot(path=str(pic),full_page=True)
       result['artifacts'].append({'file':pic.name,'bytes':pic.stat().st_size,'sha256':sha(pic)})
       page.get_by_role('link',name='View PUBLIC-1').click()
@@ -126,7 +126,7 @@ def execute(dest):
       if console:found.add('CONSOLE')
       if http:found.add('HTTP')
       rows.append({'width':width,'overflow_px':max(0,geom['scroll']-geom['viewport']),
-       'label':page.get_by_role('textbox',name='Search catalog').count()==1,
+       'label':page.get_by_role('searchbox',name='Search catalog').count()==1,
        'detail':detail,'back':back,'forward':forward,'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
