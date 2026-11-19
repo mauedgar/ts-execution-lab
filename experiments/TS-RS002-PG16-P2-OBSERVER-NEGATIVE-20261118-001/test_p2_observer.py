@@ -416,6 +416,7 @@ class P2SourceContractTests(unittest.TestCase):
                   patch.object(p,"RECEIPTS",work),
                   patch.object(p,"NATIVE_CUSTODY",None),
                   patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p,"expected_preflight_argv",return_value=[["/usr/bin/true"]]*11),
                   patch.object(p,"preflight",side_effect=lambda:p.read_output(["/usr/bin/true"])),
                   patch.object(p.subprocess,"Popen",side_effect=OSError("synthetic child failure")) as spawn):
                 with self.assertRaisesRegex(RuntimeError,"NATIVE_PREFLIGHT_BLOCKED_NONREPLAYABLE"):
@@ -443,7 +444,8 @@ class P2SourceContractTests(unittest.TestCase):
             root=Path(d)/"preflight"
             with (patch.object(p,"SOURCE_ROOT",Path(d)),
                   patch.object(p,"NATIVE_CUSTODY",None),
-                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p,"expected_preflight_argv",return_value=[[sys.executable,"-c","print('synthetic_native_readonly')"]]*11)):
                 p.begin_native_custody(root,"PREFLIGHT")
                 result=p.read_output([sys.executable,"-c","print('synthetic_native_readonly')"])
                 self.assertEqual(result,"synthetic_native_readonly")
@@ -459,20 +461,24 @@ class P2SourceContractTests(unittest.TestCase):
 
 
     def make_native_manifest_fixture(self,root:Path, admission:Path):
-        """Create source-only original via one harmless local Python process."""
+        """Eleven harmless subprocesses prove deterministic chain serialization."""
         admission.write_bytes(b'{"synthetic":true}')
         admission.chmod(0o600)
+        cmd=[sys.executable,"-c","print('native_fixture')"]
+        pin=patch.object(p,"expected_preflight_argv",return_value=[cmd]*11)
+        pin.start()
+        self.addCleanup(pin.stop)
         p.begin_native_custody(root,"PREFLIGHT")
-        self.assertEqual(p.read_output([sys.executable,"-c","print('native_fixture')"]),
-                         "native_fixture")
-        manifest=p.collect_native_preflight_chain(root,1,finalized=False)
+        for _ in range(11):
+            self.assertEqual(p.read_output(cmd),"native_fixture")
+        manifest=p.collect_native_preflight_chain(root,11,finalized=False)
         raw=p.write_once(root/"native_manifest.json",manifest)
         terminal={
             "runner_id":p.RUNNER_ID,"status":"PASS","code":"OK",
             "no_retry":True,"source_sha256":p.sha(Path(p.__file__).read_bytes()),
             "admission_sha256":p.sha(p.safe_read(admission)),
             "container_id":p.CID,"prior_C_sha256":p.C_SHA,
-            "manifest_sha256":p.sha(raw),"native_count":1,
+            "manifest_sha256":p.sha(raw),"native_count":11,
             "root_intent_sha256":manifest["root_intent_sha256"],
             "Product_effect":"NONE"}
         p.write_once(root/"terminal.json",terminal)
@@ -487,11 +493,12 @@ class P2SourceContractTests(unittest.TestCase):
                   patch.object(p,"NATIVE_CUSTODY",None),
                   patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
                 m=self.make_native_manifest_fixture(root,adm)
-                self.assertEqual(m["native_count"],1)
-                self.assertEqual(len(m["children"]),1)
+                self.assertEqual(m["native_count"],11)
+                self.assertEqual(len(m["children"]),11)
                 self.assertGreater(m["children"][0]["pid"],0)
                 self.assertEqual(m["children"][0]["exit_code"],0)
-                self.assertIsNone(p.verify_prior_preflight())
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_PROVIDER_CUSTODY_NOT_QUALIFIED"):
+                    p.verify_prior_preflight()
 
     def test_forged_pass_summary_without_manifest_cannot_admit_run(self):
         with tempfile.TemporaryDirectory() as d:
@@ -560,12 +567,86 @@ class P2SourceContractTests(unittest.TestCase):
                 t=root/"terminal.json";j=json.loads(t.read_text())
                 j["native_count"]=2
                 t.write_text(json.dumps(j)+"\n")
-                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_RECEIPT_SET_INCOMPLETE_OR_EXTRA"):
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_COUNT_NOT_FIXED"):
                     p.verify_prior_preflight()
-                j["native_count"]=1;j["manifest_sha256"]="0"*64
+                j["native_count"]=11;j["manifest_sha256"]="0"*64
                 t.write_text(json.dumps(j)+"\n")
                 with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_MANIFEST_DIGEST_MISMATCH"):
                     p.verify_prior_preflight()
+
+
+    def test_coherent_forged_command_digest_still_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                intent_path=root/"native_01_intent.json"
+                start_path=root/"native_01_start.json"
+                term_path=root/"native_01_terminal.json"
+                intent=json.loads(intent_path.read_text())
+                intent["command_sha256"]="f"*64
+                intent_path.write_text(json.dumps(intent)+"\\n")
+                start=json.loads(start_path.read_text())
+                start["intent_sha256"]=p.sha(intent_path.read_bytes())
+                start_path.write_text(json.dumps(start)+"\\n")
+                term=json.loads(term_path.read_text())
+                term["start_sha256"]=p.sha(start_path.read_bytes())
+                term_path.write_text(json.dumps(term)+"\\n")
+                manifest_path=root/"native_manifest.json"
+                manifest=json.loads(manifest_path.read_text())
+                manifest["children"][0].update({
+                    "command_sha256":"f"*64,
+                    "intent_sha256":p.sha(intent_path.read_bytes()),
+                    "start_sha256":p.sha(start_path.read_bytes()),
+                    "terminal_sha256":p.sha(term_path.read_bytes())})
+                manifest_path.write_text(json.dumps(manifest)+"\\n")
+                prior_path=root/"terminal.json";prior=json.loads(prior_path.read_text())
+                prior["manifest_sha256"]=p.sha(manifest_path.read_bytes())
+                prior_path.write_text(json.dumps(prior)+"\\n")
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_UNAUTHORIZED_COMMAND"):
+                    p.verify_prior_preflight()
+
+    def test_coherent_truncated_prefix_cannot_shrink_frozen_count(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                for n in range(2,12):
+                    for kind in ("intent","start","terminal"):
+                        (root/f"native_{n:02d}_{kind}.json").unlink()
+                manifest_path=root/"native_manifest.json"
+                manifest=json.loads(manifest_path.read_text())
+                manifest["native_count"]=1;manifest["children"]=manifest["children"][:1]
+                manifest_path.write_text(json.dumps(manifest)+"\\n")
+                prior_path=root/"terminal.json";prior=json.loads(prior_path.read_text())
+                prior["native_count"]=1
+                prior["manifest_sha256"]=p.sha(manifest_path.read_bytes())
+                prior_path.write_text(json.dumps(prior)+"\\n")
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_COUNT_NOT_FIXED"):
+                    p.verify_prior_preflight()
+
+    def test_unlisted_command_cannot_spawn(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight"
+            allowed=[sys.executable,"-c","print('approved')"]
+            other=[sys.executable,"-c","print('unauthorized')"]
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p,"expected_preflight_argv",return_value=[allowed]*11),
+                  patch.object(p.subprocess,"Popen") as child):
+                p.begin_native_custody(root,"PREFLIGHT")
+                with self.assertRaisesRegex(RuntimeError,"NATIVE_COMMAND_NOT_IN_FROZEN_ORDER"):
+                    p.read_output(other)
+                child.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()
