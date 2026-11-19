@@ -6,6 +6,7 @@ on:
       - experiment/ts-ee-feqa-ir002-repair-20261119-001
       - experiment/ts-ee-feqa-ir003-repair-20261119-001
       - experiment/ts-ee-feqa-b004-hardening-20261119-001
+      - experiment/ts-ee-feqa-b005-ir005-repair-20261119-001
 permissions:
   contents: read
 concurrency:
@@ -61,7 +62,7 @@ jobs:
           python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py \
             e2-common-evidence/COMMON_RECEIPT.json \
             --artifact-root e2-common-evidence \
-            --expected-commit "$GITHUB_SHA" --expected-tree "$TREE" --expected-run-id "$GITHUB_RUN_ID"
+            --expected-commit "$GITHUB_SHA" --expected-tree "$TREE" --expected-run-id "$GITHUB_RUN_ID" --require-local-bytes
       - name: Exercise browser negative fault injection without external egress
         run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/runtime_tests -p 'test_*.py' -v
       - name: Preserve exact browser screenshot and trace evidence
