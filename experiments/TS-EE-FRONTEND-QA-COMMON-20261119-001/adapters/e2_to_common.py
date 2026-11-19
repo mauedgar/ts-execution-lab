@@ -29,6 +29,8 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
         raise ValueError("BLOCKED_SERVICE_WORKER_POLICY")
     if sorted(raw.get("widths",[]))!=list(WIDTHS):
         raise ValueError("BLOCKED_VIEWPORT_INVENTORY")
+    if not isinstance(raw.get("runtime"),dict) or not isinstance(raw.get("widths"),list):
+        raise ValueError("BLOCKED_MALFORMED_E2_RUNTIME_OR_WIDTHS")
     variants=raw.get("variants",{})
     if not isinstance(variants,dict):
         raise ValueError("BLOCKED_MALFORMED_E2_VARIANTS")
@@ -68,6 +70,10 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
         raise ValueError("BLOCKED_E2_SCENARIOS_"+",".join(k for k,v in scenario_checks.items() if not v))
     if not all_both(lambda r:r.get("external_navigation_rejected") is True):
         raise ValueError("BLOCKED_OBSERVED_EGRESS_ROUTE_RESULT")
+    for tag,case in (("good",good),("bad",bad)):
+        per_row=sum(r.get("blocked_external",0) for r in case["rows"])
+        if type(case.get("blocked_external_requests")) is not int or case["blocked_external_requests"]!=per_row:
+            raise ValueError("BLOCKED_EGRESS_TOTAL_MISMATCH_"+tag)
     attempted=sum(r["blocked_external"] for r in positive+injected)
     if any(type(r.get("blocked_external")) is not int or r["blocked_external"]<1
            for r in positive+injected):

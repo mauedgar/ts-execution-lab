@@ -70,3 +70,13 @@ Distinct experimental successor (not retry):
 - S2 A01–A03: await native 404 event, preserve context-level route and Service Workers blocking, record provider artifact ZIP independently outside same job; OS/browser binary reproducibility not asserted.
 
 Source-only CI PASS, local artifact checks and synthetic browser PASS remain **necessary but insufficient** for cross-product QA method adoption. Competent Control separately observes original provider-native run status, head/tree and artifact metadata; it does not infer identity from self-declared E2→common JSON. Aware QA still requires new Product grant, exact candidate integration+build+browser, separate IR.
+
+## B002 IR003 repaired in distinct B003 experiment
+
+Two independently terminal originals (both LOCAL_METHOD_NO_RECOMMEND) are immutable:
+- S1 `ts-execution-transport@81e08cf095fc188e1a0e73483683732ca8a9a98c:results/TS-EE-FEQA-COMMON-B002-WEBINLINE-IR003-S1-20261119-001/ORIGINAL.md` (1F/3A): the blocking native provenance concerns **provider-level qualification**, not an observed false `VALID_SHAPE_UNATTESTED` acceptance.
+- S2 `ts-execution-transport@8629a9f5a44e40299d8fc9f663871968d19295ce:results/TS-EE-FEQA-COMMON-B002-WEBINLINE-IR003-S2-20261119-001/ORIGINAL.md` (2F/4A): navigation timeout previously risked losing a complete negative receipt and outbound proof used a brittle Chromium error string.
+
+B003 candidate repairs S2 independently: a failed Enter now adds `KEYBOARD_ACTIVATION` without losing the source `RESULT.json`; disabled-Enter negative fixture requires focused target AND exact unchanged /about URL; `route.abort` returns a typed structured source event, while external navigation must fail (timeout is not proof); per-row outbound observed counts equal source variant totals and converter rejects mismatches; malformed runtime/width fields fail closed. Method scope remains **only the browser context**, Service Workers blocked but no OS firewall claim. Always distinguish native GitHub run/artifact metadata from verified original nested ZIP data, neither of which the converter can attest independently.
+
+D4 remains experimental/nonProduct, `VALID_SHAPE_UNATTESTED` cannot be promoted by any report without native external readback. B003 new native CI and independent review must be reconciled separately before first-consumer suggestion.

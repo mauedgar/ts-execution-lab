@@ -4,6 +4,7 @@ on:
     branches:
       - experiment/ts-ee-frontend-qa-common-20261119-001
       - experiment/ts-ee-feqa-ir002-repair-20261119-001
+      - experiment/ts-ee-feqa-ir003-repair-20261119-001
 permissions:
   contents: read
 concurrency:

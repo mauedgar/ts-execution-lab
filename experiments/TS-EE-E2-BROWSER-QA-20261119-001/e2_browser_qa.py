@@ -5,7 +5,7 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 from importlib.metadata import version
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 
 WIDTHS=(320,375,768,1440)
 SEEDS={'OVERFLOW','LABEL','HIDDEN_SKU','CONSOLE','HTTP'}
@@ -97,8 +97,12 @@ def execute(dest):
       context.tracing.start(screenshots=True,snapshots=True,sources=True)
       console=[];http=[];blocked=[]
       def guard(route):
-       if route.request.url.startswith(base+'/'):route.continue_()
-       else:blocked.append(route.request.url);route.abort()
+       if route.request.url.startswith(base+'/'):
+        route.continue_()
+       else:
+        request_url=route.request.url
+        route.abort()
+        blocked.append({'url':request_url,'abort_returned':True})
       context.route('**/*',guard)
       page=context.new_page()
       page.on('console',lambda m:console.append(m.text) if m.type=='error' else None)
@@ -127,14 +131,21 @@ def execute(dest):
       if first_tab!='Catalog':found.add('KEYBOARD_FOCUS')
       else:
        page.keyboard.press('Enter')
-       page.wait_for_url('**/catalog?variant='+kind,timeout=5000)
+       try:
+        page.wait_for_url('**/catalog?variant='+kind,timeout=1200)
+       except PlaywrightTimeoutError:
+        found.add('KEYBOARD_ACTIVATION')
        keyboard_activated=(page.get_by_role('heading',name='Catalog',exact=True).count()==1
                            and page.url==base+'/catalog?variant='+kind)
        if not keyboard_activated:found.add('KEYBOARD_ACTIVATION')
-      page.goto(base+'/about?variant='+kind+'&keyboard=disabled',wait_until='load')
+      negative_url=base+'/about?variant='+kind+'&keyboard=disabled'
+      page.goto(negative_url,wait_until='load')
+      page.get_by_role('heading',name='About',exact=True).wait_for()
       page.keyboard.press('Tab')
+      negative_focus=page.evaluate("document.activeElement?.textContent?.trim()")
       page.keyboard.press('Enter')
-      keyboard_negative_rejected=page.url.startswith(base+'/about?')
+      keyboard_negative_rejected=(negative_focus=='Catalog' and page.url==negative_url
+                                  and page.get_by_role('heading',name='About',exact=True).count()==1)
       if not keyboard_negative_rejected:found.add('KEYBOARD_NEGATIVE_MISSED')
       page.goto(base+'/catalog?variant='+kind,wait_until='load')
       page.get_by_role('link',name='View PUBLIC-1').click()
@@ -157,17 +168,20 @@ def execute(dest):
       if urlsplit(href).netloc!='wa.me' or parse_qs(urlsplit(href).query).get('text')!=['PUBLIC-1 & blue']:found.add('WA_URL_ENCODING')
       external=context.new_page()
       before_blocked=len(blocked)
-      navigation_succeeded=False
-      error_text=''
+      navigation_failed=False
+      navigation_timed_out=False
+      response=None
       try:
        response=external.goto(href,wait_until='commit',timeout=2000)
-       navigation_succeeded=response is not None
-      except Exception as err:
-       error_text=str(err)
+      except PlaywrightTimeoutError:
+       navigation_timed_out=True
+      except PlaywrightError:
+       navigation_failed=True
       external.close()
       new_blocked=blocked[before_blocked:]
-      aborted_expected=(href in new_blocked and 'ERR_FAILED' in error_text
-                        and not navigation_succeeded)
+      matched_abort=any(entry['url']==href and entry['abort_returned'] is True for entry in new_blocked)
+      aborted_expected=(matched_abort and navigation_failed and not navigation_timed_out
+                        and response is None)
       if not aborted_expected:found.add('EXTERNAL_NOT_BLOCKED')
       blocked_count+=len(new_blocked)
       if console:found.add('CONSOLE')
@@ -178,7 +192,7 @@ def execute(dest):
        'first_tab':first_tab,'keyboard_activated':keyboard_activated,
        'keyboard_negative_rejected':keyboard_negative_rejected,
        'external_navigation_rejected':aborted_expected,'hidden_rejected':hidden,
-       'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})
+       'console_errors':len(console),'http_errors':len(http),'blocked_external':len(new_blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
       result['artifacts'].append({'file':trace.name,'bytes':trace.stat().st_size,'sha256':sha(trace)})
       context.close()

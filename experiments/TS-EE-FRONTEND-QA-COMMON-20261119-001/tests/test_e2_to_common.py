@@ -32,9 +32,9 @@ def make(root):
     return dict(schema="ts-ee-e2-browser-qa/v1",pass_=True,
                 source_sha256="a"*64,widths=[320,375,768,1440],service_workers="BLOCKED",
                 runtime={"playwright":"1.57.0"},
-                variants={"good":{"pass":True,"detected":[],"rows":rows},
+                variants={"good":{"pass":True,"detected":[],"rows":rows,"blocked_external_requests":4},
                           "bad":{"pass":True,"detected":["CONSOLE","HIDDEN_SKU","HTTP","LABEL","OVERFLOW"],
-                                 "rows":injected}},
+                                 "rows":injected,"blocked_external_requests":4}},
                 artifacts=artifacts)
 def bridge(r,root):
     r["pass"]=r.pop("pass_")
@@ -89,6 +89,18 @@ class BridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["variants"]["good"]["rows"][0]=None
             with self.assertRaisesRegex(ValueError,"MALFORMED_E2_ROWS_good"):bridge(r,Path(d))
+    def test_egress_total_tampering_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["blocked_external_requests"]=99
+            with self.assertRaisesRegex(ValueError,"EGRESS_TOTAL_MISMATCH_good"):bridge(r,Path(d))
+    def test_malformed_runtime_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["runtime"]=None
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_RUNTIME_OR_WIDTHS"):bridge(r,Path(d))
+    def test_malformed_width_inventory_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["widths"]=None
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_RUNTIME_OR_WIDTHS"):bridge(r,Path(d))
     def test_local_artifact_sha_mismatch_blocks(self):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["artifacts"][0]["sha256"]="0"*64
