@@ -1,0 +1,51 @@
+name: RS002 P0 native custody fail-closed source-only CI001
+on:
+  push:
+    branches:
+      - ee/rs002-p0-native-provider-custody-source-20261119-001
+    paths:
+      - .github/workflows/rs002-p0-custody-source-20261119-001.yml
+permissions:
+  contents: read
+jobs:
+  p0-source-negative-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Pin original P0 three-file source and no physical contact
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-P0-PROVIDER-CUSTODY-20261119-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p0-native-provider-custody-source-20261119-001
+          test "$(git rev-parse HEAD^)" = 12fc08818bcd38a213614ac62fb6aa3412e18c6d
+          git merge-base --is-ancestor 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD
+          test "$(git rev-parse "HEAD:$root/p0_custody_gate.py")" = f712de129a1ffdb51b6b82616b9e1946045aa0cc
+          test "$(git rev-parse "HEAD:$root/test_p0_custody_gate.py")" = a0d1f2daf16ac5b2039b21f816ecab8076b49a1f
+          test "$(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD | wc -l)" -eq 3
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p0_custody_gate.py"|"$root/test_p0_custody_gate.py"|".github/workflows/rs002-p0-custody-source-20261119-001.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD)
+          echo RS002_P0_SOURCE_CI001_FROZEN_NONPRODUCT
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Python3.15.2 P0 negative custody synthetics only
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-P0-PROVIDER-CUSTODY-20261119-001/test_p0_custody_gate.py -v
+          echo RS002_P0_SOURCE_ONLY_CI_NO_WSL_DOCKER_SQL_SECRET_OR_PRODUCT
