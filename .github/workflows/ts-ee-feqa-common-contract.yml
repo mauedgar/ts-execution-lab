@@ -1,0 +1,32 @@
+name: TS EE Frontend QA common-contract qualification
+on:
+  push:
+    branches:
+      - experiment/ts-ee-frontend-qa-common-20261119-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-feqa-common-20261119-001
+  cancel-in-progress: false
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout frozen source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Native checkout identity
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse 'HEAD^{tree}'
+      - name: Run deterministic contract negative-case tests
+        run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests -p 'test_*.py' -v
+      - name: Validate synthetic reference vector
+        run: python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/fixtures/qa_report_v0.example.json
