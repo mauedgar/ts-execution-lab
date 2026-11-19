@@ -50,7 +50,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(out["status"],"VALID_TEST_VECTOR_SHAPE_ONLY")
         strict=module.enforce_consumer_requirements(out,require_local_bytes=True)
         self.assertEqual(strict["status"],"INVALID_REPORT")
-        self.assertIn("required_local_binary_readback_missing",strict["errors"])
+        self.assertIn("test_vector_not_consumer_evidence",strict["errors"])
     def test_normal_shape_mode_preserves_historical_contract(self):
         out=module.evaluate(copy.deepcopy(BASE))
         self.assertEqual(module.enforce_consumer_requirements(out,False),out)
