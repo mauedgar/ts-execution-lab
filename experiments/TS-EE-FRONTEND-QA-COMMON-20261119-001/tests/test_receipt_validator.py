@@ -54,6 +54,53 @@ class ContractTests(unittest.TestCase):
     def test_normal_shape_mode_preserves_historical_contract(self):
         out=module.evaluate(copy.deepcopy(BASE))
         self.assertEqual(module.enforce_consumer_requirements(out,False),out)
+    def test_cli_consumer_mode_rejects_realistic_local_test_vector(self):
+        import hashlib
+        import subprocess
+        import sys
+        report=copy.deepcopy(BASE)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for item in report["artifacts"]:
+                blob=("LOCAL-TEST-VECTOR-"+item["name"]).encode()
+                (root/item["name"]).write_bytes(blob)
+                item["sha256"]=hashlib.sha256(blob).hexdigest()
+                item["bytes"]=len(blob)
+            document=root/"report.json"
+            document.write_text(json.dumps(report),encoding="utf8")
+            proof=module.evaluate(report,artifact_root=root)
+            self.assertEqual(proof["status"],"VALID_TEST_VECTOR_SHAPE_ONLY")
+            self.assertTrue(proof["artifact_bytes_verified_locally"])
+            process=subprocess.run([sys.executable,str(ROOT/"receipt_validator.py"),
+                       str(document),"--artifact-root",str(root),"--require-local-bytes"],
+                       capture_output=True,text=True,check=False)
+            self.assertEqual(process.returncode,1,process.stdout+process.stderr)
+            result=json.loads(process.stdout)
+            self.assertEqual(result["status"],"INVALID_REPORT")
+            self.assertIn("test_vector_not_consumer_evidence",result["errors"])
+    def test_cli_consumer_bytes_mode_still_requires_native_provider_join(self):
+        import hashlib
+        import subprocess
+        import sys
+        report=copy.deepcopy(BASE)
+        report["original"]["custody"]="LOCAL_UNVERIFIED"
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for item in report["artifacts"]:
+                blob=("LOCAL-SOURCE-RECEIPT-"+item["name"]).encode()
+                (root/item["name"]).write_bytes(blob)
+                item["sha256"]=hashlib.sha256(blob).hexdigest()
+                item["bytes"]=len(blob)
+            document=root/"report.json"
+            document.write_text(json.dumps(report),encoding="utf8")
+            process=subprocess.run([sys.executable,str(ROOT/"receipt_validator.py"),
+                       str(document),"--artifact-root",str(root),"--require-local-bytes"],
+                       capture_output=True,text=True,check=False)
+            self.assertEqual(process.returncode,0,process.stdout+process.stderr)
+            result=json.loads(process.stdout)
+            self.assertEqual(result["status"],"VALID_SHAPE_UNATTESTED")
+            self.assertFalse(result["provider_native_verified"])
+            self.assertFalse(result["Product_accepted"])
     def test_fake_provider_custody_not_attested(self):
         r=copy.deepcopy(BASE);r["original"]["custody"]="PROVIDER_NATIVE_READBACK"
         out=module.evaluate(r)
