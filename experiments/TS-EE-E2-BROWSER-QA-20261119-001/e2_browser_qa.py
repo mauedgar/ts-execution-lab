@@ -71,7 +71,8 @@ def execute(dest):
  start=time.monotonic()
  result={'schema':'ts-ee-e2-browser-qa/v1','source_sha256':sha(__file__),
  'widths':list(WIDTHS),'a11y_scope':'BASIC_LABEL_ROLE_ONLY_NOT_WCAG',
- 'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','service_workers':'BLOCKED',\n  'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],'variants':{},'artifacts':[]}
+ 'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','service_workers':'BLOCKED',
+  'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],'variants':{},'artifacts':[]}
  try:
   with sync_playwright() as p:
    kw={'headless':True}
@@ -137,7 +138,8 @@ def execute(dest):
       if http:found.add('HTTP')
       rows.append({'width':width,'overflow_px':max(0,geom['scroll']-geom['viewport']),
        'label':page.get_by_role('searchbox',name='Search catalog').count()==1,
-       'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,\n       'first_tab':first_tab,'hidden_rejected':hidden,
+       'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,
+       'first_tab':first_tab,'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
       result['artifacts'].append({'file':trace.name,'bytes':trace.stat().st_size,'sha256':sha(trace)})
