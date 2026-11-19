@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import stat
 import sys
 
 WIDTHS=(320,375,768,1440)
@@ -14,6 +15,34 @@ EXPECTED_BAD=["CONSOLE","HIDDEN_SKU","HTTP","LABEL","OVERFLOW"]
 IMAGE=re.compile(r"^(good|bad)-(320|375|768|1440)\.(png|zip)$")
 HEX40=re.compile(r"^[a-f0-9]{40}$")
 HEX64=re.compile(r"^[a-f0-9]{64}$")
+MAX_EVIDENCE_BYTES=16*1024*1024
+
+def read_verified_file(rootfd, filename, declared_bytes):
+    """Open a single regular evidence inode using its trusted directory FD.
+    No symlink follow; descriptor protects against path replacement after open.
+    Entire workspace ancestry must still be trusted and isolated by runner.
+    """
+    if type(declared_bytes) is not int or not 0<declared_bytes<=MAX_EVIDENCE_BYTES:
+        raise ValueError("BLOCKED_E2_ARTIFACT_LENGTH")
+    flags=os.O_RDONLY | getattr(os,"O_CLOEXEC",0)
+    if not hasattr(os,"O_NOFOLLOW"):
+        raise ValueError("BLOCKED_MISSING_NOFOLLOW_SUPPORT")
+    flags |= os.O_NOFOLLOW
+    try:
+        fd=os.open(filename,flags,dir_fd=rootfd)
+    except OSError as err:
+        raise ValueError("BLOCKED_UNSAFE_EVIDENCE_OPEN") from err
+    try:
+        record=os.fstat(fd)
+        if not stat.S_ISREG(record.st_mode) or record.st_size!=declared_bytes:
+            raise ValueError("BLOCKED_E2_ARTIFACT_NOT_REGULAR_OR_LENGTH")
+        with os.fdopen(fd,"rb",closefd=False) as handle:
+            data=handle.read(MAX_EVIDENCE_BYTES+1)
+        if len(data)!=declared_bytes:
+            raise ValueError("BLOCKED_E2_ARTIFACT_MUTATED_DURING_READ")
+        return data
+    finally:
+        os.close(fd)
 
 def digest(b):return hashlib.sha256(b).hexdigest()
 
@@ -29,10 +58,18 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
         raise ValueError("BLOCKED_SERVICE_WORKER_POLICY")
     if not isinstance(raw.get("widths"),list):
         raise ValueError("BLOCKED_MALFORMED_E2_RUNTIME_OR_WIDTHS")
-    if sorted(raw.get("widths",[]))!=list(WIDTHS):
+    if len(raw["widths"])!=len(WIDTHS) or any(type(w) is not int for w in raw["widths"]):
+        raise ValueError("BLOCKED_MALFORMED_E2_VIEWPORT_TYPE")
+    if sorted(raw["widths"])!=list(WIDTHS):
         raise ValueError("BLOCKED_VIEWPORT_INVENTORY")
-    if not isinstance(raw.get("runtime"),dict) or not isinstance(raw.get("widths"),list):
+    runtime=raw.get("runtime")
+    if not isinstance(runtime,dict):
         raise ValueError("BLOCKED_MALFORMED_E2_RUNTIME_OR_WIDTHS")
+    if (not isinstance(runtime.get("chromium"),str) or not runtime.get("chromium") or
+            not HEX64.fullmatch(str(runtime.get("chromium_executable_sha256",""))) or
+            type(runtime.get("chromium_executable_bytes")) is not int or
+            runtime["chromium_executable_bytes"]<=0):
+        raise ValueError("BLOCKED_CHROMIUM_BINARY_IDENTITY")
     variants=raw.get("variants",{})
     if not isinstance(variants,dict):
         raise ValueError("BLOCKED_MALFORMED_E2_VARIANTS")
@@ -44,8 +81,23 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
             raise ValueError("BLOCKED_MALFORMED_E2_ROWS_"+tag)
         if case.get("pass") is not True or case.get("detected")!=expected:
             raise ValueError("BLOCKED_E2_CONTROL_"+tag)
-        if sorted(x.get("width") for x in case.get("rows",[]))!=list(WIDTHS):
+        rows=case["rows"]
+        if len(rows)!=len(WIDTHS):
             raise ValueError("BLOCKED_E2_ROWS_"+tag)
+        if any(type(row.get("width")) is not int for row in rows):
+            raise ValueError("BLOCKED_MALFORMED_ROW_WIDTH_"+tag)
+        if sorted(row["width"] for row in rows)!=list(WIDTHS):
+            raise ValueError("BLOCKED_E2_ROWS_"+tag)
+        for row in rows:
+            for field in ("blocked_external","overflow_px","console_errors","http_errors"):
+                value=row.get(field)
+                if type(value) is not int or value<0:
+                    raise ValueError("BLOCKED_MALFORMED_E2_COUNTER_"+tag+"_"+field)
+            for field in ("label","detail","back","forward","deep_refresh",
+                          "keyboard_activated","keyboard_negative_rejected",
+                          "external_navigation_rejected","hidden_rejected"):
+                if type(row.get(field)) is not bool:
+                    raise ValueError("BLOCKED_MALFORMED_E2_FLAG_"+tag+"_"+field)
     positive=good["rows"]
     injected=bad["rows"]
     def all_rows(pred):
@@ -88,21 +140,30 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
     entries=raw.get("artifacts")
     if not isinstance(entries,list):
         raise ValueError("BLOCKED_MALFORMED_E2_ARTIFACTS")
-    for entry in entries:
-        if not isinstance(entry,dict):
-            raise ValueError("BLOCKED_MALFORMED_E2_ARTIFACT")
-        filename=entry.get("file","")
-        match=IMAGE.fullmatch(filename)
-        if not match:raise ValueError("BLOCKED_E2_ARTIFACT_NAME")
-        p=evidence_root/filename
-        if p.is_symlink() or not p.is_file():raise ValueError("BLOCKED_MISSING_E2_ARTIFACT")
-        actual=p.read_bytes()
-        if len(actual)!=entry.get("bytes") or digest(actual)!=entry.get("sha256"):
-            raise ValueError("BLOCKED_CORRUPTED_E2_ARTIFACT")
-        kind="SCREENSHOT" if match[3]=="png" else "TRACE"
-        item={"name":filename,"kind":kind,"sha256":digest(actual),"bytes":len(actual)}
-        if kind=="SCREENSHOT":item["width"]=int(match[2])
-        artifacts.append(item)
+    if not hasattr(os,"O_DIRECTORY") or not hasattr(os,"O_NOFOLLOW"):
+        raise ValueError("BLOCKED_UNQUALIFIED_EVIDENCE_HOST")
+    try:
+        rootfd=os.open(str(evidence_root),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    except OSError as err:
+        raise ValueError("BLOCKED_EVIDENCE_ROOT_OPEN") from err
+    try:
+        for entry in entries:
+            if not isinstance(entry,dict):
+                raise ValueError("BLOCKED_MALFORMED_E2_ARTIFACT")
+            filename=entry.get("file","")
+            if not isinstance(filename,str):
+                raise ValueError("BLOCKED_E2_ARTIFACT_NAME")
+            match=IMAGE.fullmatch(filename)
+            if not match:raise ValueError("BLOCKED_E2_ARTIFACT_NAME")
+            actual=read_verified_file(rootfd,filename,entry.get("bytes"))
+            if digest(actual)!=entry.get("sha256"):
+                raise ValueError("BLOCKED_CORRUPTED_E2_ARTIFACT")
+            kind="SCREENSHOT" if match[3]=="png" else "TRACE"
+            item={"name":filename,"kind":kind,"sha256":digest(actual),"bytes":len(actual)}
+            if kind=="SCREENSHOT":item["width"]=int(match[2])
+            artifacts.append(item)
+    finally:
+        os.close(rootfd)
     if len(artifacts)!=16 or len({x["name"] for x in artifacts})!=16:
         raise ValueError("BLOCKED_ARTIFACT_COMPLETENESS")
     if not HEX40.fullmatch(commit) or not HEX40.fullmatch(tree):
@@ -115,7 +176,10 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
         "reported_verdict":"PASS","attempt":attempt,
         "source":{"repository":repository,"commit":commit,"tree":tree,"subject_kind":"SYNTHETIC"},
         "runner":{"engine":"PLAYWRIGHT_PYTHON",
-                  "version":raw.get("runtime",{}).get("playwright",""),
+                  "version":runtime.get("playwright",""),
+                  "browser_version":runtime["chromium"],
+                  "browser_binary_sha256":runtime["chromium_executable_sha256"],
+                  "browser_binary_bytes":runtime["chromium_executable_bytes"],
                   "os":platform.platform(),"native_run_id":run_id,
                   "head_sha":commit,"attempt_number":int(os.environ.get("GITHUB_RUN_ATTEMPT","1"))},
         "stages":{"identity":"PASS","dependencies":"PASS","integration":"SKIPPED",
@@ -135,7 +199,8 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
             "BROWSER_CONTEXT_ROUTE_ABORT_ONLY_NOT_OS_EGRESS_PROOF",
             "NONPRODUCT_SYNTHETIC_NOT_AWARE_SOURCE_E2E",
             "ARTIFACT_BYTES_LOCAL_VERIFIED_PROVIDER_ZIP_READBACK_SEPARATE",
-            "KEYBOARD_ROUTING_REFRESH_POSITIVE_ONLY_NEGATIVE_SENSITIVITY_UNMEASURED",
+            "KEYBOARD_ROUTE_AND_EGRESS_FAULT_INJECTION_REQUIRES_DISTINCT_NATIVE_TEST",
+            "CHROMIUM_BINARY_SHA256_LOCAL_JOB_ONLY_PROVIDER_READBACK_SEPARATE",
             "NATIVE_RUN_ID_AND_GIT_ID_FROM_CI_CONTEXT_REQUIRES_INDEPENDENT_CHECK"
         ]
     }
