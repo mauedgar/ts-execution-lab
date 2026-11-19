@@ -491,6 +491,40 @@ def capture_bounded(child: subprocess.Popen, *, timeout: float, limit: int = 160
     return b''.join(out).decode('utf-8','replace'),b''.join(err).decode('utf-8','replace')
 
 
+
+def expected_preflight_argv() -> list[list[str]]:
+    """Source-frozen exact order; pinned Git refs come from external admission."""
+    j=json.loads(safe_read(ADMISSION))
+    refs=("review_commit","source_blob","source_commit","control_grant_commit",
+          "p0_receipt_commit","p0_review_commit")
+    if type(j) is not dict or any(not re.fullmatch(r"[0-9a-f]{40}",str(j.get(k,""))) for k in refs):
+        fail("PREFLIGHT_FIXED_REFS_UNVERIFIED")
+    transport="repos/mauedgar/ts-execution-transport/contents/"
+    source="experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001/p2_observer.py"
+    return [
+        [GH,"api",transport+REVIEW_REQUEST_PATH+"?ref="+j["review_commit"]],
+        [GH,"api","repos/mauedgar/ts-execution-lab/git/blobs/"+j["source_blob"]],
+        [GH,"api","repos/mauedgar/ts-execution-lab/git/commits/"+j["source_commit"]],
+        [GH,"api","repos/mauedgar/ts-execution-lab/contents/"+source+"?ref="+j["source_commit"]],
+        [GH,"api",transport+CONTROL_GRANT_PATH+"?ref="+j["control_grant_commit"]],
+        [GH,"api",transport+P0_DAC_ORIGINAL_PATH+"?ref="+j["p0_receipt_commit"]],
+        [GH,"api",transport+P0_REVIEW_PATH+"?ref="+j["p0_review_commit"]],
+        [DOCKER,"info","--format","{{.ID}}"],
+        [DOCKER,"container","inspect",CID],
+        [DOCKER,"network","inspect",NETWORK],
+        [DOCKER,"image","inspect","--format","{{.Id}}",IMAGE],
+    ]
+
+
+def exact_command_hash(argv: list[str]) -> str:
+    return sha(json.dumps(argv,separators=(",",":")).encode())
+
+
+def frozen_inventory_hash(commands: list[list[str]]) -> str:
+    return sha(json.dumps([exact_command_hash(c) for c in commands],
+                          separators=(",",":")).encode())
+
+
 def read_output(argv: list[str], limit: int = 32000) -> str:
     """Bounded read-only native child with fsynced intent BEFORE Popen.
 
@@ -505,6 +539,9 @@ def read_output(argv: list[str], limit: int = 32000) -> str:
     index = NATIVE_OBSERVATION_SEQ
     if index > 32:
         fail("NATIVE_OBSERVATION_LIMIT")
+    expected=expected_preflight_argv()
+    if len(expected)!=11 or index>len(expected) or argv!=expected[index-1]:
+        fail("NATIVE_COMMAND_NOT_IN_FROZEN_ORDER")
     name = f"native_{index:02d}"
     intent = write_once(root/(name+"_intent.json"),{
         "runner_id":RUNNER_ID,"name":name,"status":"UNKNOWN_UNTIL_TERMINAL",
@@ -731,8 +768,9 @@ def begin_native_custody(root: Path, kind: str) -> None:
 def collect_native_preflight_chain(root: Path, count: int, *, finalized: bool) -> dict:
     """Independently recompute every intent/start/terminal original and reject extras."""
     private_dir(root)
-    if type(count) is not int or not 1 <= count <= 32:
-        fail("PREFLIGHT_NATIVE_COUNT_NOT_VERIFIED")
+    commands=expected_preflight_argv()
+    if type(count) is not int or count!=11 or count!=len(commands):
+        fail("PREFLIGHT_NATIVE_COUNT_NOT_FIXED")
     expected = {"native_intent.json"}
     for n in range(1,count+1):
         stem=f"native_{n:02d}"
@@ -759,7 +797,9 @@ def collect_native_preflight_chain(root: Path, count: int, *, finalized: bool) -
         if (intent.get("name") != stem or intent.get("runner_id") != RUNNER_ID
             or intent.get("no_retry") is not True
             or intent.get("status") != "UNKNOWN_UNTIL_TERMINAL"
-            or not re.fullmatch(r"[0-9a-f]{64}",str(intent.get("command_sha256","")))):
+            or intent.get("command_sha256") != exact_command_hash(commands[n-1])):
+            fail("PREFLIGHT_NATIVE_UNAUTHORIZED_COMMAND")
+        if not re.fullmatch(r"[0-9a-f]{64}",str(intent.get("command_sha256",""))):
             fail("PREFLIGHT_NATIVE_INTENT_UNVERIFIED")
         if (start.get("name") != stem or start.get("intent_sha256") != sha(intent_raw)
             or type(start.get("pid")) is not int or start["pid"] <= 0
@@ -797,6 +837,10 @@ def verify_prior_preflight() -> None:
         fail("PREFLIGHT_MANIFEST_ORIGINAL_CHAIN_MISMATCH")
     if prior.get("root_intent_sha256") != expected["root_intent_sha256"]:
         fail("PREFLIGHT_ORIGINAL_INTENT_MISMATCH")
+    # Never mistake locally coherent owner-writable JSON for independent
+    # provider-native child completion. A separately qualified native original
+    # and IR-bound immutable Control custody is still absent.
+    fail("PREFLIGHT_NATIVE_PROVIDER_CUSTODY_NOT_QUALIFIED")
 
 
 def run_native_preflight() -> None:
