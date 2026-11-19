@@ -27,6 +27,8 @@ def convert(raw, *, repository, commit, tree, run_id, attempt, script_hash,
         raise ValueError("BLOCKED_E2_SCRIPT_HASH")
     if raw.get("service_workers")!="BLOCKED":
         raise ValueError("BLOCKED_SERVICE_WORKER_POLICY")
+    if not isinstance(raw.get("widths"),list):
+        raise ValueError("BLOCKED_MALFORMED_E2_RUNTIME_OR_WIDTHS")
     if sorted(raw.get("widths",[]))!=list(WIDTHS):
         raise ValueError("BLOCKED_VIEWPORT_INVENTORY")
     if not isinstance(raw.get("runtime"),dict) or not isinstance(raw.get("widths"),list):
