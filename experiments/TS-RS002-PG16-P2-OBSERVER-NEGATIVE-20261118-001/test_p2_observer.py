@@ -35,7 +35,7 @@ class P2SourceContractTests(unittest.TestCase):
     def test_original_binding(self):
         self.assertEqual(p.C_SHA,'7aef5dff689e1ceb5575084f2445caf25116cff5a22917815400693d99316852')
         self.assertEqual(p.CID,'5ce2b0833fa7ab04eac1b0c78e51ead0ed7c5e1dc2aede5621dba397b3c20d88')
-        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261119-005')
+        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261119-006')
 
     def test_host_fixed_mechanical_argv_and_password_inside_container(self):
         argv=p.cmd_for(p.POSITIVE,True)
@@ -175,8 +175,8 @@ class P2SourceContractTests(unittest.TestCase):
     def test_review_admission_exact_unique_and_provenance(self):
         review,j=self.review_text()
         p.parse_review_admission(review,j)
-        self.assertIn("PR61-WEBINLINE-IR006",p.REVIEW_REQUEST_PATH)
-        self.assertIn("PR61-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
+        self.assertIn("PR62-WEBINLINE-IR007",p.REVIEW_REQUEST_PATH)
+        self.assertIn("PR62-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
         self.assertNotIn("PR56",p.REVIEW_REQUEST_PATH+p.CONTROL_GRANT_PATH)
 
     def test_review_admission_rejects_duplicates_and_no_recommend(self):
@@ -456,6 +456,116 @@ class P2SourceContractTests(unittest.TestCase):
                 self.assertEqual(finished["stdout_sha256"],hashlib.sha256(
                     b"synthetic_native_readonly\n").hexdigest())
                 self.assertTrue(finished["no_retry"])
+
+
+    def make_native_manifest_fixture(self,root:Path, admission:Path):
+        """Create source-only original via one harmless local Python process."""
+        admission.write_bytes(b'{"synthetic":true}')
+        admission.chmod(0o600)
+        p.begin_native_custody(root,"PREFLIGHT")
+        self.assertEqual(p.read_output([sys.executable,"-c","print('native_fixture')"]),
+                         "native_fixture")
+        manifest=p.collect_native_preflight_chain(root,1,finalized=False)
+        raw=p.write_once(root/"native_manifest.json",manifest)
+        terminal={
+            "runner_id":p.RUNNER_ID,"status":"PASS","code":"OK",
+            "no_retry":True,"source_sha256":p.sha(Path(p.__file__).read_bytes()),
+            "admission_sha256":p.sha(p.safe_read(admission)),
+            "container_id":p.CID,"prior_C_sha256":p.C_SHA,
+            "manifest_sha256":p.sha(raw),"native_count":1,
+            "root_intent_sha256":manifest["root_intent_sha256"],
+            "Product_effect":"NONE"}
+        p.write_once(root/"terminal.json",terminal)
+        return manifest
+
+    def test_completed_native_preflight_manifest_verified_before_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                m=self.make_native_manifest_fixture(root,adm)
+                self.assertEqual(m["native_count"],1)
+                self.assertEqual(len(m["children"]),1)
+                self.assertGreater(m["children"][0]["pid"],0)
+                self.assertEqual(m["children"][0]["exit_code"],0)
+                self.assertIsNone(p.verify_prior_preflight())
+
+    def test_forged_pass_summary_without_manifest_cannot_admit_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                (root/"native_manifest.json").unlink()
+                with self.assertRaises(Exception): p.verify_prior_preflight()
+
+    def test_missing_native_child_terminal_blocks_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                (root/"native_01_terminal.json").unlink()
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_RECEIPT_SET_INCOMPLETE_OR_EXTRA"):
+                    p.verify_prior_preflight()
+
+    def test_orphan_unknown_or_extra_native_child_blocks_run(self):
+        for extra_name in ("native_02_intent.json","native_01_unknown.json","unexpected.json"):
+            with self.subTest(extra=extra_name),tempfile.TemporaryDirectory() as d:
+                root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+                with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                      patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                      patch.object(p,"ADMISSION",adm),
+                      patch.object(p,"NATIVE_CUSTODY",None),
+                      patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                    self.make_native_manifest_fixture(root,adm)
+                    p.write_once(root/extra_name,{"status":"UNKNOWN","no_retry":True})
+                    with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_RECEIPT_SET_INCOMPLETE_OR_EXTRA"):
+                        p.verify_prior_preflight()
+
+    def test_changed_terminal_hash_and_native_pid_break_original_chain(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                target=root/"native_01_terminal.json"
+                child=json.loads(target.read_text())
+                child["pid"]=child["pid"]+1
+                target.write_text(json.dumps(child)+"\n")
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_TERMINAL_UNVERIFIED"):
+                    p.verify_prior_preflight()
+
+    def test_tampered_manifest_digest_or_count_cannot_admit_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight";adm=Path(d)/"admission.json"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",adm),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0)):
+                self.make_native_manifest_fixture(root,adm)
+                t=root/"terminal.json";j=json.loads(t.read_text())
+                j["native_count"]=2
+                t.write_text(json.dumps(j)+"\n")
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_RECEIPT_SET_INCOMPLETE_OR_EXTRA"):
+                    p.verify_prior_preflight()
+                j["native_count"]=1;j["manifest_sha256"]="0"*64
+                t.write_text(json.dumps(j)+"\n")
+                with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_MANIFEST_DIGEST_MISMATCH"):
+                    p.verify_prior_preflight()
 
 
 if __name__=='__main__':unittest.main()
