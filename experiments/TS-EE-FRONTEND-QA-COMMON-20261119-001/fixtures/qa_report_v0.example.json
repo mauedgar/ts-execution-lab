@@ -102,5 +102,6 @@
   },
   "limitations": [
     "SYNTHETIC_TEST_VECTOR_NOT_A_NATIVE_BROWSER_RUN"
-  ]
+  ],
+  "reported_verdict": "PASS"
 }

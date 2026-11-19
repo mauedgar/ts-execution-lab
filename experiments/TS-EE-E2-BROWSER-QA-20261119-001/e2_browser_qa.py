@@ -72,7 +72,11 @@ def execute(dest):
  result={'schema':'ts-ee-e2-browser-qa/v1','source_sha256':sha(__file__),
  'widths':list(WIDTHS),'a11y_scope':'BASIC_LABEL_ROLE_ONLY_NOT_WCAG',
  'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','service_workers':'BLOCKED',
-  'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],'variants':{},'artifacts':[]}
+  'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],
+  'seeded_negative_checks':['OVERFLOW','LABEL','HIDDEN_SKU','CONSOLE','HTTP'],
+  'positive_only_checks':['ROUTE_HISTORY','DEEP_REFRESH','KEYBOARD_FOCUS','WA_URL_ENCODING','EXTERNAL_NOT_BLOCKED'],
+  'screenshot_scope':'INITIAL_CATALOG_BEFORE_KEYBOARD_HISTORY_AND_REFRESH',
+  'variants':{},'artifacts':[]}
  try:
   with sync_playwright() as p:
    kw={'headless':True}
@@ -95,12 +99,16 @@ def execute(dest):
       page.on('console',lambda m:console.append(m.text) if m.type=='error' else None)
       page.on('pageerror',lambda e:console.append(str(e)))
       page.on('response',lambda r:http.append(r.status) if r.status>=400 else None)
-      page.goto(base+'/catalog?variant='+kind,wait_until='load')
+      if kind=='bad':
+       with page.expect_response(lambda response:response.status==404 and '/api/missing' in response.url,timeout=5000):
+        page.goto(base+'/catalog?variant='+kind,wait_until='load')
+      else:
+       page.goto(base+'/catalog?variant='+kind,wait_until='load')
       page.get_by_role('heading',name='Catalog',exact=True).wait_for()
-      page.wait_for_timeout(120)
       geom=page.evaluate('({viewport:innerWidth,scroll:document.documentElement.scrollWidth})')
       if geom['scroll']>geom['viewport']+1:found.add('OVERFLOW')
-      if page.get_by_role('searchbox',name='Search catalog').count()!=1:found.add('LABEL')
+      label_ok=page.get_by_role('searchbox',name='Search catalog').count()==1
+      if not label_ok:found.add('LABEL')
       pic=dest/(kind+'-'+str(width)+'.png');page.screenshot(path=str(pic),full_page=True)
       result['artifacts'].append({'file':pic.name,'bytes':pic.stat().st_size,'sha256':sha(pic)})
       page.keyboard.press('Tab')
@@ -133,11 +141,10 @@ def execute(dest):
       external.close()
       blocked_count+=len(blocked)
       if not any(x.startswith('https://wa.me/') for x in blocked):found.add('EXTERNAL_NOT_BLOCKED')
-      page.wait_for_timeout(120)
       if console:found.add('CONSOLE')
       if http:found.add('HTTP')
       rows.append({'width':width,'overflow_px':max(0,geom['scroll']-geom['viewport']),
-       'label':page.get_by_role('searchbox',name='Search catalog').count()==1,
+       'label':label_ok,
        'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,
        'first_tab':first_tab,'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})

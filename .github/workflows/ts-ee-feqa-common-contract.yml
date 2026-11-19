@@ -37,13 +37,28 @@ jobs:
           node-version: '22.23.3'
           package-manager-cache: false
       - name: Qualify bounded pure-TypeScript test loader
-        run: node --test experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_pure_typescript_loader.mjs
+        run: node --test experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_pure_typescript_transform.mjs
       - name: Install isolated Playwright
         run: |
           python -m pip install playwright==1.57.0
           python -m playwright install --with-deps chromium
       - name: Execute full synthetic four-viewport QA with preventive service worker policy
         run: python experiments/TS-EE-E2-BROWSER-QA-20261119-001/e2_browser_qa.py --output e2-common-evidence
+      - name: Convert ACTUAL E2 browser receipt into common QA schema
+        run: |
+          set -eu
+          TREE="$(git rev-parse 'HEAD^{tree}')"
+          python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/e2_to_common.py \
+            --e2 e2-common-evidence/RESULT.json \
+            --source-script experiments/TS-EE-E2-BROWSER-QA-20261119-001/e2_browser_qa.py \
+            --output e2-common-evidence/COMMON_RECEIPT.json \
+            --repository mauedgar/ts-execution-lab \
+            --commit "$GITHUB_SHA" --tree "$TREE" --run-id "$GITHUB_RUN_ID" \
+            --attempt TS-EE-FEQA-COMMON-METHOD-IR001-REPAIR-B001
+          python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py \
+            e2-common-evidence/COMMON_RECEIPT.json \
+            --artifact-root e2-common-evidence \
+            --expected-commit "$GITHUB_SHA" --expected-tree "$TREE" --expected-run-id "$GITHUB_RUN_ID"
       - name: Preserve exact browser screenshot and trace evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
