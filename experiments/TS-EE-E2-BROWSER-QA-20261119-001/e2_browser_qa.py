@@ -127,14 +127,16 @@ def execute(dest):
       context=browser.new_context(viewport={'width':width,'height':800},device_scale_factor=1,service_workers='block')
       context.set_default_timeout(7000)
       context.tracing.start(screenshots=True,snapshots=True,sources=True)
-      console=[];http=[];blocked=[]
+      console=[];http=[];blocked=[];fulfilled=[]
       def guard(route):
        if route.request.url.startswith(base+'/'):
         route.continue_()
        elif FAULT=='external_fulfill_simulated' and route.request.url.startswith('https://wa.me/'):
-        # A synthetic SUCCESS response supplied locally: does not contact wa.me.
-        # The positive egress detector MUST recognize that no abort occurred.
-        route.fulfill(status=200,content_type='text/plain',body='E2_SIMULATED_EXTERNAL_SUCCESS_NO_NETWORK')
+        # Simulated HTTP 200 fulfilled by Playwright before egress, no Internet.
+        simulated_url=route.request.url
+        route.fulfill(status=200,content_type='text/plain',
+                      body='E2_SIMULATED_EXTERNAL_SUCCESS_NO_NETWORK')
+        fulfilled.append({'url':simulated_url,'status':200,'fulfill_returned':True})
        else:
         request_url=route.request.url
         route.abort()
@@ -206,20 +208,33 @@ def execute(dest):
       if urlsplit(href).netloc!='wa.me' or parse_qs(urlsplit(href).query).get('text')!=['PUBLIC-1 & blue']:found.add('WA_URL_ENCODING')
       external=context.new_page()
       before_blocked=len(blocked)
+      before_fulfilled=len(fulfilled)
       navigation_failed=False
       navigation_timed_out=False
       response=None
+      visited_url=''
       try:
        response=external.goto(href,wait_until='commit',timeout=2000)
       except PlaywrightTimeoutError:
        navigation_timed_out=True
       except PlaywrightError:
        navigation_failed=True
+      visited_url=external.url
       external.close()
       new_blocked=blocked[before_blocked:]
+      new_fulfilled=fulfilled[before_fulfilled:]
       matched_abort=any(entry['url']==href and entry['abort_returned'] is True for entry in new_blocked)
       aborted_expected=(matched_abort and navigation_failed and not navigation_timed_out
                         and response is None)
+      fulfilled_event=any(entry['url']==href and entry['status']==200 and
+                          entry['fulfill_returned'] is True for entry in new_fulfilled)
+      observed_status=response.status if response is not None else None
+      observed_fulfill_success=(FAULT=='external_fulfill_simulated' and fulfilled_event
+                               and observed_status==200 and visited_url==href
+                               and not navigation_failed and not navigation_timed_out
+                               and not matched_abort)
+      if FAULT=='external_fulfill_simulated' and not observed_fulfill_success:
+       found.add('FAULT_INJECTION_UNPROVEN')
       if not aborted_expected:found.add('EXTERNAL_NOT_BLOCKED')
       blocked_count+=len(new_blocked)
       if console:found.add('CONSOLE')
@@ -229,7 +244,12 @@ def execute(dest):
        'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,
        'first_tab':first_tab,'keyboard_activated':keyboard_activated,
        'keyboard_negative_rejected':keyboard_negative_rejected,
-       'external_navigation_rejected':aborted_expected,'hidden_rejected':hidden,
+       'external_navigation_rejected':aborted_expected,
+       'external_fulfill_returned':fulfilled_event,
+       'external_response_status':observed_status,
+       'external_navigation_final_url':visited_url,
+       'external_fault_injection_proven':observed_fulfill_success,
+       'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(new_blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
       result['artifacts'].append({'file':trace.name,'bytes':trace.stat().st_size,'sha256':sha(trace)})
