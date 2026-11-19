@@ -1,0 +1,90 @@
+{
+  "schema": "ts-ee-e3-seeded-oracle/v1",
+  "blind": "Do not include this path or content in reviewer packets/prompts",
+  "seed_defects": [
+    {
+      "id": "S01",
+      "path": "fixture/src/sku.mjs",
+      "category": "integrity",
+      "expected": "skuKey must include color, duplicates for line+size different colors"
+    },
+    {
+      "id": "S02",
+      "path": "fixture/src/money.mjs",
+      "category": "precision",
+      "expected": "priceToCents silently rounds price >2 decimals"
+    },
+    {
+      "id": "S03",
+      "path": "fixture/src/stock.mjs",
+      "category": "boundary",
+      "expected": "exact stock equality is rejected due to > rather than >="
+    },
+    {
+      "id": "S04",
+      "path": "fixture/src/approval.mjs",
+      "category": "authorization",
+      "expected": "formal approval OR images permits unauthorized PUBLIC"
+    },
+    {
+      "id": "S05",
+      "path": "fixture/src/roles.mjs",
+      "category": "authorization",
+      "expected": "non-ADMIN authenticated user passes edit guard"
+    },
+    {
+      "id": "S06",
+      "path": "fixture/src/availability.mjs",
+      "category": "integrity",
+      "expected": "availableAt ignores city and aggregates all warehouses"
+    },
+    {
+      "id": "S07",
+      "path": "fixture/src/leadAudit.mjs",
+      "category": "privacy",
+      "expected": "contact PII written to logger"
+    },
+    {
+      "id": "S08",
+      "path": "fixture/src/searchState.mjs",
+      "category": "race",
+      "expected": "older async search response overwrites newer state"
+    }
+  ],
+  "cross_file": [
+    {
+      "id": "X01",
+      "paths": [
+        "fixture/src/sku.mjs",
+        "fixture/src/catalog.mjs"
+      ]
+    },
+    {
+      "id": "X02",
+      "paths": [
+        "fixture/src/approval.mjs",
+        "fixture/src/catalog.mjs"
+      ]
+    },
+    {
+      "id": "X03",
+      "paths": [
+        "fixture/src/roles.mjs",
+        "fixture/src/catalog.mjs"
+      ]
+    },
+    {
+      "id": "X04",
+      "paths": [
+        "fixture/src/stock.mjs",
+        "fixture/src/availability.mjs",
+        "fixture/src/checkout.mjs"
+      ]
+    }
+  ],
+  "negative_controls": [
+    "fixture/src/whatsapp.mjs",
+    "fixture/src/fetchSupport.mjs"
+  ],
+  "metrics": "recall >=? compare arms, false-positive rate, complete semantic coverage"
+}
