@@ -180,6 +180,12 @@ def enforce_consumer_requirements(result, require_local_bytes=False):
     """A verified shape alone is NOT a consumer evidence PASS.
     Provider-native binding is still a separate external Control-only gate.
     """
+    if require_local_bytes and result.get("status")=="VALID_TEST_VECTOR_SHAPE_ONLY":
+        return {"status":"INVALID_REPORT",
+                "errors":["test_vector_not_consumer_evidence"],
+                "provider_native_verified":False,"Product_accepted":False,
+                "artifact_bytes_verified_locally":
+                    result.get("artifact_bytes_verified_locally") is True}
     if (require_local_bytes and result.get("status","").startswith("VALID_") and
             result.get("artifact_bytes_verified_locally") is not True):
         return {"status":"INVALID_REPORT",
