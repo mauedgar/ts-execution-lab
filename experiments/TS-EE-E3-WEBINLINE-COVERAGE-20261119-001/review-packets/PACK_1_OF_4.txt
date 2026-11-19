@@ -1,0 +1,79 @@
+TS-EE-E3-001 / PACK 1 OF 4
+Fixture commit: 6f94f83c53bd9f57149a27039dedece9a0a1ed71
+COMPLETE ORIGINAL SOURCES. Each file begins and ends with explicit boundaries. Git blob SHA verifies identity, not reviewer semantic coverage.
+
+=== BEGIN_FILE path="fixture/docs/CONTRACT.md" blob="b9e5b52c92965853a2128c73ed622ab14ebb85ce" bytes=1338 ===
+# Storefront demonstration — synthetic behavior contract
+This package is fabricated for Execution Engineering IR context experiments. It is not Aware, FitFlow or Attendance code.
+
+- A SKU identifies exactly one line + size + color combination. Color distinctions must not collide.
+- Prices accept integer cents precision; fractions beyond two decimal places must be rejected, not rounded.
+- Reserving an amount equal to available stock is allowed. More than available is rejected. A rejected reservation must not mutate stock.
+- A public catalog item must have formal approval AND at least one image. Images alone confer no authorization.
+- Product modifications require the ADMIN role, irrespective of whether a user is signed in.
+- Search UI must never apply an older request's response after a newer search is started.
+- Contacts/phone numbers are private. Operational logs may contain only opaque identifiers.
+- Availability for a location can only be derived from that location's stock, never a global sum.
+- WhatsApp deeplinks use URLSearchParams and must preserve special characters correctly.
+- Do not flag benign defensive copies or encoded URLs as defects. Record genuine defects with exact file/line evidence.
+- Give at least one cross-file consistency check and distinguish proven source defects from missing runtime tests.
+=== END_FILE path="fixture/docs/CONTRACT.md" ===
+
+=== BEGIN_FILE path="fixture/package.json" blob="9cc36ad2deb6f4981ce5f21e07b4fef9ffc132f9" bytes=150 ===
+{"name":"ts-ee-e3-review-fixture","private":true,"type":"module","scripts":{"test":"node --test fixture/tests/*.test.mjs"},"engines":{"node":">=22"}}
+=== END_FILE path="fixture/package.json" ===
+
+=== BEGIN_FILE path="fixture/src/sku.mjs" blob="945043cf6b6ea64486be789153bc64126733fd45" bytes=675 ===
+// Catalog keying. Identifiers must stay stable between imports and UI edits.
+const piece = value => String(value ?? '').trim().toUpperCase();
+export function skuKey(variant) {
+  if (!variant?.line || !variant?.size || !variant?.color) throw new Error('missing variant dimension');
+  return [piece(variant.line), piece(variant.size)].join(':');
+}
+export function groupVariants(rows) {
+  const index = new Map();
+  for (const row of rows) {
+    const key = skuKey(row);
+    if (index.has(key)) throw new Error('duplicate SKU: ' + key);
+    index.set(key, { ...row, key });
+  }
+  return [...index.values()];
+}
+export function skuEquals(a,b) { return skuKey(a) === skuKey(b); }
+=== END_FILE path="fixture/src/sku.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/money.mjs" blob="bc5a6a71e71c57ae78169b94cba09b1f4d0b63f9" bytes=629 ===
+// Domain money parsing uses positive prices and integer cents.
+export function priceToCents(input) {
+  if (typeof input !== 'string' && typeof input !== 'number') throw new TypeError('invalid money');
+  const amount = Number(input);
+  if (!Number.isFinite(amount) || amount < 0) throw new RangeError('invalid money');
+  return Math.round(amount * 100);
+}
+export function centsToPrice(cents) {
+  if (!Number.isSafeInteger(cents) || cents < 0) throw new RangeError('invalid cents');
+  return (cents / 100).toFixed(2);
+}
+export function totalCents(rows) {
+  return rows.reduce((sum,row) => sum + row.unitCents * row.quantity,0);
+}
+=== END_FILE path="fixture/src/money.mjs" ===
+
+=== BEGIN_FILE path="fixture/src/stock.mjs" blob="d7778cf5b66155834747ad520ca0f55f173a0d54" bytes=729 ===
+// In-memory stock reservation for synthetic tests; no persistence.
+export function reserveStock(warehouse, sku, amount) {
+  if (!Number.isSafeInteger(amount) || amount < 1) throw new RangeError('quantity');
+  const before = warehouse[sku] ?? 0;
+  if (!Number.isSafeInteger(before) || before < 0) throw new RangeError('stock');
+  if (before > amount) {
+    const result = { ...warehouse, [sku]: before - amount };
+    return { accepted: true, stock: result };
+  }
+  return { accepted: false, stock: { ...warehouse } };
+}
+export function releaseStock(warehouse, sku, amount) {
+  if (!Number.isSafeInteger(amount) || amount < 1) throw new RangeError('quantity');
+  return { ...warehouse, [sku]: (warehouse[sku] ?? 0) + amount };
+}
+=== END_FILE path="fixture/src/stock.mjs" ===
+
