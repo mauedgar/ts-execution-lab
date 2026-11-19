@@ -83,6 +83,9 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     if not isinstance(network,dict):network={}
     need(network.get("enforcement") in ("PREVENTIVE_BROWSER_ABORT","OBSERVE_ONLY"),"bad_network_mode")
     need(network.get("service_workers") in ("BLOCKED","NOT_VERIFIED"),"bad_service_workers")
+    need(network.get("measurement_scope")=="BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY",
+         "network_scope_not_bounded")
+    need(network.get("os_egress_attested") is False,"unjustified_os_egress_attestation")
     counts={}
     for k in ("outbound_attempted","outbound_blocked","outbound_escaped"):
         v=network.get(k)
@@ -93,7 +96,13 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     artifacts=report.get("artifacts")
     if not isinstance(artifacts,list):artifacts=[]
     names=set();shots=set();has_trace=False
-    root=Path(artifact_root).resolve() if artifact_root is not None else None
+    supplied=Path(artifact_root) if artifact_root is not None else None
+    if supplied is not None and (supplied.is_symlink() or
+            any(parent.is_symlink() for parent in supplied.parents) or not supplied.is_dir()):
+        errors.append("unsafe_artifact_root")
+        root=None
+    else:
+        root=supplied.resolve() if supplied is not None else None
     for a in artifacts:
         if not isinstance(a,dict):errors.append("artifact_not_object");continue
         name=a.get("name")
@@ -139,6 +148,16 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     elif browser in ("NOT_RUN","SKIPPED","BLOCKED"):
         need(not any(scenarios.get(k)=="PASS" for k in SCENARIOS),"unrun_browser_with_pass_scenarios")
         need(not any(seen.get(w)=="PASS" for w in WIDTHS),"unrun_browser_with_pass_viewports")
+    if browser=="PASS":
+        need(report.get("reported_verdict")=="PASS","browser_pass_verdict_mismatch")
+    elif browser=="FAIL":
+        need(report.get("reported_verdict")=="FAIL","browser_fail_verdict_mismatch")
+        need(any(scenarios.get(k)=="FAIL" for k in SCENARIOS) or
+             any(seen.get(w)=="FAIL" for w in WIDTHS),
+             "browser_fail_without_negative_evidence")
+    elif browser in ("BLOCKED","NOT_RUN","SKIPPED"):
+        need(report.get("reported_verdict") in ("NOT_RUN","PARTIAL"),
+             "unrun_browser_verdict_mismatch")
     if report.get("reported_verdict")=="PASS":
         need(browser=="PASS","reported_pass_but_browser_not_pass")
     if report.get("reported_verdict")=="NOT_RUN":
@@ -160,7 +179,7 @@ def main():
     try:
         data=json.loads(a.report.read_text(encoding="utf8"))
         result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id)
-    except (OSError,ValueError) as err:
+    except (OSError,ValueError,TypeError,KeyError,AttributeError,IndexError,OverflowError) as err:
         result={"status":"INVALID_REPORT","errors":[type(err).__name__]}
     print(json.dumps(result,sort_keys=True))
     return 0 if result["status"].startswith("VALID_") else 1

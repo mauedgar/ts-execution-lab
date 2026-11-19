@@ -19,6 +19,26 @@ class ContractTests(unittest.TestCase):
     def test_vector_stays_non_attesting(self):
         self.assertEqual(module.evaluate(BASE)["status"],"VALID_TEST_VECTOR_SHAPE_ONLY")
         self.assertFalse(module.evaluate(BASE)["provider_native_verified"])
+    def test_browser_pass_with_reported_fail_rejected(self):
+        self.check(lambda r:r.update(reported_verdict="FAIL"),"INVALID_REPORT",
+                   "browser_pass_verdict_mismatch")
+    def test_browser_fail_without_failure_evidence_rejected(self):
+        self.check(lambda r:(r["stages"].update(browser="FAIL"),r.update(reported_verdict="FAIL")),
+                   "INVALID_REPORT","browser_fail_without_negative_evidence")
+    def test_browser_fail_with_negative_evidence_consistent(self):
+        r=copy.deepcopy(BASE)
+        r["stages"]["browser"]="FAIL";r["reported_verdict"]="FAIL"
+        r["scenarios"]["keyboard_focus"]="FAIL"
+        self.assertEqual(module.evaluate(r)["status"],"VALID_TEST_VECTOR_SHAPE_ONLY")
+    def test_unrun_browser_fail_verdict_rejected(self):
+        self.check(lambda r:(r["stages"].update(browser="NOT_RUN"),r.update(reported_verdict="FAIL")),
+                   "INVALID_REPORT","unrun_browser_verdict_mismatch")
+    def test_network_unbounded_scope_rejected(self):
+        self.check(lambda r:r["network"].update(measurement_scope="GLOBAL_OS_EGRESS"),
+                   "INVALID_REPORT","network_scope_not_bounded")
+    def test_unsupported_os_egress_attestation_rejected(self):
+        self.check(lambda r:r["network"].update(os_egress_attested=True),
+                   "INVALID_REPORT","unjustified_os_egress_attestation")
     def test_fake_provider_custody_not_attested(self):
         r=copy.deepcopy(BASE);r["original"]["custody"]="PROVIDER_NATIVE_READBACK"
         out=module.evaluate(r)

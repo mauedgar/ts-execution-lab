@@ -55,3 +55,18 @@ Repair requirements:
 - A01/A02/A03/A04: network prevention is scoped to the Playwright context with blocked Service Workers; OS-level egress is not proven. Source runner artifacts verified locally, native artifact ZIP digest recorded separately, ZIP internals not independently read back here; retain provenance limitations. Extra tests validate negative report states and local artifact bytes. TypeScript 7 solution remains method-only until a distinct Aware Product run.
 
 DoD: true E2→common producer/consumer interoperability on one *new* immutable nonProduct candidate, 16/16 existing + expanded tests, updated transform-only Node tests, full synthetic GOOD/BAD matrix, original native CI receipt and artifacts, then a distinct independent method IR. **Do not promote to Tecnotron or merge Aware** from these component-level results.
+
+## IR002 B001 S1/S2 reconciled method repairs (nonProduct)
+
+Two original independent reviewer results are immutable, byte-identical in GitHub Transport:
+- S1 `mauedgar/ts-execution-transport@db21f3dcc88aa8d651b35e25f75693a439781fe8:results/TS-EE-FEQA-COMMON-B001-WEBINLINE-IR002-S1-20261119-001/ORIGINAL.md`: 2 findings / 3 advisories.
+- S2 `mauedgar/ts-execution-transport@c9423de2926e53a8e830ba5f308e4e92e3164606:results/TS-EE-FEQA-COMMON-B001-WEBINLINE-IR002-S2-20261119-001/ORIGINAL.md`: 2 findings / 3 advisories.
+
+Distinct experimental successor (not retry):
+- S1 F01: both-direction browser/verdict checks; failed browser must show grounded failed scenario/viewport. S1 F02: external native run/tree/readback remains a separate Control qualification requirement; converter fields and CLI values are NOT native attestation. Shape validation alone never grants a provider PASS.
+- S1 A01–A03: fail malformed nested receipt safely, contain local artifacts within non-symlink evidence roots, test negative cases and report strict local limitations.
+- S2 F01: test keyboard Enter from `/about` and require a URL transition to `/catalog`; separate negative fixture that disables Enter must remain at `/about`; converter now checks both.
+- S2 F02: explicitly bound network counts to observed browser route interceptions, require route abort navigation to fail; do not claim all system outbound blocked; no OS-level egress verification.
+- S2 A01–A03: await native 404 event, preserve context-level route and Service Workers blocking, record provider artifact ZIP independently outside same job; OS/browser binary reproducibility not asserted.
+
+Source-only CI PASS, local artifact checks and synthetic browser PASS remain **necessary but insufficient** for cross-product QA method adoption. Competent Control separately observes original provider-native run status, head/tree and artifact metadata; it does not infer identity from self-declared E2→common JSON. Aware QA still requires new Product grant, exact candidate integration+build+browser, separate IR.

@@ -13,7 +13,9 @@ def make(root):
     rows=[]
     for w in (320,375,768,1440):
         rows.append(dict(width=w,overflow_px=0,label=True,detail=True,back=True,forward=True,
-                         deep_refresh=True,first_tab="Catalog",hidden_rejected=True,
+                         deep_refresh=True,first_tab="Catalog",keyboard_activated=True,
+                         keyboard_negative_rejected=True,external_navigation_rejected=True,
+                         hidden_rejected=True,
                          console_errors=0,http_errors=0,blocked_external=1))
     injected=[dict(r,overflow_px=15 if r["width"]==320 else 0,
                    label=False,hidden_rejected=False,console_errors=1,http_errors=1)
@@ -65,6 +67,28 @@ class BridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["variants"]["good"]["rows"][0]["first_tab"]="other"
             with self.assertRaisesRegex(ValueError,"SCENARIOS_keyboard_focus"):bridge(r,Path(d))
+    def test_enter_activation_missing_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["rows"][0]["keyboard_activated"]=False
+            with self.assertRaisesRegex(ValueError,"SCENARIOS_keyboard_focus"):bridge(r,Path(d))
+    def test_disabled_enter_negative_control_missing_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["bad"]["rows"][0]["keyboard_negative_rejected"]=False
+            with self.assertRaisesRegex(ValueError,"SCENARIOS_keyboard_focus"):bridge(r,Path(d))
+    def test_egress_route_success_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["rows"][0]["external_navigation_rejected"]=False
+            with self.assertRaisesRegex(ValueError,"OBSERVED_EGRESS_ROUTE_RESULT"):bridge(r,Path(d))
+    def test_malformed_root_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_ROOT"):
+                module.convert([],repository="owner/repo",commit="a"*40,tree="b"*40,
+                               run_id="X",attempt="A",script_hash="a"*64,original_sha="f"*64,
+                               original_bytes=1,evidence_root=Path(d))
+    def test_malformed_nested_row_blocks(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["rows"][0]=None
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_ROWS_good"):bridge(r,Path(d))
     def test_local_artifact_sha_mismatch_blocks(self):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["artifacts"][0]["sha256"]="0"*64

@@ -40,6 +40,10 @@ app.innerHTML='<h1>Catalog</h1>'+(bad?'':'<label for="search">Search catalog</la
 +'<a id="contact" target="_blank" rel="noopener noreferrer">Contact via WhatsApp</a>';
 let wa=new URL('https://wa.me/5493512345678');wa.searchParams.set('text','PUBLIC-1 & blue');
 document.getElementById('contact').href=wa.toString()}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter' && new URL(location.href).searchParams.get('keyboard')==='disabled'
+     && e.target.closest('a[data-local]'))e.preventDefault();
+},true);
 document.addEventListener('click',e=>{const a=e.target.closest('a[data-local]');
 if(!a)return;e.preventDefault();history.pushState({},'',a.href);draw()});
 window.addEventListener('popstate',draw);draw();
@@ -74,7 +78,8 @@ def execute(dest):
  'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','service_workers':'BLOCKED',
   'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],
   'seeded_negative_checks':['OVERFLOW','LABEL','HIDDEN_SKU','CONSOLE','HTTP'],
-  'positive_only_checks':['ROUTE_HISTORY','DEEP_REFRESH','KEYBOARD_FOCUS','WA_URL_ENCODING','EXTERNAL_NOT_BLOCKED'],
+  'positive_only_checks':['ROUTE_HISTORY','DEEP_REFRESH','KEYBOARD_ACTIVATION','WA_URL_ENCODING','EXTERNAL_ROUTE_ABORT'],
+  'network_observation_scope':'BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY_NOT_OS_ATTESTED',
   'screenshot_scope':'INITIAL_CATALOG_BEFORE_KEYBOARD_HISTORY_AND_REFRESH',
   'variants':{},'artifacts':[]}
  try:
@@ -100,8 +105,11 @@ def execute(dest):
       page.on('pageerror',lambda e:console.append(str(e)))
       page.on('response',lambda r:http.append(r.status) if r.status>=400 else None)
       if kind=='bad':
-       with page.expect_response(lambda response:response.status==404 and '/api/missing' in response.url,timeout=5000):
+       with page.expect_response(lambda response:response.status==404 and '/api/missing' in response.url,timeout=5000) as response_info:
         page.goto(base+'/catalog?variant='+kind,wait_until='load')
+       bad_http_response=response_info.value
+       if bad_http_response.status!=404:found.add('HTTP_RESPONSE_MISMATCH')
+       if 404 not in http:http.append(404)
       else:
        page.goto(base+'/catalog?variant='+kind,wait_until='load')
       page.get_by_role('heading',name='Catalog',exact=True).wait_for()
@@ -111,12 +119,24 @@ def execute(dest):
       if not label_ok:found.add('LABEL')
       pic=dest/(kind+'-'+str(width)+'.png');page.screenshot(path=str(pic),full_page=True)
       result['artifacts'].append({'file':pic.name,'bytes':pic.stat().st_size,'sha256':sha(pic)})
+      page.goto(base+'/about?variant='+kind,wait_until='load')
+      page.get_by_role('heading',name='About',exact=True).wait_for()
       page.keyboard.press('Tab')
       first_tab=page.evaluate("document.activeElement?.textContent?.trim()")
+      keyboard_activated=False
       if first_tab!='Catalog':found.add('KEYBOARD_FOCUS')
       else:
        page.keyboard.press('Enter')
-       page.get_by_role('heading',name='Catalog',exact=True).wait_for()
+       page.wait_for_url('**/catalog?variant='+kind,timeout=5000)
+       keyboard_activated=(page.get_by_role('heading',name='Catalog',exact=True).count()==1
+                           and page.url==base+'/catalog?variant='+kind)
+       if not keyboard_activated:found.add('KEYBOARD_ACTIVATION')
+      page.goto(base+'/about?variant='+kind+'&keyboard=disabled',wait_until='load')
+      page.keyboard.press('Tab')
+      page.keyboard.press('Enter')
+      keyboard_negative_rejected=page.url.startswith(base+'/about?')
+      if not keyboard_negative_rejected:found.add('KEYBOARD_NEGATIVE_MISSED')
+      page.goto(base+'/catalog?variant='+kind,wait_until='load')
       page.get_by_role('link',name='View PUBLIC-1').click()
       detail=page.get_by_role('heading',name='Bottle 1 L').count()==1
       page.go_back(wait_until='domcontentloaded')
@@ -136,17 +156,28 @@ def execute(dest):
       href=link.get_attribute('href') or ''
       if urlsplit(href).netloc!='wa.me' or parse_qs(urlsplit(href).query).get('text')!=['PUBLIC-1 & blue']:found.add('WA_URL_ENCODING')
       external=context.new_page()
-      try:external.goto(href,wait_until='commit',timeout=2000)
-      except Exception:pass
+      before_blocked=len(blocked)
+      navigation_succeeded=False
+      error_text=''
+      try:
+       response=external.goto(href,wait_until='commit',timeout=2000)
+       navigation_succeeded=response is not None
+      except Exception as err:
+       error_text=str(err)
       external.close()
-      blocked_count+=len(blocked)
-      if not any(x.startswith('https://wa.me/') for x in blocked):found.add('EXTERNAL_NOT_BLOCKED')
+      new_blocked=blocked[before_blocked:]
+      aborted_expected=(href in new_blocked and 'ERR_FAILED' in error_text
+                        and not navigation_succeeded)
+      if not aborted_expected:found.add('EXTERNAL_NOT_BLOCKED')
+      blocked_count+=len(new_blocked)
       if console:found.add('CONSOLE')
       if http:found.add('HTTP')
       rows.append({'width':width,'overflow_px':max(0,geom['scroll']-geom['viewport']),
        'label':label_ok,
        'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,
-       'first_tab':first_tab,'hidden_rejected':hidden,
+       'first_tab':first_tab,'keyboard_activated':keyboard_activated,
+       'keyboard_negative_rejected':keyboard_negative_rejected,
+       'external_navigation_rejected':aborted_expected,'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
       result['artifacts'].append({'file':trace.name,'bytes':trace.stat().st_size,'sha256':sha(trace)})

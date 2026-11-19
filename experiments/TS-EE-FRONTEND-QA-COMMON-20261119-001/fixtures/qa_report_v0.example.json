@@ -56,7 +56,9 @@
     "service_workers": "BLOCKED",
     "outbound_attempted": 1,
     "outbound_blocked": 1,
-    "outbound_escaped": 0
+    "outbound_escaped": 0,
+    "measurement_scope": "BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY",
+    "os_egress_attested": false
   },
   "artifacts": [
     {
