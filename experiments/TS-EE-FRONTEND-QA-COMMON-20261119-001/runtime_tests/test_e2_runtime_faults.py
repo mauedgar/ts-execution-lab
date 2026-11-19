@@ -53,6 +53,14 @@ class BrowserNegativeFaults(unittest.TestCase):
         self.assertIn("EXTERNAL_NOT_BLOCKED",receipt["variants"]["bad"]["detected"])
         self.assertTrue(all(row["external_navigation_rejected"] is False
                             for row in receipt["variants"]["good"]["rows"]))
+        for variant in ("good","bad"):
+            for row in receipt["variants"][variant]["rows"]:
+                self.assertIs(row["external_fulfill_returned"],True)
+                self.assertEqual(row["external_response_status"],200)
+                self.assertTrue(row["external_fault_injection_proven"])
+                self.assertIn("https://wa.me/",row["external_navigation_final_url"])
+            self.assertNotIn("FAULT_INJECTION_UNPROVEN",
+                             receipt["variants"][variant]["detected"])
         self.assertFalse((p/"TERMINAL_FAILURE.json").exists())
 
     def test_unexpected_runtime_exception_generates_terminal_failure(self):
