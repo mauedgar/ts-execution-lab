@@ -1,4 +1,4 @@
-name: RS002 P2 IR007 fixed-command fail-closed source-only CI011
+name: RS002 P2 IR007 fixed-command fail-closed source-only CI012
 on:
   push:
     branches:
@@ -27,10 +27,10 @@ jobs:
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_RUN_ATTEMPT" = 1
           test "$GITHUB_REF" = refs/heads/ee/rs002-p2-ir007-f01-fixed-inventory-20261119-001
-          test "$(git rev-parse HEAD^)" = d7baa47ce870f2398ebd8d2bb3670e1ae036def9
+          test "$(git rev-parse HEAD^)" = cb8d74c46391a7d5de54ea87a91e574c58ebaabf
           git merge-base --is-ancestor 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD
           test "$(git rev-parse "HEAD:$root/p2_observer.py")" = f4112212507f1f35c78d0c7014928faa60a6eb83
-          test "$(git rev-parse "HEAD:$root/test_p2_observer.py")" = 3a99249c56a3fef515ceb2dea5c6093d58d53d6b
+          test "$(git rev-parse "HEAD:$root/test_p2_observer.py")" = e0a688f0f4b0fe238feb587fbd1c89077694cb54
           test "$(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD | wc -l)" -eq 3
           while IFS= read -r item; do
             case "$item" in
@@ -38,7 +38,7 @@ jobs:
               *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
             esac
           done < <(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD)
-          echo RS002_P2_CI011_SOURCE_LOCKED
+          echo RS002_P2_CI012_SOURCE_LOCKED
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           version: '0.13.7'
@@ -48,4 +48,4 @@ jobs:
           set -euo pipefail
           uv python install 3.15.2
           uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001/test_p2_observer.py -v
-          echo RS002_P2_CI011_NO_DOCKER_SQL_SECRET_OR_PRODUCT
+          echo RS002_P2_CI012_NO_DOCKER_SQL_SECRET_OR_PRODUCT
