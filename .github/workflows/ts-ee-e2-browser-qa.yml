@@ -1,0 +1,32 @@
+name: TS EE E2 Browser QA synthetic
+on:
+  push:
+    branches:
+      - experiment/ts-ee-e2-browser-qa-20261119-001
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee-e2-20261119
+  cancel-in-progress: false
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install isolated Playwright
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Browser QA with seeded positive and negative checks
+        run: |
+          python experiments/TS-EE-E2-BROWSER-QA-20261119-001/e2_browser_qa.py --output e2-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ts-ee-e2-evidence
+          path: e2-evidence/
+          retention-days: 5
