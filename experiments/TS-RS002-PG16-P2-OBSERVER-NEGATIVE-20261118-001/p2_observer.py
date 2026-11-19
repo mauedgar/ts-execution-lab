@@ -233,6 +233,31 @@ def private_dir(path: Path) -> None:
         fail("UNTRUSTED_RESULT_DIR")
 
 
+def classify_existing_attempt(root: Path) -> str:
+    """Read-only custody classifier: absent terminal never means no effect.
+
+    An original pre-spawn intent with no PID may coexist with a detached child
+    after a hard crash. Only externally authorized provider-native reconciliation
+    can resolve that UNKNOWN; never replay this attempt.
+    """
+    if not root.exists() and not root.is_symlink():
+        return "NONE"
+    private_dir(root)
+    terminal = root / "terminal.json"
+    if not terminal.exists() or terminal.is_symlink():
+        return "UNKNOWN_NONREPLAYABLE"
+    try:
+        result = json.loads(safe_read(terminal))
+    except (OSError,ValueError,RuntimeError):
+        return "UNKNOWN_NONREPLAYABLE"
+    if (type(result) is not dict or result.get("runner_id") != RUNNER_ID
+        or result.get("no_retry") is not True):
+        return "UNKNOWN_NONREPLAYABLE"
+    if result.get("status") in ("PASS","FAILED","UNKNOWN"):
+        return "TERMINAL_" + result["status"]
+    return "UNKNOWN_NONREPLAYABLE"
+
+
 def parse_review_admission(review: str, j: dict) -> None:
     """Reject embedded, duplicated or contradictory review claims."""
     begin = "<!-- TS_RS002_P2_REVIEW_ADMISSION_V1_BEGIN -->"
