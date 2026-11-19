@@ -1,0 +1,51 @@
+name: RS002 P2 IR005 native custody source-only CI009
+on:
+  push:
+    branches:
+      - ee/rs002-p2-ir005-custody-20261119-001
+    paths:
+      - .github/workflows/rs002-p2-observer-negative-20261119-009.yml
+permissions:
+  contents: read
+jobs:
+  source-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Frozen native-custody IR005 repair and strict three-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p2-ir005-custody-20261119-001
+          test "$(git rev-parse HEAD^)" = 87f883d2a316a94f6f30144a764c455a804fee48
+          git merge-base --is-ancestor 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD
+          test "$(git rev-parse "HEAD:$root/p2_observer.py")" = 301b12dc0f6e634c7a883f519cef6bda7608553d
+          test "$(git rev-parse "HEAD:$root/test_p2_observer.py")" = 964d167e0f3c6efd80377dcbc3bca451a7e501ba
+          test "$(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD | wc -l)" -eq 3
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/p2_observer.py"|"$root/test_p2_observer.py"|".github/workflows/rs002-p2-observer-negative-20261119-009.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD)
+          echo RS002_P2_CI009_SOURCE_LOCKED
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Python3.15.2 bounded native-child custody synthetic test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-PG16-P2-OBSERVER-NEGATIVE-20261118-001/test_p2_observer.py -v
+          echo RS002_P2_CI009_NO_DOCKER_NO_SQL_NO_SECRET
