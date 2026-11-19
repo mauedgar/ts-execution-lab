@@ -71,7 +71,7 @@ def execute(dest):
  start=time.monotonic()
  result={'schema':'ts-ee-e2-browser-qa/v1','source_sha256':sha(__file__),
  'widths':list(WIDTHS),'a11y_scope':'BASIC_LABEL_ROLE_ONLY_NOT_WCAG',
- 'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','variants':{},'artifacts':[]}
+ 'network_scope':'LOCAL_ONLY_AND_EXTERNAL_ABORT','service_workers':'BLOCKED',\n  'additional_checks':['DEEP_LINK_REFRESH','KEYBOARD_TAB_ENTER'],'variants':{},'artifacts':[]}
  try:
   with sync_playwright() as p:
    kw={'headless':True}
@@ -82,7 +82,7 @@ def execute(dest):
     for kind in ('good','bad'):
      found=set();rows=[];blocked_count=0
      for width in WIDTHS:
-      context=browser.new_context(viewport={'width':width,'height':800},device_scale_factor=1)
+      context=browser.new_context(viewport={'width':width,'height':800},device_scale_factor=1,service_workers='block')
       context.set_default_timeout(7000)
       context.tracing.start(screenshots=True,snapshots=True,sources=True)
       console=[];http=[];blocked=[]
@@ -102,6 +102,12 @@ def execute(dest):
       if page.get_by_role('searchbox',name='Search catalog').count()!=1:found.add('LABEL')
       pic=dest/(kind+'-'+str(width)+'.png');page.screenshot(path=str(pic),full_page=True)
       result['artifacts'].append({'file':pic.name,'bytes':pic.stat().st_size,'sha256':sha(pic)})
+      page.keyboard.press('Tab')
+      first_tab=page.evaluate("document.activeElement?.textContent?.trim()")
+      if first_tab!='Catalog':found.add('KEYBOARD_FOCUS')
+      else:
+       page.keyboard.press('Enter')
+       page.get_by_role('heading',name='Catalog',exact=True).wait_for()
       page.get_by_role('link',name='View PUBLIC-1').click()
       detail=page.get_by_role('heading',name='Bottle 1 L').count()==1
       page.go_back(wait_until='domcontentloaded')
@@ -109,6 +115,10 @@ def execute(dest):
       page.go_forward(wait_until='domcontentloaded')
       forward=page.get_by_role('heading',name='Bottle 1 L').count()==1
       if not(detail and back and forward):found.add('ROUTE_HISTORY')
+      page.goto(base+'/product?variant='+kind+'&sku=PUBLIC-1',wait_until='load')
+      page.reload(wait_until='load')
+      deep_refresh=page.get_by_role('heading',name='Bottle 1 L').count()==1
+      if not deep_refresh:found.add('DEEP_REFRESH')
       page.goto(base+'/product?variant='+kind+'&sku=HIDDEN-9',wait_until='load')
       hidden=page.get_by_role('heading',name='Not available').count()==1
       if not hidden:found.add('HIDDEN_SKU')
@@ -127,7 +137,7 @@ def execute(dest):
       if http:found.add('HTTP')
       rows.append({'width':width,'overflow_px':max(0,geom['scroll']-geom['viewport']),
        'label':page.get_by_role('searchbox',name='Search catalog').count()==1,
-       'detail':detail,'back':back,'forward':forward,'hidden_rejected':hidden,
+       'detail':detail,'back':back,'forward':forward,'deep_refresh':deep_refresh,\n       'first_tab':first_tab,'hidden_rejected':hidden,
        'console_errors':len(console),'http_errors':len(http),'blocked_external':len(blocked)})
       trace=dest/(kind+'-'+str(width)+'.zip');context.tracing.stop(path=str(trace))
       result['artifacts'].append({'file':trace.name,'bytes':trace.stat().st_size,'sha256':sha(trace)})

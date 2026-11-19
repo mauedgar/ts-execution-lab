@@ -30,3 +30,25 @@ jobs:
         run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests -p 'test_*.py' -v
       - name: Validate synthetic reference vector
         run: python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/fixtures/qa_report_v0.example.json
+
+      - name: Pin Node 22.23.3
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.23.3'
+          package-manager-cache: false
+      - name: Qualify bounded pure-TypeScript test loader
+        run: node --test experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_pure_typescript_loader.mjs
+      - name: Install isolated Playwright
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Execute full synthetic four-viewport QA with preventive service worker policy
+        run: python experiments/TS-EE-E2-BROWSER-QA-20261119-001/e2_browser_qa.py --output e2-common-evidence
+      - name: Preserve exact browser screenshot and trace evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee-feqa-browser-evidence
+          path: e2-common-evidence/
+          retention-days: 5
+          if-no-files-found: warn
