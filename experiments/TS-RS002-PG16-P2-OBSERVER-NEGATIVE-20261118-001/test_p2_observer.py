@@ -35,7 +35,7 @@ class P2SourceContractTests(unittest.TestCase):
     def test_original_binding(self):
         self.assertEqual(p.C_SHA,'7aef5dff689e1ceb5575084f2445caf25116cff5a22917815400693d99316852')
         self.assertEqual(p.CID,'5ce2b0833fa7ab04eac1b0c78e51ead0ed7c5e1dc2aede5621dba397b3c20d88')
-        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261119-004')
+        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261119-005')
 
     def test_host_fixed_mechanical_argv_and_password_inside_container(self):
         argv=p.cmd_for(p.POSITIVE,True)
@@ -139,7 +139,7 @@ class P2SourceContractTests(unittest.TestCase):
     def test_original_step_prespawn_intent_before_any_docker_child(self):
         with tempfile.TemporaryDirectory() as d:
             receipts=Path(d)/'isolated'
-            with patch.object(p,'RECEIPTS',receipts),patch.object(p,'preflight',return_value=('a'*64,'b'*64)),patch.object(p.subprocess,'Popen',side_effect=OSError('deliberate synthetic spawn denied')):
+            with patch.object(p,'RECEIPTS',receipts),patch.object(p,'SOURCE_ROOT',Path(d)),patch.object(p,'NATIVE_CUSTODY',None),patch.object(p,'verify_prior_preflight',return_value=None),patch.object(p,'preflight',return_value=('a'*64,'b'*64)),patch.object(p.subprocess,'Popen',side_effect=OSError('deliberate synthetic spawn denied')):
                 with self.assertRaises(SystemExit):p.execute()
             self.assertTrue((receipts/'step_intent_hba.json').exists())
             self.assertFalse((receipts/'start_hba.json').exists())
@@ -175,8 +175,8 @@ class P2SourceContractTests(unittest.TestCase):
     def test_review_admission_exact_unique_and_provenance(self):
         review,j=self.review_text()
         p.parse_review_admission(review,j)
-        self.assertIn("PR60-WEBINLINE-IR005",p.REVIEW_REQUEST_PATH)
-        self.assertIn("PR60-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
+        self.assertIn("PR61-WEBINLINE-IR006",p.REVIEW_REQUEST_PATH)
+        self.assertIn("PR61-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
         self.assertNotIn("PR56",p.REVIEW_REQUEST_PATH+p.CONTROL_GRANT_PATH)
 
     def test_review_admission_rejects_duplicates_and_no_recommend(self):
@@ -210,7 +210,7 @@ class P2SourceContractTests(unittest.TestCase):
             fake=Mock()
             fake.pid=9988
             fake.poll.return_value=None
-            with patch.object(p,"RECEIPTS",receipts), \
+            with patch.object(p,"RECEIPTS",receipts),patch.object(p,"SOURCE_ROOT",Path(d)),patch.object(p,"NATIVE_CUSTODY",None),patch.object(p,"verify_prior_preflight",return_value=None), \
                  patch.object(p,"preflight",return_value=("a"*64,"b"*64)), \
                  patch.object(p.subprocess,"Popen",return_value=fake), \
                  patch.object(p,"capture_bounded",side_effect=RuntimeError(
@@ -347,7 +347,7 @@ class P2SourceContractTests(unittest.TestCase):
                 if path.name=="start_hba.json":
                     raise OSError("synthetic receipt I/O failure")
                 return original(path,record)
-            with (patch.object(p,"RECEIPTS",receipts),
+            with (patch.object(p,"RECEIPTS",receipts),patch.object(p,"SOURCE_ROOT",Path(d)),patch.object(p,"NATIVE_CUSTODY",None),patch.object(p,"verify_prior_preflight",return_value=None),
                   patch.object(p,"preflight",return_value=("a"*64,"b"*64)),
                   patch.object(p.subprocess,"Popen",return_value=child),
                   patch.object(p,"write_once",side_effect=fail_after_spawn)):
@@ -367,7 +367,7 @@ class P2SourceContractTests(unittest.TestCase):
             child=Mock()
             child.pid=66112
             child.poll.return_value=None
-            with (patch.object(p,"RECEIPTS",receipts),
+            with (patch.object(p,"RECEIPTS",receipts),patch.object(p,"SOURCE_ROOT",Path(d)),patch.object(p,"NATIVE_CUSTODY",None),patch.object(p,"verify_prior_preflight",return_value=None),
                   patch.object(p,"preflight",return_value=("a"*64,"b"*64)),
                   patch.object(p.subprocess,"Popen",return_value=child),
                   patch.object(p,"capture_bounded",side_effect=RuntimeError(
@@ -380,6 +380,62 @@ class P2SourceContractTests(unittest.TestCase):
             self.assertEqual(terminal["possibly_unreconciled_child_pid"],66112)
             self.assertEqual(fail["pid"],66112)
             self.assertTrue(terminal["no_retry"])
+
+
+    def test_native_read_output_without_prior_intent_never_spawns(self):
+        with patch.object(p,"NATIVE_CUSTODY",None), \
+             patch.object(p.subprocess,"Popen") as spawn:
+            with self.assertRaisesRegex(RuntimeError,"NATIVE_COMMAND_OUTSIDE_DURABLE_CUSTODY"):
+                p.read_output(["/usr/bin/true"])
+            spawn.assert_not_called()
+
+    def test_prespawn_native_preflight_intent_is_durable_and_nonreplayable(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p.subprocess,"Popen",side_effect=OSError("synthetic spawn failure")) as spawn):
+                p.begin_native_custody(root,"PREFLIGHT")
+                with self.assertRaises(OSError):
+                    p.read_output(["/usr/bin/true"])
+                self.assertTrue((root/"native_intent.json").exists())
+                self.assertTrue((root/"native_01_intent.json").exists())
+                self.assertFalse((root/"native_01_start.json").exists())
+                with self.assertRaisesRegex(RuntimeError,"NATIVE_ATTEMPT_ALREADY_EXISTS_NO_RETRY"):
+                    p.begin_native_custody(root,"PREFLIGHT")
+                spawn.assert_called_once()
+                self.assertEqual(p.classify_existing_attempt(root),"UNKNOWN_NONREPLAYABLE")
+
+    def test_interrupted_preflight_cannot_spawn_in_second_invocation(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight"
+            work=Path(d)/"run"
+            with (patch.object(p,"SOURCE_ROOT",Path(d)),
+                  patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"RECEIPTS",work),
+                  patch.object(p,"NATIVE_CUSTODY",None),
+                  patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p,"preflight",side_effect=lambda:p.read_output(["/usr/bin/true"])),
+                  patch.object(p.subprocess,"Popen",side_effect=OSError("synthetic child failure")) as spawn):
+                with self.assertRaisesRegex(RuntimeError,"NATIVE_PREFLIGHT_BLOCKED_NONREPLAYABLE"):
+                    p.run_native_preflight()
+                self.assertTrue((root/"native_intent.json").exists())
+                self.assertTrue((root/"native_01_intent.json").exists())
+                terminal=json.loads((root/"terminal.json").read_text())
+                self.assertEqual(terminal["status"],"UNKNOWN")
+                with self.assertRaisesRegex(RuntimeError,"NATIVE_ATTEMPT_ALREADY_EXISTS_NO_RETRY"):
+                    p.run_native_preflight()
+                spawn.assert_called_once()
+
+    def test_run_requires_distinct_original_preflight_receipt(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"preflight"
+            root.mkdir(mode=0o700)
+            with (patch.object(p,"PREFLIGHT_RECEIPTS",root),
+                  patch.object(p,"ADMISSION",Path(d)/"admission.json")):
+                with self.assertRaises(Exception):p.verify_prior_preflight()
+                self.assertFalse((root/"terminal.json").exists())
 
 
 if __name__=='__main__':unittest.main()
