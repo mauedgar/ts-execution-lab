@@ -177,11 +177,20 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
             "scenario_count":len(SCENARIOS),"widths":list(WIDTHS)}
 
 def enforce_consumer_requirements(result, require_local_bytes=False):
-    """A verified shape alone is NOT a consumer evidence PASS.
-    Provider-native binding is still a separate external Control-only gate.
+    """A valid shape is never a Product/native-provider attestation.
+
+    Strict consumer mode forbids TEST_VECTOR even with all matching local bytes.
+    A diagnostic run is separate, explicitly selected by --diagnostic-only.
     """
-    if (require_local_bytes and result.get("status","").startswith("VALID_") and
-            result.get("artifact_bytes_verified_locally") is not True):
+    if not require_local_bytes:
+        return result
+    status=result.get("status","")
+    if status=="VALID_TEST_VECTOR_SHAPE_ONLY":
+        return {"status":"INVALID_REPORT",
+                "errors":["synthetic_test_vector_forbidden_for_consumer"],
+                "provider_native_verified":False,"Product_accepted":False,
+                "artifact_bytes_verified_locally":result.get("artifact_bytes_verified_locally") is True}
+    if status=="VALID_SHAPE_UNATTESTED" and result.get("artifact_bytes_verified_locally") is not True:
         return {"status":"INVALID_REPORT",
                 "errors":["required_local_binary_readback_missing"],
                 "provider_native_verified":False,"Product_accepted":False,
@@ -196,14 +205,25 @@ def main():
     p.add_argument("--expected-tree")
     p.add_argument("--expected-run-id")
     p.add_argument("--require-local-bytes",action="store_true",
-                   help="fail unless all source screenshot/trace bytes are read and hashed")
+                   help="deprecated explicit consumer guard; default is already strict")
+    p.add_argument("--diagnostic-only",action="store_true",
+                   help="allow schema-only TEST_VECTOR shape diagnostics; never use for consumer gates")
     a=p.parse_args()
-    try:
-        data=json.loads(a.report.read_text(encoding="utf8"))
-        result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id)
-        result=enforce_consumer_requirements(result,a.require_local_bytes)
-    except (OSError,ValueError,TypeError,KeyError,AttributeError,IndexError,OverflowError) as err:
-        result={"status":"INVALID_REPORT","errors":[type(err).__name__]}
+    if a.diagnostic_only and a.require_local_bytes:
+        result={"status":"INVALID_REPORT","errors":["diagnostic_strict_modes_conflict"],
+                "Product_accepted":False,"provider_native_verified":False}
+    else:
+        try:
+            data=json.loads(a.report.read_text(encoding="utf8"))
+            result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id)
+            if not a.diagnostic_only:
+                result=enforce_consumer_requirements(result,require_local_bytes=True)
+        except (OSError,ValueError,TypeError,KeyError,AttributeError,IndexError,OverflowError) as err:
+            result={"status":"INVALID_REPORT","errors":[type(err).__name__],
+                    "Product_accepted":False,"provider_native_verified":False}
     print(json.dumps(result,sort_keys=True))
-    return 0 if result["status"].startswith("VALID_") else 1
+    status=result.get("status","")
+    if a.diagnostic_only:
+        return 0 if status.startswith("VALID_") else 1
+    return 0 if status=="VALID_SHAPE_UNATTESTED" and result.get("artifact_bytes_verified_locally") is True else 1
 if __name__=="__main__":sys.exit(main())
