@@ -176,6 +176,18 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
             "provider_native_verified":False,"Product_accepted":False,
             "scenario_count":len(SCENARIOS),"widths":list(WIDTHS)}
 
+def enforce_consumer_requirements(result, require_local_bytes=False):
+    """A verified shape alone is NOT a consumer evidence PASS.
+    Provider-native binding is still a separate external Control-only gate.
+    """
+    if (require_local_bytes and result.get("status","").startswith("VALID_") and
+            result.get("artifact_bytes_verified_locally") is not True):
+        return {"status":"INVALID_REPORT",
+                "errors":["required_local_binary_readback_missing"],
+                "provider_native_verified":False,"Product_accepted":False,
+                "artifact_bytes_verified_locally":False}
+    return result
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("report",type=Path)
@@ -183,10 +195,13 @@ def main():
     p.add_argument("--expected-commit")
     p.add_argument("--expected-tree")
     p.add_argument("--expected-run-id")
+    p.add_argument("--require-local-bytes",action="store_true",
+                   help="fail unless all source screenshot/trace bytes are read and hashed")
     a=p.parse_args()
     try:
         data=json.loads(a.report.read_text(encoding="utf8"))
         result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id)
+        result=enforce_consumer_requirements(result,a.require_local_bytes)
     except (OSError,ValueError,TypeError,KeyError,AttributeError,IndexError,OverflowError) as err:
         result={"status":"INVALID_REPORT","errors":[type(err).__name__]}
     print(json.dumps(result,sort_keys=True))
