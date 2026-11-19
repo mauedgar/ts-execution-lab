@@ -395,6 +395,7 @@ class P2SourceContractTests(unittest.TestCase):
             with (patch.object(p,"SOURCE_ROOT",Path(d)),
                   patch.object(p,"NATIVE_CUSTODY",None),
                   patch.object(p,"NATIVE_OBSERVATION_SEQ",0),
+                  patch.object(p,"expected_preflight_argv",return_value=[["/usr/bin/true"]]*11),
                   patch.object(p.subprocess,"Popen",side_effect=OSError("synthetic spawn failure")) as spawn):
                 p.begin_native_custody(root,"PREFLIGHT")
                 with self.assertRaises(OSError):
@@ -526,7 +527,7 @@ class P2SourceContractTests(unittest.TestCase):
                     p.verify_prior_preflight()
 
     def test_orphan_unknown_or_extra_native_child_blocks_run(self):
-        for extra_name in ("native_02_intent.json","native_01_unknown.json","unexpected.json"):
+        for extra_name in ("native_12_intent.json","native_01_unknown.json","unexpected.json"):
             with self.subTest(extra=extra_name),tempfile.TemporaryDirectory() as d:
                 root=Path(d)/"preflight";adm=Path(d)/"admission.json"
                 with (patch.object(p,"SOURCE_ROOT",Path(d)),
@@ -589,13 +590,13 @@ class P2SourceContractTests(unittest.TestCase):
                 term_path=root/"native_01_terminal.json"
                 intent=json.loads(intent_path.read_text())
                 intent["command_sha256"]="f"*64
-                intent_path.write_text(json.dumps(intent)+"\\n")
+                intent_path.write_text(json.dumps(intent)+"\n")
                 start=json.loads(start_path.read_text())
                 start["intent_sha256"]=p.sha(intent_path.read_bytes())
-                start_path.write_text(json.dumps(start)+"\\n")
+                start_path.write_text(json.dumps(start)+"\n")
                 term=json.loads(term_path.read_text())
                 term["start_sha256"]=p.sha(start_path.read_bytes())
-                term_path.write_text(json.dumps(term)+"\\n")
+                term_path.write_text(json.dumps(term)+"\n")
                 manifest_path=root/"native_manifest.json"
                 manifest=json.loads(manifest_path.read_text())
                 manifest["children"][0].update({
@@ -603,10 +604,10 @@ class P2SourceContractTests(unittest.TestCase):
                     "intent_sha256":p.sha(intent_path.read_bytes()),
                     "start_sha256":p.sha(start_path.read_bytes()),
                     "terminal_sha256":p.sha(term_path.read_bytes())})
-                manifest_path.write_text(json.dumps(manifest)+"\\n")
+                manifest_path.write_text(json.dumps(manifest)+"\n")
                 prior_path=root/"terminal.json";prior=json.loads(prior_path.read_text())
                 prior["manifest_sha256"]=p.sha(manifest_path.read_bytes())
-                prior_path.write_text(json.dumps(prior)+"\\n")
+                prior_path.write_text(json.dumps(prior)+"\n")
                 with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_UNAUTHORIZED_COMMAND"):
                     p.verify_prior_preflight()
 
@@ -625,11 +626,11 @@ class P2SourceContractTests(unittest.TestCase):
                 manifest_path=root/"native_manifest.json"
                 manifest=json.loads(manifest_path.read_text())
                 manifest["native_count"]=1;manifest["children"]=manifest["children"][:1]
-                manifest_path.write_text(json.dumps(manifest)+"\\n")
+                manifest_path.write_text(json.dumps(manifest)+"\n")
                 prior_path=root/"terminal.json";prior=json.loads(prior_path.read_text())
                 prior["native_count"]=1
                 prior["manifest_sha256"]=p.sha(manifest_path.read_bytes())
-                prior_path.write_text(json.dumps(prior)+"\\n")
+                prior_path.write_text(json.dumps(prior)+"\n")
                 with self.assertRaisesRegex(RuntimeError,"PREFLIGHT_NATIVE_COUNT_NOT_FIXED"):
                     p.verify_prior_preflight()
 
