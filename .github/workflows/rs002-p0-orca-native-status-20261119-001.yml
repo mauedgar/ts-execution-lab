@@ -1,0 +1,51 @@
+name: RS002 P0 Orca native status binding source-only CI001
+on:
+  push:
+    branches:
+      - ee/rs002-p0-orca-native-status-readonly-20261119-001
+    paths:
+      - .github/workflows/rs002-p0-orca-native-status-20261119-001.yml
+permissions:
+  contents: read
+jobs:
+  native-status-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Freeze exactly three nonProduct source files, no host effect
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=experiments/TS-RS002-P0-ORCA-NATIVE-STATUS-20261119-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/ee/rs002-p0-orca-native-status-readonly-20261119-001
+          test "$(git rev-parse HEAD^)" = e16e8c2e18ef528384330e9c5660468ceec645ca
+          git merge-base --is-ancestor 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD
+          test "$(git rev-parse "HEAD:$root/orca_status_probe.py")" = a07fd6a66e87ea2c1a4d2660ecb7faec6c4e5586
+          test "$(git rev-parse "HEAD:$root/test_orca_status_probe.py")" = 8f97b9c91b8d80c5df5757d838d9d6fb97e66527
+          test "$(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD | wc -l)" -eq 3
+          while IFS= read -r item; do
+            case "$item" in
+              "$root/orca_status_probe.py"|"$root/test_orca_status_probe.py"|".github/workflows/rs002-p0-orca-native-status-20261119-001.yml") ;;
+              *) echo UNEXPECTED_WRITESET >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only 935ba9ff1dd2d06a39fb4b454125a51cfc4bbaa9 HEAD)
+          echo RS002_ORCA_NATIVE_STATUS_SOURCE_FROZEN
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Python3.15.2 read-only Orca CLI status source synthetics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.15.2
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS002-P0-ORCA-NATIVE-STATUS-20261119-001/test_orca_status_probe.py -v
+          echo RS002_ORCA_STATUS_CI_NO_ORCA_WSL_TERMINAL_INPUT_SECRET_DOCKER_SQL_PRODUCT
