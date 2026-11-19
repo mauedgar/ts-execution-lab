@@ -9,6 +9,9 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 WIDTHS=(320,375,768,1440)
 SEEDS={'OVERFLOW','LABEL','HIDDEN_SKU','CONSOLE','HTTP'}
+# Deliberate nonProduct fault-injection selectors, never enabled in regular QA.
+FAULT=os.environ.get('TS_EE_E2_FAULT','')
+ALLOWED_FAULTS={'','keyboard_block_positive','external_fulfill_simulated','runtime_exception'}
 HTML='''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>E2 QA fixture</title>
 <style>
@@ -64,8 +67,33 @@ class Server(BaseHTTPRequestHandler):
   self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
  def log_message(self,*args):pass
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def sha_large_file(p):
+ h=hashlib.sha256()
+ with open(p,'rb') as f:
+  while True:
+   chunk=f.read(1048576)
+   if not chunk:break
+   h.update(chunk)
+ return h.hexdigest()
+def write_failure_receipt(directory,exc):
+ """Create-only structured failure evidence; never turn a failed run into PASS."""
+ directory=Path(directory)
+ if not directory.is_dir() or directory.is_symlink():
+  return False
+ data={'schema':'ts-ee-e2-browser-qa/terminal-failure/v1',
+       'status':'FAIL','reported_verdict':'FAIL','source_sha256':sha(__file__),
+       'fault_mode':FAULT if FAULT in ALLOWED_FAULTS else 'INVALID_FAULT',
+       'exception_type':type(exc).__name__,
+       'reason_code':'SYNTHETIC_RUNTIME_EXCEPTION' if FAULT=='runtime_exception' else 'BROWSER_OR_FIXTURE_RUNTIME_EXCEPTION',
+       'Product_accepted':False,'provider_native_verified':False}
+ dest=directory/'TERMINAL_FAILURE.json'
+ with dest.open('x',encoding='utf-8') as f:
+  f.write(json.dumps(data,sort_keys=True,indent=2)+'\n')
+  f.flush();os.fsync(f.fileno())
+ return True
 
 def execute(dest):
+ if FAULT not in ALLOWED_FAULTS:raise RuntimeError('BLOCKED_UNKNOWN_TEST_FAULT')
  dest=Path(dest)
  if dest.exists():raise RuntimeError('BLOCKED_EXISTING_RESULT_PATH')
  dest.mkdir(parents=True)
@@ -87,7 +115,11 @@ def execute(dest):
    kw={'headless':True}
    if os.getenv('E2_CHROMIUM_PATH'):kw['executable_path']=os.environ['E2_CHROMIUM_PATH']
    browser=p.chromium.launch(**kw)
-   result['runtime']={'python':sys.version.split()[0],'playwright':version('playwright'),'chromium':browser.version}
+   binary=Path(p.chromium.executable_path)
+   if not binary.is_file():raise RuntimeError('BLOCKED_MISSING_CHROMIUM_BINARY')
+   result['runtime']={'python':sys.version.split()[0],'playwright':version('playwright'),
+     'chromium':browser.version,'chromium_executable_sha256':sha_large_file(binary),
+     'chromium_executable_bytes':binary.stat().st_size}
    try:
     for kind in ('good','bad'):
      found=set();rows=[];blocked_count=0
@@ -99,6 +131,10 @@ def execute(dest):
       def guard(route):
        if route.request.url.startswith(base+'/'):
         route.continue_()
+       elif FAULT=='external_fulfill_simulated' and route.request.url.startswith('https://wa.me/'):
+        # A synthetic SUCCESS response supplied locally: does not contact wa.me.
+        # The positive egress detector MUST recognize that no abort occurred.
+        route.fulfill(status=200,content_type='text/plain',body='E2_SIMULATED_EXTERNAL_SUCCESS_NO_NETWORK')
        else:
         request_url=route.request.url
         route.abort()
@@ -117,13 +153,15 @@ def execute(dest):
       else:
        page.goto(base+'/catalog?variant='+kind,wait_until='load')
       page.get_by_role('heading',name='Catalog',exact=True).wait_for()
+      if FAULT=='runtime_exception':raise RuntimeError('E2_SIMULATED_RUNTIME_EXCEPTION')
       geom=page.evaluate('({viewport:innerWidth,scroll:document.documentElement.scrollWidth})')
       if geom['scroll']>geom['viewport']+1:found.add('OVERFLOW')
       label_ok=page.get_by_role('searchbox',name='Search catalog').count()==1
       if not label_ok:found.add('LABEL')
       pic=dest/(kind+'-'+str(width)+'.png');page.screenshot(path=str(pic),full_page=True)
       result['artifacts'].append({'file':pic.name,'bytes':pic.stat().st_size,'sha256':sha(pic)})
-      page.goto(base+'/about?variant='+kind,wait_until='load')
+      page.goto(base+'/about?variant='+kind+
+                ('&keyboard=disabled' if FAULT=='keyboard_block_positive' else ''),wait_until='load')
       page.get_by_role('heading',name='About',exact=True).wait_for()
       page.keyboard.press('Tab')
       first_tab=page.evaluate("document.activeElement?.textContent?.trim()")
@@ -208,4 +246,15 @@ def execute(dest):
  return 0 if result['pass'] else 1
 if __name__=='__main__':
  a=argparse.ArgumentParser();a.add_argument('--output',required=True)
- sys.exit(execute(a.parse_args().output))
+ args=a.parse_args()
+ try:
+  sys.exit(execute(args.output))
+ except Exception as exc:
+  try:
+   saved=write_failure_receipt(args.output,exc)
+   print('E2_TERMINAL_FAILURE='+json.dumps({
+      'status':'FAIL','failure_receipt_created':saved,'exception_type':type(exc).__name__,
+      'source_sha256':sha(__file__)},sort_keys=True),flush=True)
+  except Exception as receipt_exc:
+   print('BLOCKED_FAILURE_RECEIPT='+type(receipt_exc).__name__,file=sys.stderr,flush=True)
+  sys.exit(2)
