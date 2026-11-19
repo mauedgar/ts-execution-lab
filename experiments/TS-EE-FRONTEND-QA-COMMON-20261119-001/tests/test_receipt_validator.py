@@ -45,6 +45,15 @@ class ContractTests(unittest.TestCase):
     def test_invalid_browser_binary_size_rejected(self):
         self.check(lambda r:r["runner"].update(browser_binary_bytes=0),
                    "INVALID_REPORT","missing_browser_binary_bytes")
+    def test_shape_only_report_is_rejected_by_strict_consumer_mode(self):
+        out=module.evaluate(copy.deepcopy(BASE))
+        self.assertEqual(out["status"],"VALID_TEST_VECTOR_SHAPE_ONLY")
+        strict=module.enforce_consumer_requirements(out,require_local_bytes=True)
+        self.assertEqual(strict["status"],"INVALID_REPORT")
+        self.assertIn("required_local_binary_readback_missing",strict["errors"])
+    def test_normal_shape_mode_preserves_historical_contract(self):
+        out=module.evaluate(copy.deepcopy(BASE))
+        self.assertEqual(module.enforce_consumer_requirements(out,False),out)
     def test_fake_provider_custody_not_attested(self):
         r=copy.deepcopy(BASE);r["original"]["custody"]="PROVIDER_NATIVE_READBACK"
         out=module.evaluate(r)
