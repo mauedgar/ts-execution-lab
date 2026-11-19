@@ -48,6 +48,14 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     stages=report.get("stages")
     if not isinstance(stages,dict):stages={}
     for name in STAGES:need(stages.get(name) in STATES,"bad_stage_"+name)
+    if runner.get("engine")=="PLAYWRIGHT_PYTHON" and stages.get("browser")=="PASS":
+        need(isinstance(runner.get("browser_version"),str) and
+             bool(runner.get("browser_version")),"missing_browser_version")
+        need(bool(HEX64.fullmatch(str(runner.get("browser_binary_sha256","")))),
+             "missing_browser_binary_sha256")
+        need(type(runner.get("browser_binary_bytes")) is int and
+             runner.get("browser_binary_bytes")>0,
+             "missing_browser_binary_bytes")
     scenarios=report.get("scenarios")
     if not isinstance(scenarios,dict):scenarios={}
     for name in SCENARIOS:need(scenarios.get(name) in STATES,"bad_scenario_"+name)

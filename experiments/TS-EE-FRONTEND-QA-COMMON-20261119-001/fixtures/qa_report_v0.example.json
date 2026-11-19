@@ -14,7 +14,10 @@
     "os": "ubuntu-24.04",
     "native_run_id": "FIXTURE_NOT_A_REAL_RUN",
     "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "attempt_number": 1
+    "attempt_number": 1,
+    "browser_version": "136.0.synthetic-test-vector",
+    "browser_binary_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "browser_binary_bytes": 12345678
   },
   "stages": {
     "identity": "PASS",

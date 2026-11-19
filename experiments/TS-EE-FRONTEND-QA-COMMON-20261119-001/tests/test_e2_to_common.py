@@ -31,7 +31,9 @@ def make(root):
                                       bytes=len(data)))
     return dict(schema="ts-ee-e2-browser-qa/v1",pass_=True,
                 source_sha256="a"*64,widths=[320,375,768,1440],service_workers="BLOCKED",
-                runtime={"playwright":"1.57.0"},
+                runtime={"playwright":"1.57.0","chromium":"136.0.test",
+                         "chromium_executable_sha256":"a"*64,
+                         "chromium_executable_bytes":12400000},
                 variants={"good":{"pass":True,"detected":[],"rows":rows,"blocked_external_requests":4},
                           "bad":{"pass":True,"detected":["CONSOLE","HIDDEN_SKU","HTTP","LABEL","OVERFLOW"],
                                  "rows":injected,"blocked_external_requests":4}},
@@ -54,7 +56,7 @@ class BridgeTests(unittest.TestCase):
     def test_missing_screenshot_blocks(self):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));(Path(d)/"good-320.png").unlink()
-            with self.assertRaisesRegex(ValueError,"MISSING_E2_ARTIFACT"):bridge(r,Path(d))
+            with self.assertRaisesRegex(ValueError,"UNSAFE_EVIDENCE_OPEN"):bridge(r,Path(d))
     def test_bad_control_must_match_known_injection(self):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["variants"]["bad"]["detected"]=[]
@@ -101,6 +103,37 @@ class BridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["widths"]=None
             with self.assertRaisesRegex(ValueError,"MALFORMED_E2_RUNTIME_OR_WIDTHS"):bridge(r,Path(d))
+    def test_wrong_type_outbound_counter_rejected_directly(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["rows"][0]["blocked_external"]="1"
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_COUNTER_good_blocked_external"):
+                bridge(r,Path(d))
+    def test_mixed_viewport_types_rejected_without_typeerror(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["widths"]=[320,375,None,1440]
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_VIEWPORT_TYPE"):
+                bridge(r,Path(d))
+    def test_missing_chromium_binary_identity_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["runtime"].pop("chromium_executable_sha256")
+            with self.assertRaisesRegex(ValueError,"CHROMIUM_BINARY_IDENTITY"):
+                bridge(r,Path(d))
+    def test_symlinked_artifact_rejected_by_fd_open(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);r=make(root);p=root/"good-320.png";replacement=root/"real-file"
+            p.rename(replacement);p.symlink_to(replacement)
+            with self.assertRaisesRegex(ValueError,"UNSAFE_EVIDENCE_OPEN"):
+                bridge(r,root)
+    def test_bad_binary_bytes_type_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["artifacts"][0]["bytes"]="7"
+            with self.assertRaisesRegex(ValueError,"ARTIFACT_LENGTH"):
+                bridge(r,Path(d))
+    def test_malformed_bool_flag_rejected_directly(self):
+        with tempfile.TemporaryDirectory() as d:
+            r=make(Path(d));r["variants"]["good"]["rows"][0]["keyboard_activated"]=None
+            with self.assertRaisesRegex(ValueError,"MALFORMED_E2_FLAG_good_keyboard_activated"):
+                bridge(r,Path(d))
     def test_local_artifact_sha_mismatch_blocks(self):
         with tempfile.TemporaryDirectory() as d:
             r=make(Path(d));r["artifacts"][0]["sha256"]="0"*64

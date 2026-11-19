@@ -39,6 +39,12 @@ class ContractTests(unittest.TestCase):
     def test_unsupported_os_egress_attestation_rejected(self):
         self.check(lambda r:r["network"].update(os_egress_attested=True),
                    "INVALID_REPORT","unjustified_os_egress_attestation")
+    def test_no_browser_binary_digest_rejected(self):
+        self.check(lambda r:r["runner"].pop("browser_binary_sha256"),
+                   "INVALID_REPORT","missing_browser_binary_sha256")
+    def test_invalid_browser_binary_size_rejected(self):
+        self.check(lambda r:r["runner"].update(browser_binary_bytes=0),
+                   "INVALID_REPORT","missing_browser_binary_bytes")
     def test_fake_provider_custody_not_attested(self):
         r=copy.deepcopy(BASE);r["original"]["custody"]="PROVIDER_NATIVE_READBACK"
         out=module.evaluate(r)
