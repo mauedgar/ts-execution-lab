@@ -35,7 +35,7 @@ class P2SourceContractTests(unittest.TestCase):
     def test_original_binding(self):
         self.assertEqual(p.C_SHA,'7aef5dff689e1ceb5575084f2445caf25116cff5a22917815400693d99316852')
         self.assertEqual(p.CID,'5ce2b0833fa7ab04eac1b0c78e51ead0ed7c5e1dc2aede5621dba397b3c20d88')
-        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261118-003')
+        self.assertEqual(p.RUNNER_ID,'TS-RS002-P2-OBSERVER-20261119-004')
 
     def test_host_fixed_mechanical_argv_and_password_inside_container(self):
         argv=p.cmd_for(p.POSITIVE,True)
@@ -175,8 +175,8 @@ class P2SourceContractTests(unittest.TestCase):
     def test_review_admission_exact_unique_and_provenance(self):
         review,j=self.review_text()
         p.parse_review_admission(review,j)
-        self.assertIn("PR59-WEBINLINE-IR004",p.REVIEW_REQUEST_PATH)
-        self.assertIn("PR59-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
+        self.assertIn("PR60-WEBINLINE-IR005",p.REVIEW_REQUEST_PATH)
+        self.assertIn("PR60-PHYSICAL-ADMISSION",p.CONTROL_GRANT_PATH)
         self.assertNotIn("PR56",p.REVIEW_REQUEST_PATH+p.CONTROL_GRANT_PATH)
 
     def test_review_admission_rejects_duplicates_and_no_recommend(self):
@@ -242,30 +242,100 @@ class P2SourceContractTests(unittest.TestCase):
             with self.subTest(addition=addition), self.assertRaises(RuntimeError):
                 p.parse_review_admission(review+"\n"+addition,j)
 
-    def test_verified_p0_dac_git_and_native_identity(self):
-        data={"protocol":"TS-RS002-P2-P0-HOST-DAC-NATIVE-v1",
-              "status":"PASS","other_uid_traversal":"DENIED",
-              "other_uid":65534,"identity_exit_code":0,"permission_check_exit_code":1,
-              "secret_contents_exposed":False,"container_id":p.CID,"host":p.HOST,
-              "distro":"Ubuntu-24.04","prior_C_terminal_sha256":p.C_SHA,
-              "Product_effect":"NONE"}
-        raw=json.dumps(data,sort_keys=True).encode()
+    def p0_provenance_fixture(self):
+        identity="11111111-1111-4111-8111-111111111111"
+        denial="22222222-2222-4222-8222-222222222222"
+        native={
+            "protocol":"TS-RS002-P2-P0-HOST-DAC-NATIVE-v2",
+            "execution_attempt":p.P0_NATIVE_ATTEMPT,
+            "provider":"ORCA_NATIVE_TERMINAL",
+            "status":"PASS","host":p.HOST,"distro":"Ubuntu-24.04",
+            "terminal":p.P0_TERMINAL,"terminal_incarnation":p.P0_TERMINAL_INCAR,
+            "container_id":p.CID,"prior_C_terminal_sha256":p.C_SHA,
+            "secret_contents_exposed":False,"Product_effect":"NONE",
+            "identity":{"request_id":identity,"native_pid":24501,"exit_code":0,"observed_uid":65534},
+            "denial":{"request_id":denial,"native_pid":24502,"exit_code":1,"observed_uid":65534}}
+        raw=json.dumps(native,sort_keys=True).encode()
+        digest=hashlib.sha256(raw).hexdigest()
+        begin="<!-- TS_RS002_P0_PROVIDER_REVIEW_V1_BEGIN -->"
+        end="<!-- TS_RS002_P0_PROVIDER_REVIEW_V1_END -->"
+        metadata="\n".join(("review_id: "+p.P0_REVIEW_ID,"verdict: RECOMMEND",
+            "findings: 0","advisories: 0",
+            "native_attempt: "+p.P0_NATIVE_ATTEMPT,
+            "native_original_sha256: "+digest,
+            "identity_request_id: "+identity,"denial_request_id: "+denial,
+            "native_exits: 0,1","provider_native_observed: true"))
+        review=("Review_ID: "+chr(96)+p.P0_REVIEW_ID+chr(96)+"\n"+
+            "Verdict: **RECOMMEND**\nFindings: **0**\nAdvisories: **0**\n"+
+            begin+"\n"+metadata+"\n"+end+"\n")
+        review_bytes=review.encode()
         j={"p0_receipt_commit":"a"*40,"p0_receipt_blob":"b"*40,
-           "p0_receipt_sha256":hashlib.sha256(raw).hexdigest()}
-        result={"path":p.P0_DAC_ORIGINAL_PATH,"sha":"b"*40,
-                "content":base64.b64encode(raw).decode()}
-        with patch.object(p,"read_output",return_value=json.dumps(result)):
-            p.verify_p0_dac(j)
-            wrong=dict(j)
-            wrong["p0_receipt_sha256"]="0"*64
-            with self.assertRaises(RuntimeError):p.verify_p0_dac(wrong)
-        data["permission_check_exit_code"]=0
-        altered=json.dumps(data,sort_keys=True).encode()
-        j["p0_receipt_sha256"]=hashlib.sha256(altered).hexdigest()
-        result["content"]=base64.b64encode(altered).decode()
-        with patch.object(p,"read_output",return_value=json.dumps(result)):
-            with self.assertRaises(RuntimeError):p.verify_p0_dac(j)
+           "p0_receipt_sha256":digest,
+           "p0_review_commit":"c"*40,"p0_review_blob":"d"*40,
+           "p0_review_sha256":hashlib.sha256(review_bytes).hexdigest()}
+        return native,raw,review,j
 
+    def test_p0_provider_native_and_distinct_review_required(self):
+        native,raw,review,j=self.p0_provenance_fixture()
+        original={"path":p.P0_DAC_ORIGINAL_PATH,"sha":j["p0_receipt_blob"],
+                  "content":base64.b64encode(raw).decode()}
+        independent={"path":p.P0_REVIEW_PATH,"sha":j["p0_review_blob"],
+                     "content":base64.b64encode(review.encode()).decode()}
+        with patch.object(p,"read_output",side_effect=[
+             json.dumps(original),json.dumps(independent)]) as reader:
+            p.verify_p0_dac(j)
+        self.assertEqual(reader.call_count,2)
+        p.validate_p0_native(native)
+        p.validate_p0_review(review,native,hashlib.sha256(raw).hexdigest())
+
+    def test_p0_forged_single_json_without_independent_review_denied(self):
+        native,raw,review,j=self.p0_provenance_fixture()
+        doc={"path":p.P0_DAC_ORIGINAL_PATH,"sha":j["p0_receipt_blob"],
+             "content":base64.b64encode(raw).decode()}
+        with patch.object(p,"read_output",side_effect=[
+             json.dumps(doc),json.dumps({"path":p.P0_REVIEW_PATH,
+             "sha":"e"*40,"content":""})]):
+            with self.assertRaisesRegex(RuntimeError,"P0_INDEPENDENT_REVIEW_GIT_MISMATCH"):
+                p.verify_p0_dac(j)
+
+    def test_p0_native_identity_and_unreviewed_exit_forgeries_rejected(self):
+        native,raw,review,j=self.p0_provenance_fixture()
+        for changed in (
+            ("denial","exit_code",0),("identity","observed_uid",0),
+            ("identity","native_pid",0),
+            ("denial","request_id",native["identity"]["request_id"])):
+            with self.subTest(changed=changed):
+                forged=json.loads(json.dumps(native))
+                forged[changed[0]][changed[1]]=changed[2]
+                with self.assertRaises(RuntimeError): p.validate_p0_native(forged)
+        bad=review.replace("native_exits: 0,1","native_exits: 0,0")
+        with self.assertRaises(RuntimeError):
+            p.validate_p0_review(bad,native,hashlib.sha256(raw).hexdigest())
+        with self.assertRaises(RuntimeError):
+            p.validate_p0_review(review+"\nFindings: **4**",native,hashlib.sha256(raw).hexdigest())
+
+    def test_indirect_role_attributes_in_every_role_fingerprint(self):
+        self.assertIn("FROM pg_roles)",p.AUTHORITY_SNAPSHOT)
+        self.assertNotIn("WHERE rolname IN",p.AUTHORITY_SNAPSHOT)
+        for name in ("rolsuper","rolbypassrls","rolcreaterole",
+                     "rolinherit","rolconnlimit","rolvaliduntil"):
+            with self.subTest(name=name):self.assertIn(name,p.AUTHORITY_SNAPSHOT)
+        before=p.interpret("snapshot_before",0,self.snap(),"",None)
+        changed=p.interpret("snapshot_before",0,self.snap(5),"",None)
+        self.assertEqual(before[:5],changed[:5])
+        with self.assertRaisesRegex(RuntimeError,"SCHEMA_ROWS_CHANGED"):
+            p.interpret("snapshot_after",0,self.snap(5),"",before)
+
+    def test_crash_gap_is_unknown_no_replay_even_without_native_pid(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/"attempt"
+            self.assertEqual(p.classify_existing_attempt(root),"NONE")
+            root.mkdir(mode=0o700)
+            p.write_once(root/"step_intent_hba.json",{"status":"PRE_SPAWN_UNKNOWN"})
+            self.assertEqual(p.classify_existing_attempt(root),"UNKNOWN_NONREPLAYABLE")
+            p.write_once(root/"terminal.json",{"runner_id":p.RUNNER_ID,
+                "status":"UNKNOWN","no_retry":True})
+            self.assertEqual(p.classify_existing_attempt(root),"TERMINAL_UNKNOWN")
 
     def test_postspawn_receipt_write_error_preserves_unknown_original_pid(self):
         with tempfile.TemporaryDirectory() as d:
