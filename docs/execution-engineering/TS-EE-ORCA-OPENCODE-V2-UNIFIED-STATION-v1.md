@@ -54,6 +54,14 @@ The exact `<verified_version>` is a *placeholder in the method*, never pass it l
 - Legacy Orca terminal `orphaned` statuses after runtime upgrade require exact owner/effect reconciliation before closing. Do not infer empty effect from GUI labels or process silence.
 - Orca itself remains WinGet-managed v1.4.265; official v1.4.266 existed on GitHub at cutoff but was not yet indexed in WinGet. Do not run unqualified parallel/multiple installer upgrades merely to match a newer release; Orca update choices remain separately version/hash/runtime-bound. The installed provider already exposes `agent-cli-update.v1`, but the native agent update mechanism is not a substitute for this verified npm prefix ownership until its actual behavior is qualified.
 
+## Superseding Developer ruling: retire opencode2 (2026-11-20)
+
+The Developer explicitly withdrew the use of the name `opencode2` for all new work. **Only `opencode` is the qualified command**, and Orca native agent launches must explicitly select `--agent opencode` until the persisted default is migrated. Historical alias observations above remain evidence of previous versions/links, NOT a recommendation to use them.
+
+Native current `orca agent installed --json` reported `opencode2.default=true`, `opencode.default=false`. The official `@opencode/cli@2.3.2` manifest advertises both `opencode` and `opencode2`, so npm updates may regenerate the latter. **Physical removal of both user-owned and npm-created aliases is BLOCKED_PRECONDITION_DEFAULT_AGENT**, not confirmed, because deleting first could break Orca's implicit launches. Qualify the native Orca default/disabled-agent setting and verify `opencode.default=true` before performing guarded OS alias removal. No direct Orca settings DB mutation, no rewriting secrets, no deletion of old sessions or a stale historical binary. The predecessor's compatibility rules are superseded for future dispatches.
+
+**Required terminal lifecycle:** [Orca Visible Terminal Lease Lifecycle v1](ORCA-VISIBLE-TERMINAL-LEASE-LIFECYCLE-v1.md). Create an Orca visible terminal only in an existing authorized repo/worktree, bind attempt and host/runtime/incarnation, then close that exact terminal once the responsibility finishes and all effects have settled. Verify `close.ptyKilled=true` and scoped absence in the native terminal list before claiming operational closure. Never bulk-close shared/running/orphaned/UNKNOWN sessions.
+
 ## Boundary
 
 TS EE station integration is technically operational at the CLI/visible-terminal layer. Product_authority NONE; Product_effect NONE; Remote State P0/P2 physical and PR63 untouched; Kernel replacement NO_GO; Beta Run008 paused. This document does not supersede the deeper original Orca provider custody/Windows-WSL child-exit qualification or invent an Independent Review. Do not promote synthetic, historical or agent-model results from this station verification.
