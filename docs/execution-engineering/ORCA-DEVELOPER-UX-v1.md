@@ -147,6 +147,10 @@ Use one dispatch per exact `ExecutionAttempt`. While it runs, advance only disjo
 
 **Scope note:** this section governs *local OpenCode2 semantic execution* across TS execution workstreams. Read-only operational preflights from non-Orca tools remain allowed within their independent mechanical contracts. This document does not authorize any new model provider, installation, Product effects, parallel inference, retry or automatic remote fallback. The canonical EE operating contract points here; Product SOT/Control decides what work is permissible.
 
+### 7.2 OpenCode V2 unified station (20 November 2026)
+
+The local names **OpenCode2** and **OpenCode V2** are one agent-family identity, not an obligation to maintain a second standalone executable. For new launches use the OS-native canonical `opencode` from the single verified npm installation in each Windows/WSL environment. Legacy `opencode2` is a compatibility alias only. Preserve every §7.1 requirement: **local semantic execution originates in an Orca-owned visible terminal**, with exact worktree/host, provider/model/cost/permissions and original receipt. Neither Commander nor a bare WSL command may launch an OpenCode semantic agent. Do not infer an agent-session PASS from the version-only terminal test. The bounded technical installation/update method and receipts are in [TS EE Orca + OpenCode V2 Unified Station v1](TS-EE-ORCA-OPENCODE-V2-UNIFIED-STATION-v1.md). This is nonProduct station evidence, not Product adoption or a replacement for Orca Windows→WSL child-exit custody qualification.
+
 ## 8. FitFlow Issue #25 — ADMIN Playwright
 
 Materialize `fitflow-issue25-admin-playwright-001` only from a freshly observed `origin/develop` and link Issue #25. Start the authorized application stack explicitly in `02 · FF · App`, then discover the listener:
