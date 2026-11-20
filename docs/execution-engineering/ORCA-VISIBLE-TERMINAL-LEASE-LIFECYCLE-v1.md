@@ -52,6 +52,22 @@ Do not pre-create persistent shells for every Product. Keep permanent repo/workt
 - Postclose native `terminal list --json`, original PID6832, `ok=true`, runtime unchanged, `totalCount=13`, `hostScope.hostIds=[local]`, `omittedHostIds=[]`, exact new handle absent and no terminal for this root. `PASS_VISIBLE_PER_REPO_ACQUIRE_SETTLE_CLOSE`, original effect confirmed, no replay.
 - Existing 13 historical terminal records include some `orphaned=true`/unknown owner; NOT included in this proof cleanup. They need individual independent reconciliation to justify any termination; this method does not confer that authority.
 
+## Existing Orca per-repository registration, observation only
+
+Read-only Orca worktree ps --json, original Commander PID3256, exit0: 19 registered worktrees, current observed Orca runtime at that cutoff 247c3eb7-94c7-4615-a1a9-f485ddcb0a68. **Registration is not canonical Product SOT or a fresh execution permit.** The same exact Product repo may have more than one registered root with different execution platforms. Each future competent Control must select the correct existing registered worktree by unique ID, SOT/candidate/HEAD and OS, and qualify its own native new-terminal binding before any model.
+
+| Registered surface observed | Orca terminalPlatform | Safe operational interpretation |
+| --- | --- | --- |
+| TS EE lab main worktree C:/TS/station/worktrees/ts-ee-llm040-source-20261030-001 | win32 | Per-worktree visible terminal acquire/close qualified today, no Product |
+| Tecnotron Linux root \\wsl.localhost\Ubuntu-24.04\home\tsops\workspaces\tecnotron-ai | linux | Native WSL registered, suitable only after competent Tecnotron SOT/attempt preflight |
+| Tecnotron Windows C:\TS\repos\tecnotron-ai | linux | Navigation-only historical root with counterintuitive platform; HOLD for new model launches |
+| FitFlow Windows C:/TS/repos/FitFlow | win32 | Existing Windows root, candidate for a competent FitFlow Windows attempt |
+| FitFlow WSL \\wsl.localhost\Ubuntu-24.04\home\tsops\workspaces\FitFlow | win32 | WSL path marked win32: **HOLD for any assumed native WSL launch** until repaired and requalified |
+| Aware Commerce C:/TS/station/aware-commerce-p0-20261109-001 | win32 | Registered historical local root; no inference that this is current Product authoritative checkout |
+| Attendance | no matching registration in this 19-item observed snapshot | No preexisting exact Orca workspace; register the competent SOT-selected root in an authorized separate gate before starting a terminal |
+
+Do not create or pre-open permanent terminals for each Product and do not repair Product registries merely because a historical Orca registration looks stale. If a user specifically asks "open OpenCode in this Product", a competent Product Control must choose exact repo/worktree and authorized operation, and the station then creates its fresh visible terminal, returning a provider receipt. On completion, close its exact handle per this method. Reuse existing native evidence rather than re-probing historical worktrees en masse.
+
 ## Non-goals
 
 No worktree creation, source edit, test Product, grant to use models, default agent settings mutation, account/secret read, blanket orphan cleanup, WSL child PID/UID/namespace/exit qualification, Kernel or Beta Run effects. Current method qualifies visible terminal ownership and closure at a workstation level only.
