@@ -1,24 +1,29 @@
-# TS EE 003 — ChromeDriver Q0/Q1 candidate B001
+# TS EE 003 — ChromeDriver B002 repair and negative-fault matrix
 
+status: EXPERIMENTAL_NONPRODUCT_CANDIDATE_NOT_ADOPTED
 authority: TS_EXECUTION_ENGINEERING_NONPRODUCT_ONLY
-product_authority: NONE
-product_effect: NONE
-status: EXPERIMENTAL_NOT_QUALIFIED
-source_base: mauedgar/ts-execution-lab@b451fe41b789a02e56cb5896b9db669467c52bfa
-branch: experiment/ts-ee003-chromedriver-b001-20261121
+Product_effect: NONE
+original_B001_head: 72a8e606b1dd3e75c38a55fa4ffe55e88a8eedaf
+original_B001_run: 44866963011 (attempt 1, SUCCESS, preserved)
+B001_review_task_terminal: BLOCKED_INDEPENDENCE (do not replay)
+B002_branch: experiment/ts-ee003-chromedriver-b002-20261121
 
-## Scope
+## Repair scope
 
-One real ChromeDriver lifecycle trial per isolated GitHub Actions matrix job (two jobs). Each job creates one ephemeral Chrome profile and measures GET /status separately from one native W3C POST /session. DELETE /session and process/profile teardown are mandatory. Synthetic protocol tests independently test W3C success, invalid response, timeout and redaction, without external origins.
+This is a DISTINCT candidate, not a retry of B001. One new real ChromeDriver session per native CI job, plus four deliberately negative **nonProduct** harness fault scenarios using short-lived localhost Node stubs (DRIVER_EXIT, SESSION_TIMEOUT, POST_REJECT and DELETE_REJECT). Each negative fixture must terminate as FAIL and report all browser scenarios NOT_RUN. No Product source, credentials, production navigation, model inference or external origin.
 
-No historical Aware CI, Product source, model inference, secrets or external URLs are used. Browser route and viewport scenarios remain NOT_RUN. network=OBSERVE_ONLY does not prove interception or OS-level egress prevention. No raw driver verbose logs, WebDriver session IDs, screenshots, cookies or bearer tokens are exported. The JSON is a producer self-report, not independent native provider attestation.
+The original direct ChromeDriver exit cannot attest all Chrome descendants. B002 explicitly reports `driver_termination=DIRECT_PROCESS_EXIT_OBSERVED|NO_CHILD_SPAWNED|UNVERIFIED` and `descendant_termination=NOT_ATTESTED`; profile_cleanup PASS only means isolated directory removal. An unresolved/timeout `POST /session` is `session_remote_state=UNKNOWN`, never falsely ACK. `DELETE /session` refusal remains terminal FAIL even if main driver exit and profile removal are observed.
 
-GitHub ubuntu-24.04 runner is NOT an immutable Chrome/ChromeDriver pin. Each job must read actual versions, resolved executable paths, file hashes, image version and source commit/tree; missing tools fail closed. Two trials do not establish robust latency percentiles, guaranteed ETA, or grounds to raise historical 12/15-second timeouts.
+Use `TS_EE_TEST_FAULTS=1` only in the isolated NONPRODUCT workflow to enable synthetic fixture paths, never Product. The real session path uses the same 12000ms request timeout and does not auto-retry. Native CI has no raw chromedriver verbose output or WebDriver sessionId in JSON/logs/ZIPs. Fake malicious session ID, token and screenshot markers are injected in test doubles; all report/stdout/stderr bytes must exclude them. Host network assurance remains OBSERVE_ONLY, with OS egress unattested; `--no-sandbox` is confined to isolated CI.
 
-## Expected gates and exclusions
+## Limits and residual advisories
 
-B001 is a bounded Q0 real session/teardown observation plus Q1 synthetic protocol checks. It does NOT qualify generic ChromeDriver Node Common v0 end-to-end, native child PID custody, browser route QA, network enforcement, independent review or Product use. Next qualified gates: deterministic native process-exit and cleanup-failure fixtures; loopback GOOD/BAD routes and four viewports; negative privacy tests on ZIP+logs; compatible versioned Common receipt and full strict validator; independent Q6 review of exact code, native CI/jobs/HEAD/tree, ZIP/inner hashes.
+- The ephemeral selected TCP port is released before spawn, so service-port binding is not independently traced (TOCTOU); original driver PID/descendant provenance still excluded.
+- Ubuntu image and Chrome/driver versions are read by native job and hashed, but the hosted image remains mutable and file hashes are not process executable attestation.
+- Negative-fixture direct-process exit is not a real Chrome crash/missing dependency. Two new real positive jobs and four deliberate failure cases still cannot establish reliability percentiles or a ChromeDriver timeout root cause.
+- Current Common v0 strict validator requires PREVENTIVE_BROWSER_ABORT to declare browser=PASS, incompatible with truthful ChromeDriver OBSERVE_ONLY. A proposed v0.1 contract is not adopted. No browser route/viewport/screenshot E2E, no actual Product A01 adapter, no Q6 independent review.
 
-Current Common v0 requires PREVENTIVE_BROWSER_ABORT whenever browser=PASS. A truthful ChromeDriver OBSERVE_ONLY browser PASS must not weaken this invariant. A compatible, versioned extension must distinguish functional test PASS from independently proven network safety. Aware A01 disposition remains separately BLOCKED_SCHEMA_REQUIREMENT until such method contract is qualified and Product-owner adopts it.
+Native CI must verify exact branch head/tree, source hash, both job statuses and artifact ZIP/inner hashes. The experimental repair remains DRAFT until independent full-source review by a reviewer with NO implementation-context inheritance, competent nonProduct disposition and later method integration grant.
 
-No unconditional retries, no automatic fallback to another engine, no Product merge/deploy/adoption.
+Original B001 derivative evidence: `mauedgar/ts-execution-transport@15e642e293018ac6ca73744c5980fde585651d38:results/TS-EE-003-CHROMEDRIVER-B001-NATIVE-20261121-001/TECHNICAL_RETURN.md`.
+Review independence audit: `mauedgar/ts-execution-transport@a76c0246379647e1b466f9c77a2495bad0207688:results/TS-EE-003-PR67-REVIEW-INDEPENDENCE-RECONCILIATION-20261121-001/CONTROL_RETURN.md`.
