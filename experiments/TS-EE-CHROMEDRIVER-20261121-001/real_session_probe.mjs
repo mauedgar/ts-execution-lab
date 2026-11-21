@@ -12,6 +12,24 @@ const classification = Object.freeze({
   created: 'SESSION_CREATED', sessionTimeout: 'SESSION_CREATE_TIMEOUT',
   sessionError: 'SESSION_CREATE_ERROR', badResponse: 'BAD_W3C_RESPONSE'
 });
+const faultMode = process.env.TS_EE_FAULT_MODE || 'NONE';
+const faultModes = new Set(['NONE','DRIVER_EXIT','SESSION_TIMEOUT','POST_REJECT','DELETE_REJECT']);
+if (!faultModes.has(faultMode)) throw new Error('INVALID_FAULT_MODE');
+if (faultMode !== 'NONE' && process.env.TS_EE_TEST_FAULTS !== '1') throw new Error('FAULT_MODE_NOT_AUTHORIZED');
+const stubChild = "const http=require('node:http');" +
+  "const mode=process.argv[1],port=Number(process.argv[2]);" +
+  "http.createServer((req,res)=>{" +
+  "res.setHeader('content-type','application/json');" +
+  "if(req.url==='/status'){res.end(JSON.stringify({value:{ready:true}}));return;}" +
+  "if(req.url==='/session'&&req.method==='POST'){" +
+  "if(mode==='SESSION_TIMEOUT'){setTimeout(()=>{if(!res.destroyed)res.end('{\\\"value\\\":null}');},800);return;}" +
+  "if(mode==='POST_REJECT'){res.statusCode=500;res.end(JSON.stringify({value:{error:'session not created',token:'FAKE_SECRET_TOKEN'}}));return;}" +
+  "res.end(JSON.stringify({value:{sessionId:'FAKE_SECRET_SESSION_ID',fakeToken:'FAKE_SECRET_TOKEN',fakeImage:'FAKE_BASE64_PNG'}}));return;}" +
+  "if(req.method==='DELETE'&&req.url.startsWith('/session/')){" +
+  "if(mode==='DELETE_REJECT'){res.statusCode=500;res.end(JSON.stringify({value:{error:'unknown error',token:'FAKE_SECRET_TOKEN'}}));return;}" +
+  "res.end('{\\\"value\\\":null}');return;}" +
+  "res.statusCode=404;res.end('{\\\"value\\\":null}');" +
+  "}).listen(port,'127.0.0.1');";
 const out = {
   schema: 'ts-ee/chromedriver-session-lifecycle/v0',
   subject: 'NONPRODUCT_SYNTHETIC',
@@ -21,10 +39,15 @@ const out = {
   status_ready_ms: null, session_create_ms: null,
   status_result: 'NOT_RUN', session_result: 'NOT_RUN',
   session_delete: 'NOT_APPLICABLE', driver_termination: 'NOT_RUN',
-  profile_cleanup: 'NOT_RUN', overall: 'FAIL', error_class: 'NONE'
+  profile_cleanup: 'NOT_RUN', descendant_termination: 'NOT_ATTESTED',
+  session_remote_state: 'NOT_REQUESTED',
+  driver_launch_status: 'NOT_RUN', fault_mode: faultMode,
+  port_process_binding: 'NOT_ATTESTED',
+  overall: 'FAIL', error_class: 'NONE'
 };
 let driver = null;
 let driverEnded = false;
+let spawnFailed = false;
 let driverExitResolve;
 const driverEnd = new Promise(resolve => { driverExitResolve = resolve; });
 
@@ -58,20 +81,26 @@ async function terminate() {
     try { process.kill(-driver.pid,'SIGKILL'); } catch { /* may have exited */ }
     await Promise.race([driverEnd, sleep(2500)]);
   }
-  out.driver_termination = driverEnded ? 'OBSERVED_EXIT' : 'UNVERIFIED';
+  out.driver_termination = spawnFailed ? 'NO_CHILD_SPAWNED' : driverEnded ? 'DIRECT_PROCESS_EXIT_OBSERVED' : 'UNVERIFIED';
+  out.descendant_termination = 'NOT_ATTESTED';
 }
 async function execute() {
-  const dir = await mkdtemp(join(tmpdir(), 'ts-ee-chromedriver-b001-'));
+  const dir = await mkdtemp(join(tmpdir(), 'ts-ee-chromedriver-b002-'));
   const profile = join(dir,'chrome-profile');
   try {
     const port = await reserveEphemeralPort();
     const base = 'http://127.0.0.1:' + port;
-    const exe = process.env.CHROMEDRIVER_BIN || 'chromedriver';
-    driver = spawn(exe, ['--port='+port, '--silent', '--allowed-ips=127.0.0.1'], {
+    const exe = faultMode === 'NONE' ? (process.env.CHROMEDRIVER_BIN || 'chromedriver') : process.execPath;
+    const args = faultMode === 'NONE'
+      ? ['--port='+port, '--silent', '--allowed-ips=127.0.0.1']
+      : faultMode === 'DRIVER_EXIT' ? ['-e','process.exit(23)']
+        : ['-e',stubChild,faultMode,String(port)];
+    driver = spawn(exe, args, {
       detached: true, stdio: 'ignore', shell: false, env: { ...process.env }
     });
+    out.driver_launch_status = 'SPAWN_REQUESTED';
     driver.once('exit', () => {driverEnded=true;driverExitResolve();});
-    driver.once('error', () => {driverEnded=true;driverExitResolve();});
+    driver.once('error', () => {spawnFailed=true;driverEnded=true;driverExitResolve();});
     const statusStart = performance.now();
     let ready = false;
     while (elapsed(statusStart) < 7000) {
@@ -93,6 +122,7 @@ async function execute() {
     out.status_result = classification.ready;
     const requestStart=performance.now();
     let sessionId=null;
+    out.session_remote_state='UNKNOWN';
     try {
       const r = await request(base, '/session', 'POST', {
         capabilities: { alwaysMatch: {
@@ -103,13 +133,14 @@ async function execute() {
             '--disable-background-networking', '--user-data-dir='+profile
           ] }
         } }
-      }, 12000);
+      }, faultMode === 'SESSION_TIMEOUT' ? 40 : 12000);
       out.session_create_ms = elapsed(requestStart);
-      if (!r.ok) {out.session_result=classification.sessionError;out.error_class='SESSION_NOT_CREATED';}
+      if (!r.ok) {out.session_result=classification.sessionError;out.error_class='SESSION_NOT_CREATED';out.session_remote_state='REJECTED';}
       else if (typeof r.data?.value?.sessionId !== 'string' || !r.data.value.sessionId) {
         out.session_result=classification.badResponse;out.error_class='BAD_W3C_RESPONSE';
       } else {
         sessionId=r.data.value.sessionId;
+        out.session_remote_state='CREATED';
         out.session_result=classification.created;
       }
     } catch(e) {
@@ -122,13 +153,14 @@ async function execute() {
         try {
           const r=await request(base,'/session/'+encodeURIComponent(sessionId),'DELETE',null,3000);
           out.session_delete=r.ok?'ACK':'FAIL';
-        } catch {out.session_delete='FAIL';}
+          out.session_remote_state=r.ok?'DELETED_CONFIRMED':'UNKNOWN';
+        } catch {out.session_delete='FAIL';out.session_remote_state='UNKNOWN';}
       }
     }
   } finally {
     await terminate();
     try {
-      if (out.driver_termination === 'OBSERVED_EXIT') {
+      if (out.driver_termination === 'DIRECT_PROCESS_EXIT_OBSERVED' || out.driver_termination === 'NO_CHILD_SPAWNED') {
         await rm(dir,{recursive:true,force:true,maxRetries:0});
         out.profile_cleanup='PASS';
       } else out.profile_cleanup='BLOCKED_PROCESS_UNVERIFIED';
@@ -136,8 +168,9 @@ async function execute() {
     out.overall = out.status_result === classification.ready &&
       out.session_result === classification.created &&
       out.session_delete === 'ACK' &&
-      out.driver_termination === 'OBSERVED_EXIT' &&
-      out.profile_cleanup === 'PASS' ? 'PASS_BOUNDED_LIFECYCLE' : 'FAIL';
+      out.driver_termination === 'DIRECT_PROCESS_EXIT_OBSERVED' &&
+      out.session_remote_state === 'DELETED_CONFIRMED' &&
+      out.profile_cleanup === 'PASS' ? 'PASS_BOUNDED_DIRECT_DRIVER' : 'FAIL';
     if (out.overall !== 'PASS_BOUNDED_LIFECYCLE' && out.error_class==='NONE') out.error_class='CLEANUP_OR_RUNTIME_FAILED';
   }
 }
@@ -149,4 +182,4 @@ try {
   await writeFile(join(output,'SESSION_REPORT.json'), JSON.stringify(out,null,2)+'\n',{flag:'wx'});
 } catch { out.overall='FAIL';out.error_class='RECEIPT_WRITE_FAILED'; }
 console.log(JSON.stringify(out));
-if (out.overall !== 'PASS_BOUNDED_LIFECYCLE') process.exitCode=1;
+if (out.overall !== 'PASS_BOUNDED_DIRECT_DRIVER') process.exitCode=1;
