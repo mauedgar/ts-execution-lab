@@ -103,16 +103,26 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     if not isinstance(network,dict):network={}
     need(network.get("enforcement") in ("PREVENTIVE_BROWSER_ABORT","OBSERVE_ONLY"),"bad_network_mode")
     need(network.get("service_workers") in ("BLOCKED","NOT_VERIFIED"),"bad_service_workers")
-    need(network.get("measurement_scope")=="BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY",
+    scope=network.get("measurement_scope")
+    need(scope in ("BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY","LOCAL_FIXTURE_SERVER_ONLY"),
          "network_scope_not_bounded")
+    fixture_only=scope=="LOCAL_FIXTURE_SERVER_ONLY"
+    if fixture_only:
+        need(network.get("enforcement")=="OBSERVE_ONLY","fixture_scope_cannot_claim_prevention")
+        need(network.get("service_workers")=="NOT_VERIFIED","fixture_scope_cannot_claim_sw_block")
     need(network.get("os_egress_attested") is False,"unjustified_os_egress_attestation")
     counts={}
     for k in ("outbound_attempted","outbound_blocked","outbound_escaped"):
         v=network.get(k)
-        need(type(v) is int and v>=0,"bad_network_"+k)
-        counts[k]=v if type(v) is int and v>=0 else 0
-    need(counts["outbound_blocked"]+counts["outbound_escaped"]==counts["outbound_attempted"],
-         "inconsistent_network_counts")
+        if fixture_only:
+            need(v is None,"unmeasured_network_count_must_be_null_"+k)
+            counts[k]=0  # internal validation only, NOT measured traffic
+        else:
+            need(type(v) is int and v>=0,"bad_network_"+k)
+            counts[k]=v if type(v) is int and v>=0 else 0
+    if not fixture_only:
+        need(counts["outbound_blocked"]+counts["outbound_escaped"]==counts["outbound_attempted"],
+             "inconsistent_network_counts")
     artifacts=report.get("artifacts")
     if not isinstance(artifacts,list):artifacts=[]
     names=set();shots=set();has_trace=False
@@ -207,6 +217,7 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
             "network_assurance_status":report["network_assurance_status"],
             "terminal_result":report["terminal_result"],
             "network_policy_qualified": report["network_assurance_status"]=="PREVENTIVE_BROWSER_ABORT",
+            "network_metrics_measured":not fixture_only,
             "acceptance_authority":"EXTERNAL_PRODUCT_CONTROL_ONLY"}
 
 def enforce_consumer_requirements(result, require_local_bytes=False):
