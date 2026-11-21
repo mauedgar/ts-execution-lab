@@ -171,7 +171,7 @@ async function execute() {
       out.driver_termination === 'DIRECT_PROCESS_EXIT_OBSERVED' &&
       out.session_remote_state === 'DELETED_CONFIRMED' &&
       out.profile_cleanup === 'PASS' ? 'PASS_BOUNDED_DIRECT_DRIVER' : 'FAIL';
-    if (out.overall !== 'PASS_BOUNDED_LIFECYCLE' && out.error_class==='NONE') out.error_class='CLEANUP_OR_RUNTIME_FAILED';
+    if (out.overall !== 'PASS_BOUNDED_DIRECT_DRIVER' && out.error_class==='NONE') out.error_class='CLEANUP_OR_RUNTIME_FAILED';
   }
 }
 try { await execute(); }
