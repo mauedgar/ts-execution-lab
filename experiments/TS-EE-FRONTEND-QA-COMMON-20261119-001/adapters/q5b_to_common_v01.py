@@ -54,7 +54,9 @@ def local_source(root,w):
     require(set(checks)==set(CHECKS),"Q5B_CHECK_SET_INCOMPLETE")
     require(all(checks[k]=="PASS" for k in CHECKS),"Q5B_CHECK_NOT_PASS")
     ev=r.get("local_http_events",{})
-    require(all(ev.get(k)==1 for k in ("product","deniedSku","notFound","serverError","scriptError")),"FIXTURE_FAULT_EVENT_NOT_OBSERVED")
+    require(type(ev.get("product")) is int and ev.get("product")>=1 and
+            all(ev.get(k)==1 for k in ("deniedSku","notFound","serverError","scriptError")),
+            "FIXTURE_FAULT_EVENT_NOT_OBSERVED")
     a=r.get("screenshot",{})
     name="q5b-"+str(w)+".png"
     require(a.get("filename")==name and a.get("width")==w,"SCREENSHOT_IDENTITY_MISMATCH")
