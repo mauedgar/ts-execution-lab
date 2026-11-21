@@ -1,3 +1,11 @@
+# B003 distinct repair / positive receipt cross-field gate (2026-11-21)
+
+B002 original `mauedgar/ts-execution-lab@785ac7f23f6a69bfcea7154ea404517a33654453`, Actions run `44867532566` attempt 1, concluded CI SUCCESS but **SEMANTIC_NO_RECOMMEND**. Both B002 positive JSON reported contradictory `overall=PASS_BOUNDED_DIRECT_DRIVER` and `error_class=CLEANUP_OR_RUNTIME_FAILED`. B002 is terminal; do not repeat or rewrite its original run.
+
+B003 freezes a new source candidate from B002, repairs only the stale error-class comparison in `real_session_probe.mjs` and adds `positive_receipt_gate.mjs`. This gate verifies the actual real-session JSON (not merely synthetic fixtures) requires success status and `error_class=NONE`, DELETE ACK, remote DELETED_CONFIRMED, direct driver exit observed, profile cleanup PASS, explicit descendants/port NOT_ATTESTED, browser scenarios NOT_RUN, network OBSERVE_ONLY and provider/Product acceptance both false. It deliberately mutates seven positive-receipt vectors and proves the gate rejects contradictions, overclaims and unexpected data. The native CI runs real session once per isolated job and then applies the consistency gate on its actual bytes.
+
+B003 remains an **experimental session lifecycle and receipt consistency** qualification, not full ChromeDriver/Frontend QA Common or Product acceptance. B002 four negative process/timeout/cleanup fixtures are reused as source tests in a *distinct new execution* under B003; do not confuse this with rerunning B002. Strict Common v0 baseline unchanged; v0.1 still PROPOSED_NOT_ADOPTED. Original provider ZIP SHA and inner hashes must be joined before calling B003 terminal qualified. Independent Review must use a distinct reviewer surface with no implementation context; prior IR001 was BLOCKED_INDEPENDENCE.
+
 # TS EE 003 — ChromeDriver B002 repair and negative-fault matrix
 
 status: EXPERIMENTAL_NONPRODUCT_CANDIDATE_NOT_ADOPTED
