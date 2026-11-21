@@ -1,0 +1,122 @@
+{
+  "schema": "ts-ee/frontend-browser-qa/v0.1",
+  "product_effect": "NONE",
+  "attempt": "TS-EE-FEQA-CONTRACT-VECTOR-A001",
+  "source": {
+    "repository": "mauedgar/ts-execution-lab",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "subject_kind": "SYNTHETIC"
+  },
+  "runner": {
+    "engine": "CHROMEDRIVER_NODE",
+    "version": "157.0.8103.78-SYNTHETIC-TEST-VECTOR",
+    "os": "ubuntu-24.04",
+    "native_run_id": "FIXTURE_NOT_A_REAL_RUN",
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "attempt_number": 1,
+    "browser_version": "157.0.8103.78-SYNTHETIC-TEST-VECTOR",
+    "browser_binary_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+    "browser_binary_bytes": 12345678,
+    "driver_version": "157.0.8103.78-SYNTHETIC-TEST-VECTOR",
+    "driver_binary_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "driver_binary_bytes": 12345678
+  },
+  "stages": {
+    "identity": "PASS",
+    "dependencies": "PASS",
+    "integration": "SKIPPED",
+    "build": "SKIPPED",
+    "browser": "PASS"
+  },
+  "scenarios": {
+    "viewport": "PASS",
+    "routing": "PASS",
+    "history": "PASS",
+    "deep_link_refresh": "PASS",
+    "sku_negative": "PASS",
+    "keyboard_focus": "PASS",
+    "a11y_basic": "PASS",
+    "console_http": "PASS"
+  },
+  "viewports": [
+    {
+      "width": 320,
+      "status": "PASS"
+    },
+    {
+      "width": 375,
+      "status": "PASS"
+    },
+    {
+      "width": 768,
+      "status": "PASS"
+    },
+    {
+      "width": 1440,
+      "status": "PASS"
+    }
+  ],
+  "network": {
+    "enforcement": "OBSERVE_ONLY",
+    "service_workers": "NOT_VERIFIED",
+    "outbound_attempted": 0,
+    "outbound_blocked": 0,
+    "outbound_escaped": 0,
+    "measurement_scope": "BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY",
+    "os_egress_attested": false
+  },
+  "artifacts": [
+    {
+      "name": "shot-320.png",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "bytes": 123,
+      "width": 320,
+      "kind": "SCREENSHOT"
+    },
+    {
+      "name": "shot-375.png",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "bytes": 123,
+      "width": 375,
+      "kind": "SCREENSHOT"
+    },
+    {
+      "name": "shot-768.png",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "bytes": 123,
+      "width": 768,
+      "kind": "SCREENSHOT"
+    },
+    {
+      "name": "shot-1440.png",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "bytes": 123,
+      "width": 1440,
+      "kind": "SCREENSHOT"
+    },
+    {
+      "name": "trace.zip",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "bytes": 456,
+      "kind": "TRACE"
+    }
+  ],
+  "original": {
+    "custody": "TEST_VECTOR",
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "bytes": 500,
+    "reference": "FAKE_RECEIPT_DO_NOT_TREAT_AS_PROVIDER_EVIDENCE"
+  },
+  "limitations": [
+    "TEST_VECTOR_ONLY_NO_REAL_BROWSER_NATIVE_EVIDENCE",
+    "FUNCTIONAL_PASS_DOES_NOT_PROVE_NETWORK_PREVENTION",
+    "PRODUCT_ACCEPTANCE_NEVER_GRANTED"
+  ],
+  "reported_verdict": "PARTIAL",
+  "functional_browser_status": "PASS",
+  "network_assurance_status": "OBSERVE_ONLY_UNATTESTED",
+  "terminal_result": "PASS_FUNCTIONAL_ONLY",
+  "provider_native_verified": false,
+  "Product_accepted": false
+}
