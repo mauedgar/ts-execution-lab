@@ -3,6 +3,8 @@
 import argparse
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 import re
 
@@ -14,6 +16,17 @@ HEX40=re.compile(r"^[a-f0-9]{40}$")
 HEX64=re.compile(r"^[a-f0-9]{64}$")
 ATTEMPT=re.compile(r"^[A-Z0-9][A-Z0-9_-]{8,127}$")
 MARKERS=("FAKE_SECRET_SESSION_ID","FAKE_SECRET_TOKEN","FAKE_BASE64_PNG")
+MAX_SOURCE_BYTES=8*1024*1024
+SCENARIO_CHECKS={
+    "viewport":("width","overflow","screenshot"),
+    "routing":("deep_link",),
+    "history":("history_back",),
+    "deep_link_refresh":("deep_link_refresh",),
+    "sku_negative":("sku_negative",),
+    "keyboard_focus":("keyboard_tab","keyboard_enter"),
+    "a11y_basic":("semantic_heading","button_label","keyboard_tab","keyboard_enter"),
+    "console_http":("http_404","http_500","seeded_js_error")
+}
 
 def digest(raw):
     return hashlib.sha256(raw).hexdigest()
@@ -22,9 +35,54 @@ def require(ok,code):
     if not ok:
         raise ValueError(code)
 
+def secure_directory_fd(path):
+    """Walk each directory with O_NOFOLLOW; never resolve symlinked parents."""
+    absolute=Path(os.path.abspath(os.fspath(path)))
+    require(absolute.is_absolute(),"UNSAFE_ROOT")
+    fd=os.open(os.path.sep,os.O_RDONLY|os.O_DIRECTORY)
+    try:
+        for name in absolute.parts[1:]:
+            require(name not in ("", ".", ".."),"UNSAFE_DIRECTORY_COMPONENT")
+            child=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+            os.close(fd)
+            fd=child
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
 def read_file(path):
-    require(path.is_file() and not path.is_symlink(),"MISSING_OR_UNSAFE_SOURCE_FILE")
-    return path.read_bytes()
+    """Single-descriptor regular file identity, type and bounded bytes."""
+    parent=secure_directory_fd(path.parent)
+    try:
+        fd=os.open(path.name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+        try:
+            st=os.fstat(fd)
+            require(stat.S_ISREG(st.st_mode) and 0<=st.st_size<=MAX_SOURCE_BYTES,
+                    "MISSING_OR_UNSAFE_SOURCE_FILE")
+            with os.fdopen(fd,"rb",closefd=False) as stream:
+                raw=stream.read(MAX_SOURCE_BYTES+1)
+            require(len(raw)<=MAX_SOURCE_BYTES,"OVERSIZE_SOURCE_FILE")
+            return raw
+        finally:
+            os.close(fd)
+    finally:
+        os.close(parent)
+
+def write_create_only(directory_fd,name,raw):
+    require("/" not in name and name not in ("", ".", ".."),"UNSAFE_OUTPUT_NAME")
+    fd=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+               0o600,dir_fd=directory_fd)
+    with os.fdopen(fd,"wb") as output:
+        output.write(raw)
+
+def create_output_directory(path):
+    parent=secure_directory_fd(path.parent)
+    try:
+        os.mkdir(path.name,0o700,dir_fd=parent)
+        return os.open(path.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+    finally:
+        os.close(parent)
 
 def safe_json(raw):
     return json.loads(raw.decode("utf-8"))
@@ -99,13 +157,12 @@ def main():
     sources=[]
     for w in WIDTHS:
         sources.append((w,*local_source(a.evidence_root,w)))
-    # Separate output directory creates only new files in one isolated CI workspace.
-    a.output_root.mkdir(parents=True,exist_ok=False)
+    # Isolated output: atomic exclusive mkdir and descriptor-bound create-only files.
+    output_fd=create_output_directory(a.output_root)
     artifacts=[]
     for w,r,raw,png in sources:
         name="shot-"+str(w)+".png"
-        with (a.output_root/name).open("xb") as fp:
-            fp.write(png)
+        write_create_only(output_fd,name,png)
         artifacts.append({"name":name,"kind":"SCREENSHOT","width":w,
                           "bytes":len(png),"sha256":digest(png)})
     log_data={"schema":"ts-ee/q5b/sanitized-fixture-events/v0",
@@ -122,8 +179,7 @@ def main():
                          "descendants_attested":False} for w,r,_,_ in sources]}
     log_bytes=(json.dumps(log_data,sort_keys=True,indent=2)+"\n").encode("utf-8")
     require(not any(m.encode() in log_bytes for m in MARKERS),"LOG_MARKER_LEAK")
-    with (a.output_root/"sanitized-q5b-log.json").open("xb") as fp:
-        fp.write(log_bytes)
+    write_create_only(output_fd,"sanitized-q5b-log.json",log_bytes)
     artifacts.append({"name":"sanitized-q5b-log.json","kind":"LOG",
                       "bytes":len(log_bytes),"sha256":digest(log_bytes)})
     original_bytes=b"\n--Q5B-BOUNDARY--\n".join([tool_raw]+[x[2] for x in sources])
@@ -143,9 +199,15 @@ def main():
           "driver_binary_bytes":t["driver"]["bytes"]},
       "stages":{"identity":"PASS","dependencies":"PASS","integration":"SKIPPED",
                 "build":"SKIPPED","browser":"PASS"},
-      "scenarios":{name:"PASS" for name in
-           ("viewport","routing","history","deep_link_refresh","sku_negative",
-            "keyboard_focus","a11y_basic","console_http")},
+      "scenarios":{name:("PASS" if all(
+          r["checks"][check]=="PASS" for _,r,_,_ in sources for check in required
+          ) else "FAIL") for name,required in SCENARIO_CHECKS.items()},
+      "scenario_evidence":{name:{
+          "scope":"SYNTHETIC_LOCAL_FIXTURE_ONLY",
+          "checks":list(required),
+          "viewports":[{"width":w,"observed":{check:r["checks"][check] for check in required}}
+                       for w,r,_,_ in sources]
+      } for name,required in SCENARIO_CHECKS.items()},
       "viewports":[{"width":w,"status":"PASS"} for w in WIDTHS],
       "network":{"enforcement":"OBSERVE_ONLY","service_workers":"NOT_VERIFIED",
                  "outbound_attempted":None,"outbound_blocked":None,"outbound_escaped":None,
@@ -153,7 +215,8 @@ def main():
       "artifacts":artifacts,
       "original":{"custody":"LOCAL_UNVERIFIED","sha256":digest(original_bytes),
                   "bytes":len(original_bytes),"reference":"LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"},
-      "limitations":["LOCAL_FIXTURE_SERVER_ONLY_NETWORK_COUNTS_NOT_MEASURED",
+      "limitations":["SYNTHETIC_LOCAL_FIXTURE_ONLY",
+                     "LOCAL_FIXTURE_SERVER_ONLY_NETWORK_COUNTS_NOT_MEASURED",
                      "CHROME_DIRECT_CHILD_EXIT_NOT_DESCENDANT_ATTESTATION",
                      "SYNTHETIC_ROUTE_ERROR_FIXTURES_NOT_GENERIC_CDP_NETWORK_OR_CONSOLE",
                      "NO_HOST_OS_EGRESS_DENIAL","NO_PRODUCT_QA_ACCEPTANCE_OR_WCAG",
@@ -165,10 +228,9 @@ def main():
       "provider_native_verified":False,
       "Product_accepted":False
     }
-    dst=a.output_root/"COMMON_RECEIPT_V01.json"
-    with dst.open("x",encoding="utf-8") as fp:
-        json.dump(report,fp,sort_keys=True,indent=2)
-        fp.write("\n")
+    report_bytes=(json.dumps(report,sort_keys=True,indent=2)+"\n").encode("utf-8")
+    write_create_only(output_fd,"COMMON_RECEIPT_V01.json",report_bytes)
+    os.close(output_fd)
     print(json.dumps({"producer":"PASS_BOUNDED_Q5B_LOCAL",
         "artifact_count":len(artifacts),"widths":list(WIDTHS),
         "functional_browser_status":"PASS","network_assurance":"OBSERVE_ONLY_UNATTESTED",
