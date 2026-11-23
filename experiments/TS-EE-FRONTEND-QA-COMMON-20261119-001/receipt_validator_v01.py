@@ -174,6 +174,14 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     if artifact_root is not None:
         try:
             root_fd=secure_directory_fd(artifact_root)
+            # An interrupted producer keeps this create-only sentinel. Never
+            # accept apparently valid inner files from an incomplete output.
+            try:
+                os.stat("INCOMPLETE_Q5B",dir_fd=root_fd,follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                errors.append("incomplete_producer_output")
         except (OSError,ValueError,TypeError):
             errors.append("unsafe_artifact_root")
     for a in artifacts:
@@ -212,9 +220,12 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     need(isinstance(original.get("reference"),str) and bool(original.get("reference")),"bad_original_ref")
     need(isinstance(report.get("limitations"),list) and
          all(isinstance(x,str) for x in report.get("limitations",[])),"bad_limitations")
+    # Enforce on the schema's full synthetic-ChromeDriver PASS class, never on
+    # user-provided original.reference, which could be swapped to bypass evidence.
+    # This verifies declared mapping shape/consistency, NOT independent native bytes;
+    # that separate provider ZIP/readback join must remain outside this validator.
     if (runner.get("engine")=="CHROMEDRIVER_NODE" and s.get("subject_kind")=="SYNTHETIC"
-            and stages.get("browser")=="PASS" and
-            original.get("reference")=="LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"):
+            and stages.get("browser")=="PASS"):
         evidence=report.get("scenario_evidence")
         need(isinstance(evidence,dict) and set(evidence)==set(Q5B_SCENARIO_CHECKS),
              "q5b_scenario_evidence_incomplete")

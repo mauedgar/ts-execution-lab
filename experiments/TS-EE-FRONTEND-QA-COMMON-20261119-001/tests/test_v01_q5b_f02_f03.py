@@ -24,7 +24,8 @@ class Q5BScenarioEvidence(unittest.TestCase):
     def setUp(self):
         self.report=json.loads(FIXTURE.read_text(encoding="utf8"))
         self.report["original"]["reference"]="LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"
-        self.report["limitations"].append("SYNTHETIC_LOCAL_FIXTURE_ONLY")
+        if "SYNTHETIC_LOCAL_FIXTURE_ONLY" not in self.report["limitations"]:
+            self.report["limitations"].append("SYNTHETIC_LOCAL_FIXTURE_ONLY")
         self.report["scenario_evidence"]={
             name:{
                 "scope":"SYNTHETIC_LOCAL_FIXTURE_ONLY",

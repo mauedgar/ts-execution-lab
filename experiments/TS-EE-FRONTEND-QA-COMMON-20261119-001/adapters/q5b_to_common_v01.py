@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """NONPRODUCT ChromeDriver Q5B local producer. Output is not a provider or Product attestation."""
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -84,6 +85,23 @@ def create_output_directory(path):
     finally:
         os.close(parent)
 
+@contextmanager
+def create_only_output(path):
+    """Create-only output; partial results remain explicitly quarantined, never resumable.
+
+    Failure keeps INCOMPLETE_Q5B and the isolated partial files for forensic readback.
+    A fresh attempt MUST use a different destination. No auto-delete or blind retry.
+    The directory descriptor is always closed, including on an injected write error.
+    """
+    directory_fd=create_output_directory(path)
+    try:
+        write_create_only(directory_fd,"INCOMPLETE_Q5B",
+                          b"UNTRUSTED_PARTIAL_OUTPUT_DO_NOT_CONSUME\n")
+        yield directory_fd
+        os.unlink("INCOMPLETE_Q5B",dir_fd=directory_fd)
+    finally:
+        os.close(directory_fd)
+
 def safe_json(raw):
     return json.loads(raw.decode("utf-8"))
 
@@ -158,79 +176,78 @@ def main():
     for w in WIDTHS:
         sources.append((w,*local_source(a.evidence_root,w)))
     # Isolated output: atomic exclusive mkdir and descriptor-bound create-only files.
-    output_fd=create_output_directory(a.output_root)
-    artifacts=[]
-    for w,r,raw,png in sources:
-        name="shot-"+str(w)+".png"
-        write_create_only(output_fd,name,png)
-        artifacts.append({"name":name,"kind":"SCREENSHOT","width":w,
-                          "bytes":len(png),"sha256":digest(png)})
-    log_data={"schema":"ts-ee/q5b/sanitized-fixture-events/v0",
-              "subject":"NONPRODUCT_SYNTHETIC",
-              "network_scope":"LOCAL_FIXTURE_SERVER_ONLY",
-              "browser_context_network_metrics":"NOT_MEASURED",
-              "events":[{"viewport":w,
-                         "scenario_checks":len(CHECKS),
-                         "checks":{k:r["checks"][k] for k in CHECKS},
-                         "fixture_http_counts":{k:r["local_http_events"][k] for k in
-                             ("home","product","deniedSku","notFound","serverError","scriptError")},
-                         "session_create_ms":r["session_create_ms"],
-                         "direct_driver_exit_observed":True,
-                         "descendants_attested":False} for w,r,_,_ in sources]}
-    log_bytes=(json.dumps(log_data,sort_keys=True,indent=2)+"\n").encode("utf-8")
-    require(not any(m.encode() in log_bytes for m in MARKERS),"LOG_MARKER_LEAK")
-    write_create_only(output_fd,"sanitized-q5b-log.json",log_bytes)
-    artifacts.append({"name":"sanitized-q5b-log.json","kind":"LOG",
-                      "bytes":len(log_bytes),"sha256":digest(log_bytes)})
-    original_bytes=b"\n--Q5B-BOUNDARY--\n".join([tool_raw]+[x[2] for x in sources])
-    report={
-      "schema":"ts-ee/frontend-browser-qa/v0.1",
-      "product_effect":"NONE",
-      "attempt":a.attempt,
-      "source":{"repository":a.repository,"commit":a.commit,"tree":a.tree,"subject_kind":"SYNTHETIC"},
-      "runner":{"engine":"CHROMEDRIVER_NODE","version":t["driver"]["version"],
-          "os":t["runner_os"],"native_run_id":a.run_id,"head_sha":a.commit,
-          "attempt_number":a.run_attempt,
-          "browser_version":t["chrome"]["version"],
-          "browser_binary_sha256":t["chrome"]["sha256"],
-          "browser_binary_bytes":t["chrome"]["bytes"],
-          "driver_version":t["driver"]["version"],
-          "driver_binary_sha256":t["driver"]["sha256"],
-          "driver_binary_bytes":t["driver"]["bytes"]},
-      "stages":{"identity":"PASS","dependencies":"PASS","integration":"SKIPPED",
-                "build":"SKIPPED","browser":"PASS"},
-      "scenarios":{name:("PASS" if all(
-          r["checks"][check]=="PASS" for _,r,_,_ in sources for check in required
-          ) else "FAIL") for name,required in SCENARIO_CHECKS.items()},
-      "scenario_evidence":{name:{
-          "scope":"SYNTHETIC_LOCAL_FIXTURE_ONLY",
-          "checks":list(required),
-          "viewports":[{"width":w,"observed":{check:r["checks"][check] for check in required}}
-                       for w,r,_,_ in sources]
-      } for name,required in SCENARIO_CHECKS.items()},
-      "viewports":[{"width":w,"status":"PASS"} for w in WIDTHS],
-      "network":{"enforcement":"OBSERVE_ONLY","service_workers":"NOT_VERIFIED",
-                 "outbound_attempted":None,"outbound_blocked":None,"outbound_escaped":None,
-                 "measurement_scope":"LOCAL_FIXTURE_SERVER_ONLY","os_egress_attested":False},
-      "artifacts":artifacts,
-      "original":{"custody":"LOCAL_UNVERIFIED","sha256":digest(original_bytes),
-                  "bytes":len(original_bytes),"reference":"LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"},
-      "limitations":["SYNTHETIC_LOCAL_FIXTURE_ONLY",
-                     "LOCAL_FIXTURE_SERVER_ONLY_NETWORK_COUNTS_NOT_MEASURED",
-                     "CHROME_DIRECT_CHILD_EXIT_NOT_DESCENDANT_ATTESTATION",
-                     "SYNTHETIC_ROUTE_ERROR_FIXTURES_NOT_GENERIC_CDP_NETWORK_OR_CONSOLE",
-                     "NO_HOST_OS_EGRESS_DENIAL","NO_PRODUCT_QA_ACCEPTANCE_OR_WCAG",
-                     "NATIVE_PROVIDER_JOIN_EXTERNAL_TO_SELF_REPORT"],
-      "functional_browser_status":"PASS",
-      "network_assurance_status":"OBSERVE_ONLY_UNATTESTED",
-      "terminal_result":"PASS_FUNCTIONAL_ONLY",
-      "reported_verdict":"PARTIAL",
-      "provider_native_verified":False,
-      "Product_accepted":False
-    }
-    report_bytes=(json.dumps(report,sort_keys=True,indent=2)+"\n").encode("utf-8")
-    write_create_only(output_fd,"COMMON_RECEIPT_V01.json",report_bytes)
-    os.close(output_fd)
+    with create_only_output(a.output_root) as output_fd:
+        artifacts=[]
+        for w,r,raw,png in sources:
+            name="shot-"+str(w)+".png"
+            write_create_only(output_fd,name,png)
+            artifacts.append({"name":name,"kind":"SCREENSHOT","width":w,
+                              "bytes":len(png),"sha256":digest(png)})
+        log_data={"schema":"ts-ee/q5b/sanitized-fixture-events/v0",
+                  "subject":"NONPRODUCT_SYNTHETIC",
+                  "network_scope":"LOCAL_FIXTURE_SERVER_ONLY",
+                  "browser_context_network_metrics":"NOT_MEASURED",
+                  "events":[{"viewport":w,
+                             "scenario_checks":len(CHECKS),
+                             "checks":{k:r["checks"][k] for k in CHECKS},
+                             "fixture_http_counts":{k:r["local_http_events"][k] for k in
+                                 ("home","product","deniedSku","notFound","serverError","scriptError")},
+                             "session_create_ms":r["session_create_ms"],
+                             "direct_driver_exit_observed":True,
+                             "descendants_attested":False} for w,r,_,_ in sources]}
+        log_bytes=(json.dumps(log_data,sort_keys=True,indent=2)+"\n").encode("utf-8")
+        require(not any(m.encode() in log_bytes for m in MARKERS),"LOG_MARKER_LEAK")
+        write_create_only(output_fd,"sanitized-q5b-log.json",log_bytes)
+        artifacts.append({"name":"sanitized-q5b-log.json","kind":"LOG",
+                          "bytes":len(log_bytes),"sha256":digest(log_bytes)})
+        original_bytes=b"\n--Q5B-BOUNDARY--\n".join([tool_raw]+[x[2] for x in sources])
+        report={
+          "schema":"ts-ee/frontend-browser-qa/v0.1",
+          "product_effect":"NONE",
+          "attempt":a.attempt,
+          "source":{"repository":a.repository,"commit":a.commit,"tree":a.tree,"subject_kind":"SYNTHETIC"},
+          "runner":{"engine":"CHROMEDRIVER_NODE","version":t["driver"]["version"],
+              "os":t["runner_os"],"native_run_id":a.run_id,"head_sha":a.commit,
+              "attempt_number":a.run_attempt,
+              "browser_version":t["chrome"]["version"],
+              "browser_binary_sha256":t["chrome"]["sha256"],
+              "browser_binary_bytes":t["chrome"]["bytes"],
+              "driver_version":t["driver"]["version"],
+              "driver_binary_sha256":t["driver"]["sha256"],
+              "driver_binary_bytes":t["driver"]["bytes"]},
+          "stages":{"identity":"PASS","dependencies":"PASS","integration":"SKIPPED",
+                    "build":"SKIPPED","browser":"PASS"},
+          "scenarios":{name:("PASS" if all(
+              r["checks"][check]=="PASS" for _,r,_,_ in sources for check in required
+              ) else "FAIL") for name,required in SCENARIO_CHECKS.items()},
+          "scenario_evidence":{name:{
+              "scope":"SYNTHETIC_LOCAL_FIXTURE_ONLY",
+              "checks":list(required),
+              "viewports":[{"width":w,"observed":{check:r["checks"][check] for check in required}}
+                           for w,r,_,_ in sources]
+          } for name,required in SCENARIO_CHECKS.items()},
+          "viewports":[{"width":w,"status":"PASS"} for w in WIDTHS],
+          "network":{"enforcement":"OBSERVE_ONLY","service_workers":"NOT_VERIFIED",
+                     "outbound_attempted":None,"outbound_blocked":None,"outbound_escaped":None,
+                     "measurement_scope":"LOCAL_FIXTURE_SERVER_ONLY","os_egress_attested":False},
+          "artifacts":artifacts,
+          "original":{"custody":"LOCAL_UNVERIFIED","sha256":digest(original_bytes),
+                      "bytes":len(original_bytes),"reference":"LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"},
+          "limitations":["SYNTHETIC_LOCAL_FIXTURE_ONLY",
+                         "LOCAL_FIXTURE_SERVER_ONLY_NETWORK_COUNTS_NOT_MEASURED",
+                         "CHROME_DIRECT_CHILD_EXIT_NOT_DESCENDANT_ATTESTATION",
+                         "SYNTHETIC_ROUTE_ERROR_FIXTURES_NOT_GENERIC_CDP_NETWORK_OR_CONSOLE",
+                         "NO_HOST_OS_EGRESS_DENIAL","NO_PRODUCT_QA_ACCEPTANCE_OR_WCAG",
+                         "NATIVE_PROVIDER_JOIN_EXTERNAL_TO_SELF_REPORT"],
+          "functional_browser_status":"PASS",
+          "network_assurance_status":"OBSERVE_ONLY_UNATTESTED",
+          "terminal_result":"PASS_FUNCTIONAL_ONLY",
+          "reported_verdict":"PARTIAL",
+          "provider_native_verified":False,
+          "Product_accepted":False
+        }
+        report_bytes=(json.dumps(report,sort_keys=True,indent=2)+"\n").encode("utf-8")
+        write_create_only(output_fd,"COMMON_RECEIPT_V01.json",report_bytes)
     print(json.dumps({"producer":"PASS_BOUNDED_Q5B_LOCAL",
         "artifact_count":len(artifacts),"widths":list(WIDTHS),
         "functional_browser_status":"PASS","network_assurance":"OBSERVE_ONLY_UNATTESTED",

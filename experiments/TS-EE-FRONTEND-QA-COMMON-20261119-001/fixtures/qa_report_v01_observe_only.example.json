@@ -111,12 +111,311 @@
   "limitations": [
     "TEST_VECTOR_ONLY_NO_REAL_BROWSER_NATIVE_EVIDENCE",
     "FUNCTIONAL_PASS_DOES_NOT_PROVE_NETWORK_PREVENTION",
-    "PRODUCT_ACCEPTANCE_NEVER_GRANTED"
+    "PRODUCT_ACCEPTANCE_NEVER_GRANTED",
+    "SYNTHETIC_LOCAL_FIXTURE_ONLY"
   ],
   "reported_verdict": "PARTIAL",
   "functional_browser_status": "PASS",
   "network_assurance_status": "OBSERVE_ONLY_UNATTESTED",
   "terminal_result": "PASS_FUNCTIONAL_ONLY",
   "provider_native_verified": false,
-  "Product_accepted": false
+  "Product_accepted": false,
+  "scenario_evidence": {
+    "viewport": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "width",
+        "overflow",
+        "screenshot"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "width": "PASS",
+            "overflow": "PASS",
+            "screenshot": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "width": "PASS",
+            "overflow": "PASS",
+            "screenshot": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "width": "PASS",
+            "overflow": "PASS",
+            "screenshot": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "width": "PASS",
+            "overflow": "PASS",
+            "screenshot": "PASS"
+          }
+        }
+      ]
+    },
+    "routing": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "deep_link"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "deep_link": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "deep_link": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "deep_link": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "deep_link": "PASS"
+          }
+        }
+      ]
+    },
+    "history": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "history_back"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "history_back": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "history_back": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "history_back": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "history_back": "PASS"
+          }
+        }
+      ]
+    },
+    "deep_link_refresh": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "deep_link_refresh"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "deep_link_refresh": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "deep_link_refresh": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "deep_link_refresh": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "deep_link_refresh": "PASS"
+          }
+        }
+      ]
+    },
+    "sku_negative": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "sku_negative"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "sku_negative": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "sku_negative": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "sku_negative": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "sku_negative": "PASS"
+          }
+        }
+      ]
+    },
+    "keyboard_focus": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "keyboard_tab",
+        "keyboard_enter"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        }
+      ]
+    },
+    "a11y_basic": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "semantic_heading",
+        "button_label",
+        "keyboard_tab",
+        "keyboard_enter"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "semantic_heading": "PASS",
+            "button_label": "PASS",
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "semantic_heading": "PASS",
+            "button_label": "PASS",
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "semantic_heading": "PASS",
+            "button_label": "PASS",
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "semantic_heading": "PASS",
+            "button_label": "PASS",
+            "keyboard_tab": "PASS",
+            "keyboard_enter": "PASS"
+          }
+        }
+      ]
+    },
+    "console_http": {
+      "scope": "SYNTHETIC_LOCAL_FIXTURE_ONLY",
+      "checks": [
+        "http_404",
+        "http_500",
+        "seeded_js_error"
+      ],
+      "viewports": [
+        {
+          "width": 320,
+          "observed": {
+            "http_404": "PASS",
+            "http_500": "PASS",
+            "seeded_js_error": "PASS"
+          }
+        },
+        {
+          "width": 375,
+          "observed": {
+            "http_404": "PASS",
+            "http_500": "PASS",
+            "seeded_js_error": "PASS"
+          }
+        },
+        {
+          "width": 768,
+          "observed": {
+            "http_404": "PASS",
+            "http_500": "PASS",
+            "seeded_js_error": "PASS"
+          }
+        },
+        {
+          "width": 1440,
+          "observed": {
+            "http_404": "PASS",
+            "http_500": "PASS",
+            "seeded_js_error": "PASS"
+          }
+        }
+      ]
+    }
+  }
 }

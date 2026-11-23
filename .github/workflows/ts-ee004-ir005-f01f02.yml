@@ -1,0 +1,106 @@
+name: TS EE 004 IR005 F01-F02 bounded repair (NONPRODUCT)
+on:
+  push:
+    branches:
+      - experiment/ts-ee004-ir005-f01-f02-20261123
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee004-ir005-f01f02-repair
+  cancel-in-progress: false
+jobs:
+  q5b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable Q5B source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Node 22.23.3
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.23.3'
+      - name: Native source identity and static nonProduct preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse 'HEAD^{tree}'
+          echo "ImageVersion=${ImageVersion:-UNAVAILABLE}"
+          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py)" = "36c207326fff0da2231b731422323af186511a49"
+          python --version
+          node --version
+          google-chrome --version
+          chromedriver --version
+          node --check experiments/TS-EE-CHROMEDRIVER-20261121-001/browser_synthetic_q5b.mjs
+          node --check experiments/TS-EE-CHROMEDRIVER-20261121-001/q5b_receipt_gate.mjs
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator_v01.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_to_common_v01.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_toolchain_capture.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_v01_q5b_f02_f03.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_v01_ir005_f01_f02.py
+      - name: Preserve v0 and qualify Q5B v0.1 negative/schema cases
+        run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests -p 'test_*.py' -v
+      - name: Capture bounded actual host Chrome/driver file versions and hashes
+        run: python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_toolchain_capture.py q5b-evidence/TOOLCHAIN.json
+      - name: Execute four distinct real ChromeDriver sessions, local synthetic pages only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for w in 320 375 768 1440; do
+            echo "Q5B_WIDTH=$w"
+            TS_EE_Q5B_WIDTH="$w" TS_EE_Q5B_OUTPUT_DIR="q5b-evidence/$w" \
+              node experiments/TS-EE-CHROMEDRIVER-20261121-001/browser_synthetic_q5b.mjs
+            TS_EE_Q5B_OUTPUT_DIR="q5b-evidence/$w" \
+              node experiments/TS-EE-CHROMEDRIVER-20261121-001/q5b_receipt_gate.mjs
+          done
+      - name: Convert ACTUAL local bytes to nonProduct Common v0.1 receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE="$(git rev-parse 'HEAD^{tree}')"
+          python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_to_common_v01.py \
+            --evidence-root q5b-evidence --output-root q5b-evidence/common \
+            --repository mauedgar/ts-execution-lab --commit "$GITHUB_SHA" --tree "$TREE" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --attempt TS-EE-004-IR005-F01F02-20261123-001-A001
+          python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator_v01.py \
+            q5b-evidence/common/COMMON_RECEIPT_V01.json \
+            --artifact-root q5b-evidence/common \
+            --expected-commit "$GITHUB_SHA" --expected-tree "$TREE" --expected-run-id "$GITHUB_RUN_ID" \
+            > q5b-evidence/common/VALIDATION.json
+          python - <<'PY'
+          import json
+          r=json.load(open("q5b-evidence/common/VALIDATION.json",encoding="utf8"))
+          assert r["status"]=="VALID_SHAPE_UNATTESTED",r
+          assert r["artifact_bytes_verified_locally"] is True,r
+          assert r["functional_browser_status"]=="PASS",r
+          assert r["network_assurance_status"]=="OBSERVE_ONLY_UNATTESTED",r
+          assert r["network_metrics_measured"] is False,r
+          assert r["network_policy_qualified"] is False,r
+          assert r["Product_accepted"] is False and r["provider_native_verified"] is False,r
+          with open("q5b-evidence/common/COMMON_RECEIPT_V01.json",encoding="utf8") as input_file:
+            common=json.load(input_file)
+          assert common["limitations"][0]=="SYNTHETIC_LOCAL_FIXTURE_ONLY"
+          assert len(common["scenario_evidence"])==8
+          assert common["original"]["reference"]=="LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"
+          assert common["runner"]["engine"]=="CHROMEDRIVER_NODE"
+          assert not __import__("pathlib").Path("q5b-evidence/common/INCOMPLETE_Q5B").exists()
+          assert common["scenario_evidence"]["console_http"]["checks"]==["http_404","http_500","seeded_js_error"]
+          assert common["scenario_evidence"]["a11y_basic"]["checks"]==["semantic_heading","button_label","keyboard_tab","keyboard_enter"]
+          assert all(len(item["viewports"])==4 for item in common["scenario_evidence"].values())
+          print(json.dumps({"Q5B_LOCAL_CONSUMER":"PASS_BOUNDED_SHAPE_UNATTESTED","Product_effect":"NONE","Q5B_SCENARIO_EVIDENCE":"SYNTHETIC_ONLY"}))
+          PY
+      - name: Preserve local originals, screenshots and Common receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee004-ir005-f01f02-new-original-browser-and-common
+          path: q5b-evidence/
+          retention-days: 5
+          if-no-files-found: error
