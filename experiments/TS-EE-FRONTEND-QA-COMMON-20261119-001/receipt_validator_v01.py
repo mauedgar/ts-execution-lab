@@ -3,6 +3,8 @@
 import argparse
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 import re
 import sys
@@ -16,6 +18,48 @@ HEX40=re.compile(r"^[a-f0-9]{40}$")
 HEX64=re.compile(r"^[a-f0-9]{64}$")
 NAME=re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 ATTEMPT=re.compile(r"^[A-Z0-9][A-Z0-9_-]{8,127}$")
+Q5B_SCENARIO_CHECKS={
+    "viewport":("width","overflow","screenshot"),
+    "routing":("deep_link",),
+    "history":("history_back",),
+    "deep_link_refresh":("deep_link_refresh",),
+    "sku_negative":("sku_negative",),
+    "keyboard_focus":("keyboard_tab","keyboard_enter"),
+    "a11y_basic":("semantic_heading","button_label","keyboard_tab","keyboard_enter"),
+    "console_http":("http_404","http_500","seeded_js_error")
+}
+MAX_ARTIFACT_BYTES=8*1024*1024
+
+def secure_directory_fd(path):
+    """Open every path component as a directory with no followed symlinks."""
+    absolute=Path(os.path.abspath(os.fspath(path)))
+    fd=os.open(os.path.sep,os.O_RDONLY|os.O_DIRECTORY)
+    try:
+        for component in absolute.parts[1:]:
+            if component in ("", ".", ".."):
+                raise ValueError("UNSAFE_DIRECTORY_COMPONENT")
+            child=os.open(component,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+            os.close(fd)
+            fd=child
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+def secure_read_artifact(directory_fd,name):
+    """One descriptor for type, size and content; no stat/read_bytes race."""
+    fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=directory_fd)
+    try:
+        meta=os.fstat(fd)
+        if not stat.S_ISREG(meta.st_mode) or not 0<=meta.st_size<=MAX_ARTIFACT_BYTES:
+            raise ValueError("UNSAFE_ARTIFACT_FILE")
+        with os.fdopen(fd,"rb",closefd=False) as stream:
+            raw=stream.read(MAX_ARTIFACT_BYTES+1)
+        if len(raw)>MAX_ARTIFACT_BYTES:
+            raise ValueError("OVERSIZE_ARTIFACT")
+        return raw
+    finally:
+        os.close(fd)
 
 def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,expected_run_id=None):
     errors=[]
@@ -126,13 +170,12 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     artifacts=report.get("artifacts")
     if not isinstance(artifacts,list):artifacts=[]
     names=set();shots=set();has_trace=False
-    supplied=Path(artifact_root) if artifact_root is not None else None
-    if supplied is not None and (supplied.is_symlink() or
-            any(parent.is_symlink() for parent in supplied.parents) or not supplied.is_dir()):
-        errors.append("unsafe_artifact_root")
-        root=None
-    else:
-        root=supplied.resolve() if supplied is not None else None
+    root_fd=None
+    if artifact_root is not None:
+        try:
+            root_fd=secure_directory_fd(artifact_root)
+        except (OSError,ValueError,TypeError):
+            errors.append("unsafe_artifact_root")
     for a in artifacts:
         if not isinstance(a,dict):errors.append("artifact_not_object");continue
         name=a.get("name")
@@ -150,12 +193,15 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
             need(type(w) is int and w in WIDTHS,"bad_screenshot_width")
             if type(w) is int and w in WIDTHS:shots.add(w)
         if kind in ("TRACE","LOG"):has_trace=True
-        if root is not None:
-            p=root/name
-            if not p.is_file() or p.is_symlink():errors.append("missing_or_unsafe_artifact_"+name)
-            elif p.stat().st_size!=size:errors.append("artifact_size_mismatch_"+name)
-            elif hashlib.sha256(p.read_bytes()).hexdigest()!=a.get("sha256"):
-                errors.append("artifact_hash_mismatch_"+name)
+        if root_fd is not None:
+            try:
+                raw=secure_read_artifact(root_fd,name)
+            except (OSError,ValueError):
+                errors.append("missing_or_unsafe_artifact_"+name)
+            else:
+                if len(raw)!=size:errors.append("artifact_size_mismatch_"+name)
+                elif hashlib.sha256(raw).hexdigest()!=a.get("sha256"):
+                    errors.append("artifact_hash_mismatch_"+name)
     original=report.get("original")
     if not isinstance(original,dict):original={}
     # Custody is reported by producer and NEVER independently authenticated by this validator.
@@ -166,6 +212,37 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     need(isinstance(original.get("reference"),str) and bool(original.get("reference")),"bad_original_ref")
     need(isinstance(report.get("limitations"),list) and
          all(isinstance(x,str) for x in report.get("limitations",[])),"bad_limitations")
+    if (runner.get("engine")=="CHROMEDRIVER_NODE" and s.get("subject_kind")=="SYNTHETIC"
+            and stages.get("browser")=="PASS" and
+            original.get("reference")=="LOCAL_NONPRODUCT_Q5B_ACTUAL_JSON_AND_TOOLCHAIN_BYTES"):
+        evidence=report.get("scenario_evidence")
+        need(isinstance(evidence,dict) and set(evidence)==set(Q5B_SCENARIO_CHECKS),
+             "q5b_scenario_evidence_incomplete")
+        need("SYNTHETIC_LOCAL_FIXTURE_ONLY" in report.get("limitations",[]),
+             "q5b_fixture_scope_limit_missing")
+        if isinstance(evidence,dict):
+            for scenario,required in Q5B_SCENARIO_CHECKS.items():
+                item=evidence.get(scenario)
+                if not isinstance(item,dict):
+                    errors.append("q5b_evidence_missing_"+scenario)
+                    continue
+                need(item.get("scope")=="SYNTHETIC_LOCAL_FIXTURE_ONLY",
+                     "q5b_evidence_scope_"+scenario)
+                need(item.get("checks")==list(required),
+                     "q5b_evidence_check_mapping_"+scenario)
+                rows=item.get("viewports")
+                if not isinstance(rows,list) or len(rows)!=len(WIDTHS) or any(
+                    not isinstance(row,dict) for row in rows):
+                    errors.append("q5b_evidence_viewports_"+scenario)
+                    continue
+                need([row.get("width") for row in rows]==list(WIDTHS),
+                     "q5b_evidence_width_order_"+scenario)
+                for row in rows:
+                    observed=row.get("observed")
+                    need(isinstance(observed,dict) and
+                         set(observed)==set(required) and
+                         all(observed.get(k)=="PASS" for k in required),
+                         "q5b_evidence_missing_pass_"+scenario)
     browser=stages.get("browser")
     if browser=="PASS":
         need(all(scenarios.get(k)=="PASS" for k in SCENARIOS),"browser_pass_missing_scenarios")
@@ -208,9 +285,11 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
         need(browser=="PASS","reported_pass_but_browser_not_pass")
     if report.get("reported_verdict")=="NOT_RUN":
         need(browser in ("NOT_RUN","SKIPPED","BLOCKED"),"reported_notrun_browser_executed")
+    if root_fd is not None:
+        os.close(root_fd)
     if errors:return {"status":"INVALID_REPORT","errors":sorted(set(errors)),"artifact_bytes_verified_locally":False}
     status="VALID_TEST_VECTOR_SHAPE_ONLY" if original["custody"]=="TEST_VECTOR" else "VALID_SHAPE_UNATTESTED"
-    return {"status":status,"artifact_bytes_verified_locally":root is not None,
+    return {"status":status,"artifact_bytes_verified_locally":root_fd is not None,
             "provider_native_verified":False,"Product_accepted":False,
             "scenario_count":len(SCENARIOS),"widths":list(WIDTHS),
             "functional_browser_status":report["functional_browser_status"],
