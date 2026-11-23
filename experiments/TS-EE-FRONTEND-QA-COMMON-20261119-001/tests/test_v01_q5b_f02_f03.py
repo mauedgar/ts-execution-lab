@@ -141,15 +141,18 @@ class DescriptorSecurity(unittest.TestCase):
                 artifact["sha256"]=hashlib.sha256(raw).hexdigest()
             report["original"]["custody"]="LOCAL_UNVERIFIED"
             report["original"]["reference"]="EE004_TEST_FIXTURE_NOT_Q5B"
-            good=v01.evaluate(report,actual)
+            good=v01.evaluate(report,actual,report["source"]["commit"],report["source"]["tree"],report["runner"]["native_run_id"],
+                              "CHROMEDRIVER_NODE","SYNTHETIC","Q5B_SYNTHETIC_LOCAL_V01")
             self.assertEqual(good["status"],"VALID_SHAPE_UNATTESTED")
             link=root/"alias"
             link.symlink_to(actual,target_is_directory=True)
-            bad=v01.evaluate(report,link)
+            bad=v01.evaluate(report,link,report["source"]["commit"],report["source"]["tree"],report["runner"]["native_run_id"],
+                                 "CHROMEDRIVER_NODE","SYNTHETIC","Q5B_SYNTHETIC_LOCAL_V01")
             self.assertEqual(bad["status"],"INVALID_REPORT")
             self.assertIn("unsafe_artifact_root",bad["errors"])
             (actual/report["artifacts"][0]["name"]).write_bytes(b"tampered")
-            bad=v01.evaluate(report,actual)
+            bad=v01.evaluate(report,actual,report["source"]["commit"],report["source"]["tree"],report["runner"]["native_run_id"],
+                                 "CHROMEDRIVER_NODE","SYNTHETIC","Q5B_SYNTHETIC_LOCAL_V01")
             self.assertEqual(bad["status"],"INVALID_REPORT")
 
 if __name__=="__main__":

@@ -91,14 +91,16 @@ class VersionedNetworkAxes(unittest.TestCase):
                 a["sha256"]=hashlib.sha256(payload).hexdigest()
             data["original"]["custody"]="LOCAL_UNVERIFIED"
             data["original"]["reference"]="LOCAL_NONPRODUCT_TEST_ONLY_NO_PROVIDER_ATTESTATION"
-            result=self.v01.evaluate(data,root,data["source"]["commit"],data["source"]["tree"],data["runner"]["native_run_id"])
+            result=self.v01.evaluate(data,root,data["source"]["commit"],data["source"]["tree"],data["runner"]["native_run_id"],
+                                     "CHROMEDRIVER_NODE","SYNTHETIC","Q5B_SYNTHETIC_LOCAL_V01")
             self.assertEqual(result["status"],"VALID_SHAPE_UNATTESTED")
             self.assertTrue(result["artifact_bytes_verified_locally"])
             self.assertFalse(result["provider_native_verified"])
             self.assertFalse(result["Product_accepted"])
             one=data["artifacts"][0]["name"]
             (root/one).write_bytes(b"CHANGED")
-            corrupt=self.v01.evaluate(data,root)
+            corrupt=self.v01.evaluate(data,root,data["source"]["commit"],data["source"]["tree"],data["runner"]["native_run_id"],
+                                      "CHROMEDRIVER_NODE","SYNTHETIC","Q5B_SYNTHETIC_LOCAL_V01")
             self.assertEqual(corrupt["status"],"INVALID_REPORT")
 
     def test_diagnostic_only_is_not_default_consumer(self):

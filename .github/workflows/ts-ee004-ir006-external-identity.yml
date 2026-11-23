@@ -1,0 +1,97 @@
+name: TS EE 004 IR006 external producer identity source qualification (NONPRODUCT)
+on:
+  push:
+    branches:
+      - experiment/ts-ee004-ir006-external-identity-20261123
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee004-ir006-external-identity
+  cancel-in-progress: false
+jobs:
+  q5b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable Q5B source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Node 22.23.3
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.23.3'
+      - name: Native source identity and static nonProduct preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse 'HEAD^{tree}'
+          echo "ImageVersion=${ImageVersion:-UNAVAILABLE}"
+          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator.py)" = "36c207326fff0da2231b731422323af186511a49"
+          python --version
+          node --version
+          google-chrome --version
+          chromedriver --version
+          node --check experiments/TS-EE-CHROMEDRIVER-20261121-001/browser_synthetic_q5b.mjs
+          node --check experiments/TS-EE-CHROMEDRIVER-20261121-001/q5b_receipt_gate.mjs
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator_v01.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_to_common_v01.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_toolchain_capture.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_v01_q5b_f02_f03.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_v01_ir005_f01_f02.py
+          python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_v01_ir006_external_identity.py
+      - name: Preserve v0 and qualify Q5B v0.1 negative/schema cases
+        run: python -m unittest discover -s experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests -p 'test_*.py' -v
+      - name: Verify fixed external profile against diagnostic fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          # These expectations are hardcoded by trusted CI, never copied from JSON.
+          # Diagnostic TEST_VECTOR only; NOT a provider-native browser attestation.
+          python experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator_v01.py \
+            experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/fixtures/qa_report_v01_observe_only.example.json \
+            --diagnostic-only \
+            --expected-engine CHROMEDRIVER_NODE \
+            --expected-subject-kind SYNTHETIC \
+            --expected-evidence-profile Q5B_SYNTHETIC_LOCAL_V01 \
+            --expected-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --expected-tree bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            --expected-run-id FIXTURE_NOT_A_REAL_RUN
+      - name: Record immutable source-only native evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ir006-evidence
+          python - <<'PY'
+          import hashlib,json,os,subprocess
+          source=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip()
+          tree=subprocess.check_output(["git","rev-parse","HEAD^{tree}"],text=True).strip()
+          record={"schema":"ts-ee/ir006/source-ci/v0","scope":"NONPRODUCT_SOURCE_TESTS_ONLY",
+            "head":source,"tree":tree,"native_run_id":os.environ["GITHUB_RUN_ID"],
+            "native_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+            "expected_engine":"CHROMEDRIVER_NODE",
+            "expected_subject_kind":"SYNTHETIC",
+            "expected_evidence_profile":"Q5B_SYNTHETIC_LOCAL_V01",
+            "original_chromedriver_native_run":"45229561752",
+            "original_chromedriver_artifact":"14847471289",
+            "new_browser_sessions":0,
+            "Product_effect":"NONE","provider_native_verified_by_report":False,
+            "Product_accepted":False}
+          with open("ir006-evidence/SOURCE_ONLY_RESULT.json","x",encoding="utf8") as output:
+            json.dump(record,output,sort_keys=True,indent=2)
+            output.write("\n")
+          PY
+      - name: Publish source-only evidence, not a new browser run
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee004-ir006-source-binding-negative-tests
+          path: ir006-evidence/
+          retention-days: 5
+          if-no-files-found: warn

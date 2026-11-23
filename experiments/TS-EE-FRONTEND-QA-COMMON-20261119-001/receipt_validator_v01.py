@@ -29,6 +29,9 @@ Q5B_SCENARIO_CHECKS={
     "console_http":("http_404","http_500","seeded_js_error")
 }
 MAX_ARTIFACT_BYTES=8*1024*1024
+ENGINES=("PLAYWRIGHT_PYTHON","CHROMEDRIVER_NODE")
+SUBJECT_KINDS=("SYNTHETIC","PRODUCT_PREVIEW")
+EVIDENCE_PROFILES=("Q5B_SYNTHETIC_LOCAL_V01","GENERIC_BROWSER_V01")
 
 def secure_directory_fd(path):
     """Open every path component as a directory with no followed symlinks."""
@@ -61,7 +64,8 @@ def secure_read_artifact(directory_fd,name):
     finally:
         os.close(fd)
 
-def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,expected_run_id=None):
+def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,expected_run_id=None,
+             expected_engine=None,expected_subject_kind=None,expected_evidence_profile=None):
     errors=[]
     def need(ok,code):
         if not ok: errors.append(code)
@@ -220,12 +224,34 @@ def evaluate(report,artifact_root=None,expected_commit=None,expected_tree=None,e
     need(isinstance(original.get("reference"),str) and bool(original.get("reference")),"bad_original_ref")
     need(isinstance(report.get("limitations"),list) and
          all(isinstance(x,str) for x in report.get("limitations",[])),"bad_limitations")
-    # Enforce on the schema's full synthetic-ChromeDriver PASS class, never on
-    # user-provided original.reference, which could be swapped to bypass evidence.
-    # This verifies declared mapping shape/consistency, NOT independent native bytes;
-    # that separate provider ZIP/readback join must remain outside this validator.
-    if (runner.get("engine")=="CHROMEDRIVER_NODE" and s.get("subject_kind")=="SYNTHETIC"
-            and stages.get("browser")=="PASS"):
+    # Trust boundary: all three expected values come from the trusted consumer
+    # invocation (pinned CI contract), never from self-reported JSON. For a
+    # non-TEST_VECTOR PASS report, missing caller expectations FAIL CLOSED.
+    claimed_real_pass=(stages.get("browser")=="PASS" and
+                       original.get("custody")!="TEST_VECTOR")
+    caller_bound=(expected_engine is not None or expected_subject_kind is not None or
+                  expected_evidence_profile is not None)
+    if claimed_real_pass or caller_bound:
+        need(expected_engine in ENGINES,"missing_or_invalid_expected_engine")
+        need(expected_subject_kind in SUBJECT_KINDS,"missing_or_invalid_expected_subject_kind")
+        need(expected_evidence_profile in EVIDENCE_PROFILES,
+             "missing_or_invalid_expected_evidence_profile")
+        need(runner.get("engine")==expected_engine,"external_engine_mismatch")
+        need(s.get("subject_kind")==expected_subject_kind,"external_subject_kind_mismatch")
+        if expected_evidence_profile=="Q5B_SYNTHETIC_LOCAL_V01":
+            need(expected_engine=="CHROMEDRIVER_NODE" and
+                 expected_subject_kind=="SYNTHETIC",
+                 "q5b_external_profile_configuration_mismatch")
+            need(expected_commit is not None and expected_tree is not None and
+                 expected_run_id is not None,"q5b_provider_identity_not_pinned")
+    # The Q5B rule is selected by the caller's immutable evidence profile.
+    # For TEST_VECTOR-only schema diagnostics preserve old bounded coverage.
+    # A producer cannot escape this by mutating engine or subject_kind.
+    q5b_profile=(expected_evidence_profile=="Q5B_SYNTHETIC_LOCAL_V01" or
+       (not caller_bound and original.get("custody")=="TEST_VECTOR" and
+        runner.get("engine")=="CHROMEDRIVER_NODE" and
+        s.get("subject_kind")=="SYNTHETIC"))
+    if q5b_profile and stages.get("browser")=="PASS":
         evidence=report.get("scenario_evidence")
         need(isinstance(evidence,dict) and set(evidence)==set(Q5B_SCENARIO_CHECKS),
              "q5b_scenario_evidence_incomplete")
@@ -338,6 +364,12 @@ def main():
     p.add_argument("--expected-commit")
     p.add_argument("--expected-tree")
     p.add_argument("--expected-run-id")
+    p.add_argument("--expected-engine",choices=ENGINES,
+                   help="required for real browser PASS; select from trusted workflow, not report JSON")
+    p.add_argument("--expected-subject-kind",choices=SUBJECT_KINDS,
+                   help="required for real browser PASS; select from trusted workflow")
+    p.add_argument("--expected-evidence-profile",choices=EVIDENCE_PROFILES,
+                   help="required for real browser PASS; select from trusted versioned method")
     p.add_argument("--require-local-bytes",action="store_true",
                    help="deprecated explicit consumer guard; default is already strict")
     p.add_argument("--diagnostic-only",action="store_true",
@@ -349,7 +381,8 @@ def main():
     else:
         try:
             data=json.loads(a.report.read_text(encoding="utf8"))
-            result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id)
+            result=evaluate(data,a.artifact_root,a.expected_commit,a.expected_tree,a.expected_run_id,
+                            a.expected_engine,a.expected_subject_kind,a.expected_evidence_profile)
             if not a.diagnostic_only:
                 result=enforce_consumer_requirements(result,require_local_bytes=True)
         except (OSError,ValueError,TypeError,KeyError,AttributeError,IndexError,OverflowError) as err:
