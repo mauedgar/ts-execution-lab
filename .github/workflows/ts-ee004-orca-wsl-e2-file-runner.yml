@@ -1,0 +1,45 @@
+name: TS EE 004 Orca WSL direct child relay source-only (NONPRODUCT)
+on:
+  push:
+    branches:
+      - experiment/ts-ee004-orca-wsl-e2-file-runner-20261123
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee004-orca-wsl-e2-leaf-source-only
+  cancel-in-progress: false
+jobs:
+  windows-source-only:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact source SHA and static contract
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw "SOURCE_SHA_MISMATCH" }
+          Get-FileHash -Algorithm SHA256 -LiteralPath experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1
+      - name: SelfTest only, six negatives, no WSL/Orca
+        shell: pwsh
+        run: |
+          pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1 -Mode SelfTest
+      - name: Create bounded source-only original evidence
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path source-evidence -ErrorAction Stop | Out-Null
+          $hash=(Get-FileHash -Algorithm SHA256 -LiteralPath experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1).Hash.ToLowerInvariant()
+          $record=@{schema="ts-ee/wsl-leaf-source-only/v0.1";
+            head=$env:GITHUB_SHA;run_id=$env:GITHUB_RUN_ID;
+            attempt=$env:GITHUB_RUN_ATTEMPT;runner_sha256=$hash;
+            Native_WSL="NOT_RUN";Orca="NOT_RUN";Product_effect="NONE"}
+          $record | ConvertTo-Json -Compress | Set-Content -Path source-evidence/SOURCE_ONLY.json -NoNewline -Encoding utf8
+      - name: Preserve source-only artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee004-orca-wsl-direct-leaf-source-only
+          path: source-evidence/
+          retention-days: 5
+          if-no-files-found: warn
