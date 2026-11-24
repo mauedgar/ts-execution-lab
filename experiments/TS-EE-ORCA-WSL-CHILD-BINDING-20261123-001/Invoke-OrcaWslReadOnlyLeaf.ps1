@@ -120,7 +120,7 @@ public static class TSEEStrict {
       !String.Equals(e.GetProperty("attempt").GetString(),attempt,StringComparison.Ordinal)) throw new Exception("MARKER_IDENTITY_MISMATCH");
    if(e.GetProperty("pid").GetInt32()<=1 || e.GetProperty("ppid").GetInt32()<1 ||
       e.GetProperty("uid").GetInt32()!=1000 || e.GetProperty("intended_exit").GetInt32()!=7 ||
-      !Regex.IsMatch(e.GetProperty("pid_namespace").GetString(),@"^pid:\[[0-9]+\]$")) throw new Exception("MARKER_VALUE_MISMATCH");
+      !Regex.IsMatch(e.GetProperty("pid_namespace").GetString(),@"\Apid:\[[0-9]+\]\z")) throw new Exception("MARKER_VALUE_MISMATCH");
   }
  }
  public static void Receipt(string json) {
@@ -317,6 +317,14 @@ function Wait-LeafTasks {
  if(-not [Object]::ReferenceEquals($winner,$all)) {throw 'WSL_DEADLINE_EFFECT_UNKNOWN'}
  $all.GetAwaiter().GetResult()
 }
+function Assert-OrcaBinding {
+ param([string]$Runtime,[string]$Handle,[string]$Incarnation,[string]$HostId)
+ $uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
+ if($Runtime -cnotmatch ('\A'+$uuid+'\z') -or
+    $Handle -cnotmatch ('\Aterm_'+$uuid+'\z') -or
+    $Incarnation -cnotmatch ('\A'+$uuid+'\z') -or
+    $HostId -cne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
+}
 function Assert-Negative {
  param([scriptblock]$Action,[string]$Case)
  $denied=$false
@@ -330,7 +338,7 @@ if ($Mode -eq 'SelfTest') {
          pid=101;ppid=1;uid=1000;pid_namespace='pid:[4026532211]';intended_exit=7}
  $text=$Marker+(ConvertTo-Json $good -Compress)+[string][char]10
  if((Assert-ChildOutput -Stdout $text -ExitCode 7).pid -ne 101) {throw 'POSITIVE_CASE_FAILED'}
- $cases=@('exit','request','attempt','schema','uid','duplicate','namespace','pid','ppid',
+ $cases=@('exit','request','attempt','schema','uid','duplicate','namespace','namespace_lf','pid','ppid',
           'intended','missing','extra','json','extra_key','uid_string','uid_fraction','uid_exponent',
           'wrong_case','duplicate_key','empty_line')
  foreach($c in $cases) {
@@ -343,6 +351,7 @@ if ($Mode -eq 'SelfTest') {
    'uid' {$copy.uid=0}
    'duplicate' {$str=$text+$text}
    'namespace' {$copy.pid_namespace='BAD'}
+   'namespace_lf' {$copy.pid_namespace=$good.pid_namespace+[string][char]10}
    'pid' {$copy.pid=0}
    'ppid' {$copy.ppid=0}
    'intended' {$copy.intended_exit=0}
@@ -357,13 +366,13 @@ if ($Mode -eq 'SelfTest') {
    'duplicate_key' {$str=$Marker+('{"uid":1000,'+((ConvertTo-Json $good -Compress).Substring(1)))+[string][char]10}
    'empty_line' {$str=$text+[string][char]10}
   }
-  if($c -in @('request','attempt','schema','uid','namespace','pid','ppid','intended',
+  if($c -in @('request','attempt','schema','uid','namespace','namespace_lf','pid','ppid','intended',
               'extra_key','uid_string','wrong_case')) {
    $str=$Marker+(ConvertTo-Json $copy -Compress)+[string][char]10
   }
   $expected=@{
    exit='WSL_EXIT_MISMATCH';request='MARKER_IDENTITY_MISMATCH';attempt='MARKER_IDENTITY_MISMATCH';schema='MARKER_IDENTITY_MISMATCH'
-   uid='MARKER_VALUE_MISMATCH';duplicate='CHILD_MARKER_FRAMING_INVALID';namespace='MARKER_VALUE_MISMATCH'
+   uid='MARKER_VALUE_MISMATCH';duplicate='CHILD_MARKER_FRAMING_INVALID';namespace='MARKER_VALUE_MISMATCH';namespace_lf='MARKER_VALUE_MISMATCH'
    pid='MARKER_VALUE_MISMATCH';ppid='MARKER_VALUE_MISMATCH';intended='MARKER_VALUE_MISMATCH';missing='CHILD_MARKER_FRAMING_INVALID'
    extra='CHILD_MARKER_FRAMING_INVALID';extra_key='UNEXPECTED_OR_DUPLICATE_PROPERTY';uid_string='NON_INTEGER_JSON_TOKEN'
    uid_fraction='NON_INTEGER_JSON_TOKEN';uid_exponent='NON_INTEGER_JSON_TOKEN';wrong_case='MARKER_IDENTITY_MISMATCH'
@@ -372,6 +381,14 @@ if ($Mode -eq 'SelfTest') {
   if($c -eq 'json') {Assert-Negative -Case $c -Action {Assert-ChildOutput -Stdout $str -ExitCode $code}}
   else {Assert-Rejection -Case $c -Reason $expected[$c] -Action {Assert-ChildOutput -Stdout $str -ExitCode $code}}
  }
+ $leaseId='12345678-1234-1234-1234-123456789abc'
+ $leaseHandle='term_'+$leaseId
+ Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation $leaseId -HostId 'local'
+ $lf=[string][char]10
+ Assert-Rejection -Case 'lease_runtime_lf' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime ($leaseId+$lf) -Handle $leaseHandle -Incarnation $leaseId -HostId 'local'}
+ Assert-Rejection -Case 'lease_handle_lf' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle ($leaseHandle+$lf) -Incarnation $leaseId -HostId 'local'}
+ Assert-Rejection -Case 'lease_incarnation_lf' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation ($leaseId+$lf) -HostId 'local'}
+ Assert-Rejection -Case 'lease_host_case' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation $leaseId -HostId 'LOCAL'}
  $oversize=[Text.UTF8Encoding]::new($false).GetBytes('X'*17)
  $read=[TSEEBounded]::Capture([IO.MemoryStream]::new($oversize),16,[Threading.CancellationToken]::None)
  Assert-Rejection -Case 'byte_limit' -Reason 'OUTPUT_BYTE_LIMIT_EXCEEDED' -Action {$null=$read.GetAwaiter().GetResult()}
@@ -489,7 +506,7 @@ if ($Mode -eq 'SelfTest') {
   Write-ExclusiveUtf8 -Path (Join-Path $oversizedDir 'RESULT.json') -Text ('x'*16385)
   Assert-Rejection -Case 'oversized_receipt' -Reason 'RECEIPT_BYTE_LIMIT' -Action {Read-TestResult -Directory $oversizedDir}
  } finally {[IO.Directory]::Delete($temp,$true)}
- Write-Output '{"source_only":"PASS_E7_ISOLATED_ANCHOR_PROVISION_AND_PROTECTED_OUTPUT_FIXTURES","Native_Provision":"NOT_RUN","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
+ Write-Output '{"source_only":"PASS_E7_ISOLATED_ANCHOR_PROVISION_PROTECTED_OUTPUT_AND_EXACT_IDENTITY_FIXTURES","Native_Provision":"NOT_RUN","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
  exit 0
 }
 
@@ -517,11 +534,7 @@ if($Mode -eq 'Provision'){
  }
 }
 if($ExpectedProvisionAttempt){throw 'NATIVE_PROVISION_ID_CONFLICT'}
-$uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
-if($ExpectedOrcaRuntimeId -cnotmatch ('^'+$uuid+'$') -or
-   $ExpectedOrcaHandle -cnotmatch ('^term_'+$uuid+'$') -or
-   $ExpectedOrcaIncarnationId -cnotmatch ('^'+$uuid+'$') -or
-   $ExpectedOrcaHostId -ne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
+Assert-OrcaBinding -Runtime $ExpectedOrcaRuntimeId -Handle $ExpectedOrcaHandle -Incarnation $ExpectedOrcaIncarnationId -HostId $ExpectedOrcaHostId
 if(-not [IO.Directory]::Exists($WorkRoot)) {throw 'MISSING_WORKROOT'}
 Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
 Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
