@@ -1,0 +1,80 @@
+name: RS011 A01 N08 disposable PG16 actual crash recovery CI001
+on:
+  push:
+    branches:
+      - rs011/a01-n08-pg16-crash-recovery-20261124-001
+    paths:
+      - .github/workflows/rs011-a01-n08-pg16-crash-recovery-20261124-001.yml
+permissions:
+  contents: read
+jobs:
+  n08-crash-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      TS_RS011_N08_DISPOSABLE: 'yes'
+      TS_RS011_N08_SERVICE_ID: ${{ job.services.pg16.id }}
+    services:
+      pg16:
+        image: postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e
+        env:
+          POSTGRES_PASSWORD: 'a01-disposable-admin'
+          POSTGRES_DB: postgres
+        ports:
+          - '127.0.0.1:5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze exactly two additive files and existing experimental schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=700f0c68e0ce09baa3dc84f3ae245734ddd702bf
+          parent=3bfe20402791d8b5ee9e48c05e880fb06b53402e
+          root=experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001
+          schema_commit=e805c0bba7e32a6092a4d5155a95d664f8ee37ed
+          schema_path=experiments/TS-RS011-A01-OPTION-A-PG16-20261124-001/schema.sql
+          test "$GITHUB_EVENT_NAME" = push || { echo EVENT_MISMATCH; exit 1; }
+          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo ATTEMPT_MISMATCH; exit 1; }
+          test "$GITHUB_REF" = refs/heads/rs011/a01-n08-pg16-crash-recovery-20261124-001 || { echo BRANCH_MISMATCH; exit 1; }
+          test "$(git rev-parse HEAD^)" = "$parent" || { echo PARENT_MISMATCH; exit 1; }
+          git merge-base --is-ancestor "$base" HEAD
+          test "$(git rev-parse "HEAD:$root/probe.py")" = ed8a9095039d5c4b5ecb9474f1bde73039b9ce50 || { echo PROBE_MISMATCH; exit 1; }
+          test "$(git diff --name-only "$base" HEAD | wc -l)" -eq 2 || { echo WRITESET_COUNT; exit 1; }
+          while IFS= read -r f; do
+            case "$f" in
+              "$root/probe.py"|.github/workflows/rs011-a01-n08-pg16-crash-recovery-20261124-001.yml) ;;
+              *) echo UNEXPECTED_WRITESET; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$base" HEAD)
+          test "$(git rev-parse "$schema_commit:$schema_path")" = 1a5027709214092a4cabb21c63a53ca4f262c09c || { echo SCHEMA_MISMATCH; exit 1; }
+          mkdir -m 700 "$RUNNER_TEMP/rs011-n08"
+          git show "$schema_commit:$schema_path" > "$RUNNER_TEMP/rs011-n08/schema.sql"
+          test "$(git hash-object "$RUNNER_TEMP/rs011-n08/schema.sql")" = 1a5027709214092a4cabb21c63a53ca4f262c09c
+          echo N08_FROZEN_NONPRODUCT_NO_HOST_OR_NEON
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Prepare standalone Python and psql
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          /usr/bin/psql --version
+          uv python install 3.15.2
+      - name: Execute single fresh N08 crash on this exact disposable service
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001/probe.py "$RUNNER_TEMP/rs011-n08/schema.sql"
+          echo N08_CI001_CRASH_RECOVERY_PASS_LIMITED
