@@ -1,0 +1,81 @@
+name: TS RS011 A05 isolated PostgreSQL16 one-host actual lock contention CI001
+on:
+  push:
+    branches:
+      - rs011/a05-disposable-pg16-contention-20261124-001
+    paths:
+      - .github/workflows/rs011-a05-pg16-one-host-contention-20261124-001.yml
+permissions:
+  contents: read
+
+jobs:
+  one-host-pg16-contention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      UV_NO_CONFIG: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      GITHUB_ACTIONS: 'true'
+      TS_RS011_EPHEMERAL: 'yes'
+      PGHOST: '127.0.0.1'
+      PGPORT: '5432'
+      PGUSER: 'postgres'
+      PGDATABASE: 'postgres'
+      PGPASSWORD: 'rs011-only-disposable'
+    services:
+      pg16:
+        image: postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e
+        env:
+          POSTGRES_PASSWORD: 'rs011-only-disposable'
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout exact isolated branch without write credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce source identity, branch, three-file scope and one run attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=b451fe41b789a02e56cb5896b9db669467c52bfa
+          root=experiments/TS-RS011-A05-PG16-CONTENTION-20261124-001
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REF" = refs/heads/rs011/a05-disposable-pg16-contention-20261124-001
+          git merge-base --is-ancestor "$base" HEAD
+          test "$(git rev-parse "HEAD:$root/probe.py")" = e99458126e59a0b9dc1883a80f75eedd833e3e42
+          test "$(git rev-parse "HEAD:$root/README.md")" = eafe51a4a7de2bc14e3063a546ecc4cf4bb6725b
+          test "$(git diff --name-only "$base" HEAD | wc -l)" -eq 3
+          while IFS= read -r entry; do
+            case "$entry" in
+              "$root/probe.py"|"$root/README.md"|.github/workflows/rs011-a05-pg16-one-host-contention-20261124-001.yml) ;;
+              *) echo "UNEXPECTED_WRITE_SET" >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$base" HEAD)
+          echo FROZEN_ONE_HOST_NONPRODUCT_PG16_CANDIDATE
+      - name: Install pinned standalone Python 3.15.2
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+        with:
+          version: '0.13.7'
+      - name: Install disposable PostgreSQL 16 CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          psql --version
+          uv python install 3.15.2
+      - name: Execute one-host two-backend actual lock contention (not two-host, no Neon)
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.15.2 python -B experiments/TS-RS011-A05-PG16-CONTENTION-20261124-001/probe.py
+          echo A05_ONE_HOST_CONTENTION_SOURCE_LIMITED_CI_PASS_NO_PRODUCT_NEON_ORCA_P0_P2
