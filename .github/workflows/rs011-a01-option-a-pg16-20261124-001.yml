@@ -1,4 +1,4 @@
-name: TS RS011 A01 Option A isolated PG16 authority serialization CI001
+name: TS RS011 A01 Option A isolated PG16 authority serialization CI002
 on:
   push:
     branches:
@@ -39,15 +39,15 @@ jobs:
           set -euo pipefail
           base=a0e1d8c06255d908c481c6ccf8099ec99b67b64c
           root=experiments/TS-RS011-A01-OPTION-A-PG16-20261124-001
-          test "$GITHUB_EVENT_NAME" = push
-          test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$GITHUB_REF" = refs/heads/rs011/a01-option-a-pg16-20261124-001
-          test "$(git rev-parse HEAD^)" = 52ad0c997c0ff9827715642f6710b1d29a23ab
-          git merge-base --is-ancestor "$base" HEAD
-          test "$(git rev-parse "HEAD:$root/schema.sql")" = 1a5027709214092a4cabb21c63a53ca4f262c09c
-          test "$(git rev-parse "HEAD:$root/probe.py")" = 0f55982a783782bc04df581615c9f6052e12b92e
-          test "$(git rev-parse "HEAD:$root/README.md")" = 08de519f9e2432e98855fad448aa9d9501d0c7b4
-          test "$(git diff --name-only "$base" HEAD | wc -l)" -eq 4
+          test "$GITHUB_EVENT_NAME" = push || { echo EVENT_MISMATCH >&2; exit 1; }
+          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo ATTEMPT_MISMATCH >&2; exit 1; }
+          test "$GITHUB_REF" = refs/heads/rs011/a01-option-a-pg16-20261124-001 || { echo BRANCH_MISMATCH >&2; exit 1; }
+          test "$(git rev-parse HEAD^)" = 18b0be4d3a138c1e766daac88b4a0c0a33b8b752 || { echo PARENT_PIN_MISMATCH >&2; exit 1; }
+          git merge-base --is-ancestor "$base" HEAD || { echo BASE_ANCESTRY_MISMATCH >&2; exit 1; }
+          test "$(git rev-parse "HEAD:$root/schema.sql")" = 1a5027709214092a4cabb21c63a53ca4f262c09c || { echo SCHEMA_BLOB_MISMATCH >&2; exit 1; }
+          test "$(git rev-parse "HEAD:$root/probe.py")" = 0f55982a783782bc04df581615c9f6052e12b92e || { echo PROBE_BLOB_MISMATCH >&2; exit 1; }
+          test "$(git rev-parse "HEAD:$root/README.md")" = 08de519f9e2432e98855fad448aa9d9501d0c7b4 || { echo README_BLOB_MISMATCH >&2; exit 1; }
+          test "$(git diff --name-only "$base" HEAD | wc -l)" -eq 4 || { echo WRITESET_COUNT_MISMATCH >&2; exit 1; }
           while IFS= read -r f; do
             case "$f" in
               "$root/schema.sql"|"$root/probe.py"|"$root/README.md"|.github/workflows/rs011-a01-option-a-pg16-20261124-001.yml) ;;
@@ -71,4 +71,4 @@ jobs:
         run: |
           set -euo pipefail
           uv run --no-project --python 3.15.2 python -B experiments/TS-RS011-A01-OPTION-A-PG16-20261124-001/probe.py
-          echo A01_CI001_LIMITED_PASS_NO_PRODUCT_AUTHORITY_TRANSFER
+          echo A01_CI002_LIMITED_PASS_NO_PRODUCT_AUTHORITY_TRANSFER
