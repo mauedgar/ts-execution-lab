@@ -40,27 +40,45 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $kit=Join-Path $env:RUNNER_TEMP 'ts-ee-mat-xform-kit'
-          $resolved=@(node -p "process.execPath")
-          if($LASTEXITCODE -ne 0 -or $resolved.Count -ne 1 -or -not [IO.Path]::IsPathFullyQualified([string]$resolved[0])){throw 'RUNTIME_SOURCE_AMBIGUOUS'}
-          $sourceNode=[IO.Path]::GetFullPath([string]$resolved[0])
-          $targetNode=Join-Path $kit 'runtime\node.exe'
-          $sourceHash=(Get-FileHash -LiteralPath $sourceNode -Algorithm SHA256).Hash.ToLowerInvariant()
-          [IO.File]::Copy($sourceNode,$targetNode,$false)
-          $targetHash=(Get-FileHash -LiteralPath $targetNode -Algorithm SHA256).Hash.ToLowerInvariant()
-          Write-Output "RUNTIME_SOURCE_SHA256=$sourceHash TARGET_SHA256=$targetHash"
-          if($sourceHash -cne $targetHash){throw 'RUNTIME_COPY_HASH'}
+          $installParent=Join-Path $env:RUNNER_TEMP 'ts-ee-mat-xform-install-parent'
+          New-Item -ItemType Directory -Path $installParent | Out-Null
           $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
-          $acl=Get-Acl -LiteralPath $kit
+          $acl=Get-Acl -LiteralPath $installParent
           $acl.SetAccessRuleProtection($true,$false)
           foreach($identity in @($sid.Value,'S-1-5-18','S-1-5-32-544')){
             $rule=[Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($identity),'FullControl','ContainerInherit,ObjectInherit','None','Allow')
             $acl.SetAccessRule($rule)
           }
-          Set-Acl -LiteralPath $kit -AclObject $acl
-          $actual=Get-Acl -LiteralPath $kit
-          $sddl=$actual.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group -bor [Security.AccessControl.AccessControlSections]::Access)
-          $env:TEST_ROOT_ACL_SHA256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sddl))).ToLowerInvariant()
+          Set-Acl -LiteralPath $installParent -AclObject $acl
+          $kit=Join-Path $installParent 'station'
+          $badRoot=Join-Path $installParent 'wrong-hash'
+          $zip=[IO.Path]::GetFullPath('source-evidence/STATION_KIT.zip')
+          $e=Get-Content -Raw -LiteralPath source-evidence/SOURCE_ONLY.json | ConvertFrom-Json
+          $resolved=@(node -p "process.execPath")
+          if($LASTEXITCODE -ne 0 -or $resolved.Count -ne 1 -or -not [IO.Path]::IsPathFullyQualified([string]$resolved[0])){throw 'RUNTIME_SOURCE_AMBIGUOUS'}
+          $sourceNode=[IO.Path]::GetFullPath([string]$resolved[0])
+          $sourceHash=(Get-FileHash -LiteralPath $sourceNode -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installer='scripts/station/mat-xform-v1/Install-Kit.ps1'
+          $installerHash=(Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $bad=@(pwsh.exe -NoLogo -NoProfile -NonInteractive -File $installer -Root $badRoot -KitZip $zip -ZipSha256 ('0'*64) -ManifestSha256 $e.manifest_sha256 -SourceNode $sourceNode -NodeSha256 $sourceHash)
+          if($LASTEXITCODE -ne 1 -or $bad.Count -ne 1 -or (Test-Path -LiteralPath $badRoot)){throw 'INSTALL_NEGATIVE_HASH_FAILED'}
+          $br=$bad[0] | ConvertFrom-Json
+          if($br.effect -ne 'NONE' -or $br.reason -ne 'ZIP_HASH'){throw 'INSTALL_NEGATIVE_HASH_REASON'}
+          Write-Output 'PASS install-wrong-hash ZIP_HASH'
+          $native=@(pwsh.exe -NoLogo -NoProfile -NonInteractive -File $installer -Root $kit -KitZip $zip -ZipSha256 $e.zip_sha256 -ManifestSha256 $e.manifest_sha256 -SourceNode $sourceNode -NodeSha256 $sourceHash)
+          if($LASTEXITCODE -ne 0 -or $native.Count -ne 1){throw 'INSTALL_NATIVE_FAILED'}
+          $ir=$native[0] | ConvertFrom-Json
+          if($ir.status -ne 'INSTALLED_NOT_ADMITTED' -or $ir.effect -ne 'CONFIRMED' -or $ir.root -cne $kit -or $ir.node_sha256 -cne $sourceHash){throw 'INSTALL_RECEIPT_MISMATCH'}
+          [IO.File]::WriteAllText([IO.Path]::GetFullPath('source-evidence/INSTALL.json'),$native[0],[Text.UTF8Encoding]::new($false))
+          $existingFiles=@(Get-ChildItem -LiteralPath $kit -Recurse -File -Force).Count
+          $collision=@(pwsh.exe -NoLogo -NoProfile -NonInteractive -File $installer -Root $kit -KitZip $zip -ZipSha256 $e.zip_sha256 -ManifestSha256 $e.manifest_sha256 -SourceNode $sourceNode -NodeSha256 $sourceHash)
+          if($LASTEXITCODE -ne 1 -or $collision.Count -ne 1){throw 'INSTALL_COLLISION_FAILED'}
+          $cr=$collision[0] | ConvertFrom-Json
+          if($cr.effect -ne 'NONE' -or $cr.reason -notmatch 'INSTALL_ROOT_RESERVATION_FAILED' -or @(Get-ChildItem -LiteralPath $kit -Recurse -File -Force).Count -ne $existingFiles){throw 'INSTALL_COLLISION_EFFECT'}
+          Write-Output 'PASS install-collision no new effect'
+          Write-Output "INSTALLER_SHA256=$installerHash"
+          Write-Output "PASS installed-pristine-kit files=$($ir.file_count)"
+          $env:TEST_ROOT_ACL_SHA256=$ir.root_acl_sha256
           node scripts/station/mat-xform-v1/test-station.mjs $kit | Tee-Object -FilePath source-evidence/TESTS.txt
           if ($LASTEXITCODE -ne 0) {throw 'FIXTURES_FAILED'}
       - name: Preserve original kit and evidence
