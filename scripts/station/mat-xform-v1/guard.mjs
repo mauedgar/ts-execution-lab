@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const fail=code=>{throw new Error(code)};
 const ok=(v,c)=>{if(!v)fail(c)};
-const exact=(o,keys)=>ok(o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join('|')===keys.slice().sort().join('|'),'SCHEMA_KEYS');
+const exact=(o,keys)=>ok(o&&typeof o==='object'&&!Array.isArray(o)&&JSON.stringify(Object.keys(o).sort())===JSON.stringify(keys.slice().sort()),'SCHEMA_KEYS');
 const canonical=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
 const hex=x=>typeof x==='string'&&/^[0-9a-f]{64}$/.test(x);
 const id=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,96}$/.test(x);
@@ -30,7 +30,7 @@ try{
  const gb=read(grantPath,32768);ok(sha(gb)===grantHash,'GRANT_HASH');const g=parse(gb);
  exact(g,['schema','station_root','attempt','request_id','batch_id','carrier_bytes','carrier_sha256','manifest_sha256','node_sha256','root_acl_sha256','artifacts']);
  ok(g.schema==='ts-ee/mat-xform-station-grant/v1'&&g.station_root===root&&g.attempt===attempt&&id(g.request_id)&&id(g.batch_id)&&hex(g.carrier_sha256)&&hex(g.manifest_sha256)&&hex(g.node_sha256)&&hex(g.root_acl_sha256),'GRANT_IDENTITY');
- ok(sha(read(process.execPath,128*1024*1024))===g.node_sha256&&process.version==='v22.23.3','NODE_BINDING');
+ ok(path.resolve(process.execPath).toLowerCase()===path.join(root,'runtime','node.exe').toLowerCase()&&sha(read(process.execPath,128*1024*1024))===g.node_sha256&&process.version==='v22.23.3','NODE_BINDING');
  checkInstall(root,g.manifest_sha256);
  ok(Number.isSafeInteger(g.carrier_bytes)&&g.carrier_bytes>0&&g.carrier_bytes<=65536,'CARRIER_LIMIT');
  const rb=read(carrier,g.carrier_bytes);ok(rb.length===g.carrier_bytes&&sha(rb)===g.carrier_sha256,'CARRIER_HASH');const r=parse(rb);

@@ -28,10 +28,10 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) {throw 'NPM_CI_FAILED'}
           $kit=Join-Path $env:RUNNER_TEMP 'ts-ee-mat-xform-kit'
-          node scripts/station/mat-xform-v1/build-kit.mjs $kit
-          if ($LASTEXITCODE -ne 0) {throw 'KIT_FAILED'}
-          # Artifact packaging before tests: pristine install, empty inbox/runs.
           New-Item -ItemType Directory -Path source-evidence | Out-Null
+          node scripts/station/mat-xform-v1/build-kit.mjs $kit | Tee-Object -FilePath source-evidence/BUILD.json
+          if ($LASTEXITCODE -ne 0) {throw 'KIT_FAILED'}
+          # Artifact packaging before tests: pristine install, empty runtime/inbox/runs.
           Compress-Archive -LiteralPath $kit -DestinationPath source-evidence/STATION_KIT.zip
           $hash=(Get-FileHash -LiteralPath source-evidence/STATION_KIT.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           $summary=@{schema='ts-ee/mat-xform-kit-ci/v1';head=$env:GITHUB_SHA;tree=(git rev-parse 'HEAD^{tree}').Trim();run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;zip_sha256=$hash;manifest_sha256=(Get-FileHash -LiteralPath (Join-Path $kit 'manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant();Native_notebook='NOT_RUN';Product_effect='NONE'}
@@ -41,6 +41,9 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $kit=Join-Path $env:RUNNER_TEMP 'ts-ee-mat-xform-kit'
+          $sourceNode=(Get-Command node.exe -CommandType Application).Source
+          Copy-Item -LiteralPath $sourceNode -Destination (Join-Path $kit 'runtime\node.exe')
+          if((Get-FileHash -LiteralPath $sourceNode -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Join-Path $kit 'runtime\node.exe') -Algorithm SHA256).Hash){throw 'RUNTIME_COPY_HASH'}
           $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
           $acl=Get-Acl -LiteralPath $kit
           $acl.SetAccessRuleProtection($true,$false)
