@@ -1,0 +1,16 @@
+{
+  "attempt": "TS-RS011-N08-PG16-CI003-A001",
+  "ref": "refs/heads/rs011/execute/n08-ci003-20261124-001",
+  "head": "b7e1da25ecfddeff943c3853df6313169bcae56d",
+  "tree": "1f55f836587ee46c55965a816dcb37ac6c85d3e0",
+  "parent": "0bf78fa0f40a01f8cb7e2767c405c9becfc2b560",
+  "workflow_blob": "98f73c80708524797ef19cb70e554c10d1e4808e",
+  "probe_blob": "416d39ad3b280300b9a1abe207ef98efe8b4f782",
+  "schema_blob": "1a5027709214092a4cabb21c63a53ca4f262c09c",
+  "base": "700f0c68e0ce09baa3dc84f3ae245734ddd702bf",
+  "owner": "TS_REMOTE_STATE_011",
+  "scope": "NONPRODUCT_FRESH_DISPOSABLE_ONLY",
+  "original_terminal_run": 45461678040,
+  "prior_effect": "CONFIRMED_DISPOSABLE_TERMINAL_NO_REPLAY",
+  "product_effect": "NONE"
+}
