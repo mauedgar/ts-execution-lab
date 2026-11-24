@@ -70,12 +70,21 @@ jobs:
           $ir=$native[0] | ConvertFrom-Json
           if($ir.status -ne 'INSTALLED_NOT_ADMITTED' -or $ir.effect -ne 'CONFIRMED' -or $ir.root -cne $kit -or $ir.node_sha256 -cne $sourceHash){throw 'INSTALL_RECEIPT_MISMATCH'}
           [IO.File]::WriteAllText([IO.Path]::GetFullPath('source-evidence/INSTALL.json'),$native[0],[Text.UTF8Encoding]::new($false))
-          $existingFiles=@(Get-ChildItem -LiteralPath $kit -Recurse -File -Force).Count
+          function Snapshot-Install([string]$root){
+            $rows=@(Get-Item -LiteralPath $root;Get-ChildItem -LiteralPath $root -Recurse -Force)|Sort-Object FullName
+            foreach($item in $rows){
+              $acl=(Get-Acl -LiteralPath $item.FullName).Sddl
+              $hash=if($item.PSIsContainer){'DIR'}else{(Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash}
+              $item.FullName+'|'+$hash+'|'+$acl
+            }
+          }
+          $existingSnapshot=@(Snapshot-Install $kit) -join "`n"
           $collision=@(pwsh.exe -NoLogo -NoProfile -NonInteractive -File $installer -Root $kit -KitZip $zip -ZipSha256 $e.zip_sha256 -ManifestSha256 $e.manifest_sha256 -SourceNode $sourceNode -NodeSha256 $sourceHash)
           if($LASTEXITCODE -ne 1 -or $collision.Count -ne 1){throw 'INSTALL_COLLISION_FAILED'}
           $cr=$collision[0] | ConvertFrom-Json
-          if($cr.effect -ne 'NONE' -or $cr.reason -notmatch 'INSTALL_ROOT_RESERVATION_FAILED' -or @(Get-ChildItem -LiteralPath $kit -Recurse -File -Force).Count -ne $existingFiles){throw 'INSTALL_COLLISION_EFFECT'}
-          Write-Output 'PASS install-collision no new effect'
+          if($cr.effect -ne 'NONE' -or $cr.reason -notmatch 'INSTALL_ROOT_RESERVATION_FAILED' -or (@(Snapshot-Install $kit) -join "`n") -cne $existingSnapshot){throw 'INSTALL_COLLISION_EFFECT'}
+          Write-Output 'PASS install-collision no new effect, hashes and ACL unchanged'
+          & scripts/station/mat-xform-v1/Test-Install-Namespace.ps1 -Parent $installParent -Installer $installer -SourceNode $sourceNode -NodeSha256 $sourceHash
           Write-Output "INSTALLER_SHA256=$installerHash"
           Write-Output "PASS installed-pristine-kit files=$($ir.file_count)"
           $env:TEST_ROOT_ACL_SHA256=$ir.root_acl_sha256

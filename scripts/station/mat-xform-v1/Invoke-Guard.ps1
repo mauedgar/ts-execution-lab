@@ -48,7 +48,7 @@ function Resolve-Terminal([byte[]]$Out,[byte[]]$Err,[int]$Code) {
   if($r.GetProperty('schema').GetString() -cne 'ts-ee/mat-xform-station-terminal/v1' -or $r.GetProperty('attempt').GetString() -cne $Attempt -or $r.GetProperty('Product_effect').GetString() -cne 'NONE'){throw 'GUARD_TERMINAL_IDENTITY'}
   if($status -ceq 'PASS'){
    $expected=@('schema','attempt','status','effect','grant_sha256','carrier_sha256','request_identity','result_sha256','receipt_sha256','artifact_count','Product_effect')
-   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 0 -or $effect -cne 'CONFIRMED' -or $r.GetProperty('grant_sha256').GetString() -cne $GrantSha256 -or $r.GetProperty('carrier_sha256').GetString() -cne $g.carrier_sha256 -or $r.GetProperty('request_identity').GetString() -cnotmatch '^sha256:[a-f0-9]{64}$' -or $r.GetProperty('artifact_count').GetInt32() -ne $g.artifacts.Count){throw 'GUARD_PASS_CONTRADICTION'}
+   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 0 -or $effect -cne 'CONFIRMED' -or $r.GetProperty('grant_sha256').GetString() -cne $GrantSha256 -or $r.GetProperty('carrier_sha256').GetString() -cne $g.carrier_sha256 -or $r.GetProperty('request_identity').GetString() -cne ('sha256:'+$g.carrier_sha256) -or $r.GetProperty('artifact_count').GetInt32() -ne $g.artifacts.Count){throw 'GUARD_PASS_CONTRADICTION'}
    foreach($kind in @('result','receipt')){
     $p=Join-Path $runs ($Attempt+'.'+$kind+'.json')
     Assert-Path $p $false;$null=Assert-Acl $p
@@ -63,8 +63,8 @@ function Resolve-Terminal([byte[]]$Out,[byte[]]$Err,[int]$Code) {
  }finally{$doc.Dispose()}
 }
 try{
- if(-not $IsWindows -or $Attempt -cnotmatch '^[A-Za-z0-9_-]{1,96}$' -or $Root -cnotmatch '^[A-Za-z]:\\' -or [IO.Path]::GetFullPath($Root) -cne $Root){throw 'ARGUMENTS'}
- foreach($h in @($GrantSha256,$NodeSha256,$GuardSha256)){if($h -cnotmatch '^[a-f0-9]{64}$'){throw 'HASH_ARGUMENT'}}
+ if(-not $IsWindows -or $Attempt -cnotmatch '\A[A-Za-z0-9_-]{1,96}\z' -or $Root -cnotmatch '^[A-Za-z]:\\' -or [IO.Path]::GetFullPath($Root) -cne $Root){throw 'ARGUMENTS'}
+ foreach($h in @($GrantSha256,$NodeSha256,$GuardSha256)){if($h -cnotmatch '\A[a-f0-9]{64}\z'){throw 'HASH_ARGUMENT'}}
  # The stable, exclusively owned parent chain is an externally admitted precondition.
  # Check every ancestor for reparse points; do not change ACLs.
  $p=$Root;while($p){Assert-Path $p $true;$next=[IO.Path]::GetDirectoryName($p);if($next -eq $p){break};$p=$next}
@@ -113,6 +113,7 @@ public static class MatXformBoundedNative {
  foreach($arg in @($guard,$Root,$Attempt,$GrantSha256)){$psi.ArgumentList.Add($arg)}
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi
  $launched=$true
+ $outTask=$null;$errTask=$null
  try{
   if(-not $process.Start()){throw 'START_FAILED'}
   $outTask=[MatXformBoundedNative]::Read($process.StandardOutput.BaseStream,16384)
@@ -128,7 +129,14 @@ public static class MatXformBoundedNative {
   $line=Resolve-Terminal $stdoutBytes $stderrBytes $nativeExit
   [Console]::WriteLine($line)
  }catch{
-  try{if($process.HasExited){$nativeExit=$process.ExitCode}else{$process.Kill($true)}}catch{}
+  # Preserve each independently completed bounded stream, even when its sibling fails.
+  try{if($null -ne $outTask -and $outTask.IsCompletedSuccessfully){$stdoutBytes=$outTask.GetAwaiter().GetResult()}}catch{}
+  try{if($null -ne $errTask -and $errTask.IsCompletedSuccessfully){$stderrBytes=$errTask.GetAwaiter().GetResult()}}catch{}
+  try{
+   if(-not $process.HasExited){$process.Kill($true);$null=$process.WaitForExit(5000)}
+   if($process.HasExited){$nativeExit=$process.ExitCode}
+  }catch{}
+  # Root exit is not proof that descendants terminated; UNKNOWN remains mandatory.
   throw
  }finally{$process.Dispose()}
  exit $nativeExit
