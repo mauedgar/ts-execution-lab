@@ -1,0 +1,59 @@
+name: TS EE 004 Orca WSL E3 bounded leaf source repair (NONPRODUCT)
+on:
+  push:
+    branches:
+      - experiment/ts-ee004-orca-wsl-e3-source-repair-20261123
+permissions:
+  contents: read
+concurrency:
+  group: ts-ee004-orca-wsl-e3-bounded-source
+  cancel-in-progress: false
+jobs:
+  source-only:
+    runs-on: windows-2025
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact parent source blob and pinned candidate checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'SOURCE_HEAD_MISMATCH' }
+          $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
+          $blob=(git rev-parse "HEAD:$src").Trim()
+          if ($blob -ne '30689f7b1d97b78f64462b530bb9f489e80f7ddb') { throw "SOURCE_BLOB_MISMATCH_$blob" }
+          if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw 'MISSING_SOURCE' }
+          Write-Output "GIT_BLOB=$blob"
+      - name: Source-only selftest with 14 marker negative and bounded I/O cases
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
+          pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $src -Mode SelfTest
+          if ($LASTEXITCODE -ne 0) { throw "SELFTEST_FAILED_$LASTEXITCODE" }
+      - name: Exact native source-only evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Path source-evidence -ErrorAction Stop | Out-Null
+          $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
+          $hash=(Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash.ToLowerInvariant()
+          $result=@{schema='ts-ee/orca-wsl-e3-source-only/v0.1';head=$env:GITHUB_SHA
+            tree=(git rev-parse 'HEAD^{tree}').Trim()
+            source_blob='30689f7b1d97b78f64462b530bb9f489e80f7ddb'
+            runner_windows_sha256=$hash;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT
+            findings_targeted=@('IR001-F01','IR001-F02','IR001-F03','IR001-F04','IR001-F05','IR001-F06')
+            tests='SOURCE_ONLY_NEGATIVE_AND_ATOMIC';Native_WSL='NOT_RUN';Orca='NOT_RUN'
+            Product_effect='NONE';method_accepted=$false;source_review='PENDING'}
+          $json=ConvertTo-Json -InputObject $result -Compress -Depth 5
+          [IO.File]::WriteAllText('source-evidence/SOURCE_ONLY.json',$json,[Text.UTF8Encoding]::new($false))
+      - name: Preserve CI original source-only artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ts-ee004-orca-wsl-e3-source-only
+          path: source-evidence/
+          retention-days: 5
+          if-no-files-found: warn
