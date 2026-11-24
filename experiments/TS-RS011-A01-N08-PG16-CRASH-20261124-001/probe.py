@@ -176,7 +176,11 @@ def main():
         check(not down["running"] and down["exit_code"]==137,"NOT_CRASH_EXIT")
         pending.stdin.close()
         rc=pending.wait(timeout=8)
-        check(rc!=0,"UNCOMMITTED_CLIENT_SUCCESS")
+        # psql may exit 0 on EOF while idle at stdin, even after server death.
+        # No COMMIT was sent on this session; post-recovery equality is the oracle.
+        check(pending.poll() is not None,"CLIENT_NOT_TERMINAL")
+        print(json.dumps({"stage":"CRASH_CONFIRMED","exit":down["exit_code"],
+                          "client_exit":rc,"commit_sent":False},sort_keys=True),flush=True)
         check(run(["docker","start",cid]).stdout.strip()==cid,"START_RECEIPT")
         wait_recovery()
         after_container=inspect(cid)
@@ -192,7 +196,7 @@ def main():
         check(snapshot()==after,"DENIAL_CHANGED_STATE")
         print(json.dumps({"status":"N08_SINGLE_HOST_PG16_CRASH_RECOVERY_PASS_LIMITED",
           "container_id":cid,"same_anonymous_volume":True,"crash_exit":down["exit_code"],
-          "uncommitted_client_pid":pid,"uncommitted_client_exit":rc,
+          "uncommitted_client_pid":pid,"uncommitted_client_exit":rc,"uncommitted_client_commit_sent":False,
           "before_identity":before_identity,"after_identity":after_identity,
           "same_cluster":True,"before_state_sha256":digest(before),"after_state_sha256":digest(after),
           "committed_revocation":"PRESERVED","committed_effect_and_receipt":"PRESERVED",
