@@ -328,7 +328,13 @@ if ($Mode -eq 'SelfTest') {
   $read=[Security.AccessControl.FileSystemAccessRule]::new($readSid,[Security.AccessControl.FileSystemRights]::ReadAndExecute,[Security.AccessControl.AccessControlType]::Allow)
   $goodAcl.AddAccessRule($read)
   Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value
-  if((Get-AclFingerprint -Acl $goodAcl) -cnotmatch '^[a-f0-9]{64}
+  if((Get-AclFingerprint -Acl $goodAcl) -cnotmatch '^[a-f0-9]{64}$') {throw 'ACL_FINGERPRINT_FAILED'}
+  $write=[Security.AccessControl.FileSystemAccessRule]::new($readSid,[Security.AccessControl.FileSystemRights]::WriteData,[Security.AccessControl.AccessControlType]::Allow)
+  $goodAcl.AddAccessRule($write)
+  Assert-Negative -Case 'untrusted_write_acl' -Action {Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value}
+  $oversizedDir=Join-Path $temp 'oversized';[IO.Directory]::CreateDirectory($oversizedDir)|Out-Null
+  Write-ExclusiveUtf8 -Path (Join-Path $oversizedDir 'RESULT.json') -Text ('x'*16385)
+  Assert-Negative -Case 'oversized_receipt' -Action {Read-QualifiedResult -Directory $oversizedDir}
  } finally {[IO.Directory]::Delete($temp,$true)}
  Write-Output '{"source_only":"PASS_STRICT_RECEIPT_ACL_DEADLINE_AND_ORIGINAL_BYTES","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
  exit 0

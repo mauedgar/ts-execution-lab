@@ -23,7 +23,7 @@ jobs:
           if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'SOURCE_HEAD_MISMATCH' }
           $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
           $blob=(git rev-parse "HEAD:$src").Trim()
-          if ($blob -ne '12dba1ff16743441806a1c9528f30b6eaebba438') { throw "SOURCE_BLOB_MISMATCH_$blob" }
+          if ($blob -ne '7d139fd18ce46c34f3cb2fbd3cdc325addbcaabb') { throw "SOURCE_BLOB_MISMATCH_$blob" }
           if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw 'MISSING_SOURCE' }
           Write-Output "GIT_BLOB=$blob"
       - name: SelfTest strict original bytes, typed ACL and independent deadline, source only
@@ -42,7 +42,7 @@ jobs:
           $hash=(Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash.ToLowerInvariant()
           $result=@{schema='ts-ee/orca-wsl-e5-source-only/v0.1';head=$env:GITHUB_SHA
             tree=(git rev-parse 'HEAD^{tree}').Trim()
-            source_blob='12dba1ff16743441806a1c9528f30b6eaebba438'
+            source_blob='7d139fd18ce46c34f3cb2fbd3cdc325addbcaabb'
             runner_windows_sha256=$hash;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT
             findings_targeted=@('IR002-F01','IR002-F02','IR002-F03','IR002-F04','IR002-F05')
             tests='SOURCE_ONLY_NEGATIVE_AND_ATOMIC';Native_WSL='NOT_RUN';Orca='NOT_RUN'
