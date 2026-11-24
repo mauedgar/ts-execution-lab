@@ -1,4 +1,4 @@
-name: RS011 A01 N08 disposable PG16 actual crash recovery CI001
+name: RS011 A01 N08 disposable PG16 actual crash recovery CI002
 on:
   push:
     branches:
@@ -15,7 +15,6 @@ jobs:
       UV_NO_CONFIG: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       TS_RS011_N08_DISPOSABLE: 'yes'
-      TS_RS011_N08_SERVICE_ID: ${{ job.services.pg16.id }}
     services:
       pg16:
         image: postgres@sha256:5983db9a9c6ad225a48a46cfe2e03e6680b1826662befd0465eb05b34cb1c64e
@@ -39,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           base=700f0c68e0ce09baa3dc84f3ae245734ddd702bf
-          parent=3bfe20402791d8b5ee9e48c05e880fb06b53402e
+          parent=3dbca14360efe9c9271a7123f5998dcfdb138eea
           root=experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001
           schema_commit=e805c0bba7e32a6092a4d5155a95d664f8ee37ed
           schema_path=experiments/TS-RS011-A01-OPTION-A-PG16-20261124-001/schema.sql
@@ -73,8 +72,10 @@ jobs:
           /usr/bin/psql --version
           uv python install 3.15.2
       - name: Execute single fresh N08 crash on this exact disposable service
+        env:
+          TS_RS011_N08_SERVICE_ID: ${{ job.services.pg16.id }}
         shell: bash
         run: |
           set -euo pipefail
           uv run --no-project --python 3.15.2 python -B experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001/probe.py "$RUNNER_TEMP/rs011-n08/schema.sql"
-          echo N08_CI001_CRASH_RECOVERY_PASS_LIMITED
+          echo N08_CI002_CRASH_RECOVERY_PASS_LIMITED
