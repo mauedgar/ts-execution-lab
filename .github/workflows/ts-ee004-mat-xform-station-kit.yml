@@ -41,9 +41,15 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $kit=Join-Path $env:RUNNER_TEMP 'ts-ee-mat-xform-kit'
-          $sourceNode=(Get-Command node.exe -CommandType Application).Source
-          Copy-Item -LiteralPath $sourceNode -Destination (Join-Path $kit 'runtime\node.exe')
-          if((Get-FileHash -LiteralPath $sourceNode -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Join-Path $kit 'runtime\node.exe') -Algorithm SHA256).Hash){throw 'RUNTIME_COPY_HASH'}
+          $resolved=@(node -p "process.execPath")
+          if($LASTEXITCODE -ne 0 -or $resolved.Count -ne 1 -or -not [IO.Path]::IsPathFullyQualified([string]$resolved[0])){throw 'RUNTIME_SOURCE_AMBIGUOUS'}
+          $sourceNode=[IO.Path]::GetFullPath([string]$resolved[0])
+          $targetNode=Join-Path $kit 'runtime\node.exe'
+          $sourceHash=(Get-FileHash -LiteralPath $sourceNode -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::Copy($sourceNode,$targetNode,$false)
+          $targetHash=(Get-FileHash -LiteralPath $targetNode -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Output "RUNTIME_SOURCE_SHA256=$sourceHash TARGET_SHA256=$targetHash"
+          if($sourceHash -cne $targetHash){throw 'RUNTIME_COPY_HASH'}
           $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
           $acl=Get-Acl -LiteralPath $kit
           $acl.SetAccessRuleProtection($true,$false)
