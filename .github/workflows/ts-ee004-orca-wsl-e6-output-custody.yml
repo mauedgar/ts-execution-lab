@@ -1,4 +1,4 @@
-name: TS EE 004 Orca WSL E6 protected output custody and namespace (NONPRODUCT)
+name: TS EE 004 Orca WSL E7 isolated station and protected output (NONPRODUCT)
 on:
   push:
     branches:
@@ -23,10 +23,10 @@ jobs:
           if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'SOURCE_HEAD_MISMATCH' }
           $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
           $blob=(git rev-parse "HEAD:$src").Trim()
-          if ($blob -ne 'aa94df4eb24f5461848dc983cfd508621b541d8f') { throw "SOURCE_BLOB_MISMATCH_$blob" }
+          if ($blob -ne '28f18b9c550dedfd43d65ea6bba3b417a7ea71b5') { throw "SOURCE_BLOB_MISMATCH_$blob" }
           if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw 'MISSING_SOURCE' }
           Write-Output "GIT_BLOB=$blob"
-      - name: SelfTest strict original bytes, typed ACL and independent deadline, source only
+      - name: SelfTest isolated anchor/protected reservation and strict receipt, source only
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -40,12 +40,12 @@ jobs:
           New-Item -ItemType Directory -Path source-evidence -ErrorAction Stop | Out-Null
           $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
           $hash=(Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash.ToLowerInvariant()
-          $result=@{schema='ts-ee/orca-wsl-e6-source-only/v0.1';head=$env:GITHUB_SHA
+          $result=@{schema='ts-ee/orca-wsl-e7-source-only/v0.1';head=$env:GITHUB_SHA
             tree=(git rev-parse 'HEAD^{tree}').Trim()
-            source_blob='aa94df4eb24f5461848dc983cfd508621b541d8f'
+            source_blob='28f18b9c550dedfd43d65ea6bba3b417a7ea71b5'
             runner_windows_sha256=$hash;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT
-            findings_targeted=@('IR006-F01','IR006-F02')
-            tests='SOURCE_ONLY_PROTECTED_DIRECTORY_AND_EXACT_REJECTIONS';Native_WSL='NOT_RUN';Orca='NOT_RUN'
+            findings_targeted=@('IR006-F01','IR006-F02','E6-G1-UNTRUSTED-ANCESTOR-ACL','IR007-A02')
+            tests='SOURCE_ONLY_E7_ISOLATED_ANCHOR_AND_PROTECTED_OUTPUT';Native_Provision='NOT_RUN';Native_WSL='NOT_RUN';Orca='NOT_RUN'
             Product_effect='NONE';method_accepted=$false;source_review='PENDING'}
           $json=ConvertTo-Json -InputObject $result -Compress -Depth 5
           [IO.File]::WriteAllText('source-evidence/SOURCE_ONLY.json',$json,[Text.UTF8Encoding]::new($false))

@@ -2,27 +2,29 @@
 # Native mode requires a distinct exact host grant, immutable source and caller hash.
 [CmdletBinding()]
 param(
-    [ValidateSet('SelfTest','Native')][string]$Mode = 'SelfTest',
+    [ValidateSet('SelfTest','Provision','Native')][string]$Mode = 'SelfTest',
     [string]$ExpectedRunnerSha256 = '',
     [string]$ExpectedOrcaRuntimeId = '',
     [string]$ExpectedOrcaHandle = '',
     [string]$ExpectedOrcaIncarnationId = '',
     [string]$ExpectedOrcaHostId = '',
-    [string]$ExpectedTsAclSha256 = '',
+    [string]$ExpectedDriveAclSha256 = '',
+    [string]$ExpectedProvisionAttempt = '',
     [string]$ExpectedStationAclSha256 = ''
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$RequestId = 'TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001'
-$AttemptId = 'TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001-A001'
+$RequestId = 'TS-EE-004-ORCA-WSL-E7-ISOLATED-STATION-20261124-001'
+$AttemptId = 'TS-EE-004-ORCA-WSL-E7-ISOLATED-STATION-20261124-001-A001'
 $Marker = 'TS_EE004_CHILD_JSON='
 $MarkerSchema = 'ts-ee/wsl-child-marker/v0.2'
 $MaxStdoutBytes = 4096
 $MaxStderrBytes = 2048
 $ExpectedLinuxExit = 7
 $ExpectedUid = 1000
-$WorkRoot = 'C:\TS\station'
-$OutputDir = 'C:\TS\station\ts-ee004-wsl-leaf-e6-20261124-001'
+$WorkRoot = 'C:\TS-EE-station'
+$OutputDir = 'C:\TS-EE-station\ts-ee004-wsl-leaf-e7-20261124-001'
+$ProvisionAttempt = 'TS-EE-004-E7-STATION-PROVISION-20261124-001-A001'
 
 
 # Windows-only atomic create-only namespace reservation and bounded async reads.
@@ -217,33 +219,47 @@ function Get-AclFingerprint {
  return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sddl))).ToLowerInvariant()
 }
 function Assert-AclObject {
- param([Security.AccessControl.FileSystemSecurity]$Acl,[string]$SelfSid)
+ param([Security.AccessControl.FileSystemSecurity]$Acl,[string]$SelfSid,[switch]$DriveAnchor)
  $raw=[Security.AccessControl.RawSecurityDescriptor]::new($Acl.GetSecurityDescriptorBinaryForm(),0)
- if($null -eq $raw.DiscretionaryAcl) {throw 'NULL_DACL_NOT_ADMITTED'}
- $ownerSid=$Acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+ if($null -eq $raw.DiscretionaryAcl -or $null -eq $raw.Owner) {throw 'NULL_DACL_NOT_ADMITTED'}
  $trusted=@($SelfSid,'S-1-5-18','S-1-5-32-544')
- if($ownerSid -notin $trusted) {throw 'UNTRUSTED_DIRECTORY_OWNER'}
- # Use exact mutation bits, not Modify (which includes read).
- $rights=[Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor
-         [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
-         [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
-         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
- foreach($ace in $Acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
-  if($ace.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) {continue}
-  # Generic write/all are also rejected when represented as generic bits.
-  $mutates=(([int]$ace.FileSystemRights -band [int]$rights) -ne 0 -or
-            ([int]$ace.FileSystemRights -band 0x50000000) -ne 0)
-  if($ace.IdentityReference.Value -notin $trusted -and $mutates) {throw 'UNTRUSTED_DIRECTORY_WRITE_ACL'}
+ $owners=@($trusted)
+ if($DriveAnchor){$owners+=@('S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')}
+ if($raw.Owner.Value -notin $owners) {throw 'UNTRUSTED_DIRECTORY_OWNER'}
+ if($raw.DiscretionaryAcl.Count -gt 64){throw 'ACL_ACE_LIMIT'}
+ # Admit only ordinary common allow/deny ACEs; do not project away callback/object/unknown ACEs.
+ foreach($ace in $raw.DiscretionaryAcl){
+  if($ace -isnot [Security.AccessControl.CommonAce] -or $ace.IsCallback -or
+     $ace.AceQualifier -notin @([Security.AccessControl.AceQualifier]::AccessAllowed,[Security.AccessControl.AceQualifier]::AccessDenied)){
+   throw 'UNSUPPORTED_ACL_ACE'
+  }
+  if($ace.AceQualifier -ne [Security.AccessControl.AceQualifier]::AccessAllowed -or $ace.SecurityIdentifier.Value -in $trusted){continue}
+  # A drive-root inherit-only allow is not effective on the anchor. The isolated child
+  # is created atomically with a protected DACL, so this ACE is not inherited there.
+  if($DriveAnchor -and (($ace.AceFlags -band [Security.AccessControl.AceFlags]::InheritOnly) -ne 0)){continue}
+  # Known read/traverse/synchronize rights only; on the fixed drive anchor allow ADD_SUBDIRECTORY
+  # (0x4) but never DELETE_CHILD, DELETE, WRITE_DAC, WRITE_OWNER, generic write/all or other bits.
+  [long]$allowed=0x1200a9
+  if($DriveAnchor){$allowed=$allowed -bor 4}
+  [long]$mask=([long]$ace.AccessMask -band 4294967295L)
+  if(($mask -band (-bnot $allowed)) -ne 0){throw 'UNTRUSTED_DIRECTORY_WRITE_ACL'}
  }
 }
 function Assert-TrustedDirectoryAcl {
- param([string]$Path,[string]$Expected)
- if($Expected -cnotmatch '^[a-f0-9]{64}$') {throw 'EXTERNAL_ACL_PIN_REQUIRED'}
- if(([IO.File]::GetAttributes($Path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'UNSAFE_ANCESTOR_REPARSE'}
+ param([string]$Path,[string]$Expected,[switch]$DriveAnchor)
+ if($Expected -cnotmatch '\A[a-f0-9]{64}\z') {throw 'EXTERNAL_ACL_PIN_REQUIRED'}
+ $attrs=[IO.File]::GetAttributes($Path)
+ if(($attrs -band [IO.FileAttributes]::Directory) -eq 0 -or ($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'UNSAFE_ANCESTOR_REPARSE'}
  $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
- $selfSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
- Assert-AclObject -Acl $acl -SelfSid $selfSid
+ if(-not $acl.AreAccessRulesProtected){throw 'ANCESTOR_DACL_NOT_PROTECTED'}
+ Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid) -DriveAnchor:$DriveAnchor
  if((Get-AclFingerprint -Acl $acl) -cne $Expected) {throw 'EXTERNAL_ACL_PIN_MISMATCH'}
+}
+function Assert-DriveAnchor {
+ param([string]$Expected)
+ $drive=[IO.DriveInfo]::new('C:\')
+ if($drive.DriveType -ne [IO.DriveType]::Fixed -or $drive.DriveFormat -cne 'NTFS'){throw 'UNQUALIFIED_DRIVE'}
+ Assert-TrustedDirectoryAcl -Path 'C:\' -Expected $Expected -DriveAnchor
 }
 function Get-CurrentSid {
  return [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -257,6 +273,15 @@ function Assert-OutputDirectory {
  Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid)
  $pin=Get-AclFingerprint -Acl $acl
  if(-not $Initial -and ($Expected -cnotmatch '^[a-f0-9]{64}$' -or $pin -cne $Expected)) {throw 'OUTPUT_ACL_PIN_MISMATCH'}
+ return $pin
+}
+function Assert-EmptyProtectedRoot {
+ param([string]$Path)
+ $pin=Assert-OutputDirectory -Path $Path -Initial
+ $enum=[IO.EnumerationOptions]::new()
+ $enum.IgnoreInaccessible=$false;$enum.RecurseSubdirectories=$false;$enum.AttributesToSkip=[IO.FileAttributes]0
+ foreach($entry in [IO.Directory]::EnumerateFileSystemEntries($Path,'*',$enum)){throw 'STATION_ROOT_NOT_EMPTY'}
+ $null=Assert-OutputDirectory -Path $Path -Expected $pin
  return $pin
 }
 function Assert-TrustedFileAcl {
@@ -356,6 +381,7 @@ if ($Mode -eq 'SelfTest') {
  try {
   $reserved=Join-Path $temp 'reservation'
   New-TestDirectory -Path $reserved
+  if((Assert-EmptyProtectedRoot -Path $reserved) -cne $testPins[$reserved]){throw 'PROVISION_PIN_MISMATCH'}
   $collision=$false
   try {[TSEEBounded]::ReserveTrusted($reserved,(Get-CurrentSid))} catch {
    $ex=$_.Exception.GetBaseException()
@@ -365,6 +391,7 @@ if ($Mode -eq 'SelfTest') {
   if(-not $collision) {throw 'ATOMIC_COLLISION_NOT_BLOCKED'}
   Assert-Rejection -Case 'no_receipt' -Reason 'MISSING_TERMINAL_RECEIPT' -Action {Read-TestResult -Directory $reserved}
   Write-ExclusiveUtf8 -Path (Join-Path $reserved 'INCOMPLETE.txt') -Text 'UNTRUSTED'
+  Assert-Rejection -Case 'provision_nonempty' -Reason 'STATION_ROOT_NOT_EMPTY' -Action {Assert-EmptyProtectedRoot -Path $reserved}
   Assert-Rejection -Case 'marker' -Reason 'INCOMPLETE_MARKER_DOMINATES' -Action {Read-TestResult -Directory $reserved}
   Write-ExclusiveUtf8 -Path (Join-Path $reserved 'RESULT.json') -Text '{"spoofed":true}'
   Assert-Rejection -Case 'marker_dominates_result' -Reason 'INCOMPLETE_MARKER_DOMINATES' -Action {Read-TestResult -Directory $reserved}
@@ -443,27 +470,60 @@ if ($Mode -eq 'SelfTest') {
   $write=[Security.AccessControl.FileSystemAccessRule]::new($readSid,[Security.AccessControl.FileSystemRights]::WriteData,[Security.AccessControl.AccessControlType]::Allow)
   $goodAcl.AddAccessRule($write)
   Assert-Rejection -Case 'untrusted_write_acl' -Reason 'UNTRUSTED_DIRECTORY_WRITE_ACL' -Action {Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value}
+  # Model the observed fixed-volume root ACL and distinguish anchor from station.
+  $anchorAcl=[Security.AccessControl.DirectorySecurity]::new()
+  $ti='S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'
+  $anchorSddl='O:'+$ti+'G:SYD:P(A;;0x4;;;AU)(A;OICIIO;0xe0010000;;;AU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)'
+  $anchorAcl.SetSecurityDescriptorSddlForm($anchorSddl)
+  Assert-AclObject -Acl $anchorAcl -SelfSid $identity.Value -DriveAnchor
+  Assert-Rejection -Case 'anchor_not_station' -Reason 'UNTRUSTED_DIRECTORY_OWNER' -Action {Assert-AclObject -Acl $anchorAcl -SelfSid $identity.Value}
+  foreach($case in @(@{label='delete_child';mask='0x40'},@{label='delete';mask='0x10000'},@{label='write_dac';mask='0x40000'},@{label='write_owner';mask='0x80000'},@{label='generic_write';mask='0x40000000'})){
+   $badAnchor=[Security.AccessControl.DirectorySecurity]::new()
+   $badAnchor.SetSecurityDescriptorSddlForm($anchorSddl.Replace('(A;;0x4;;;AU)',('(A;;'+$case.mask+';;;AU)')))
+   Assert-Rejection -Case ('anchor_'+$case.label) -Reason 'UNTRUSTED_DIRECTORY_WRITE_ACL' -Action {Assert-AclObject -Acl $badAnchor -SelfSid $identity.Value -DriveAnchor}
+  }
+  $inheritedStation=[Security.AccessControl.DirectorySecurity]::new()
+  $inheritedStation.SetSecurityDescriptorSddlForm(('O:'+$identity.Value+'G:SYD:P(A;OICIIO;0x40000000;;;AU)(A;OICI;FA;;;SY)'))
+  Assert-Rejection -Case 'station_inherit_only_write' -Reason 'UNTRUSTED_DIRECTORY_WRITE_ACL' -Action {Assert-AclObject -Acl $inheritedStation -SelfSid $identity.Value}
   $oversizedDir=Join-Path $temp 'oversized';New-TestDirectory -Path $oversizedDir
   Write-ExclusiveUtf8 -Path (Join-Path $oversizedDir 'RESULT.json') -Text ('x'*16385)
   Assert-Rejection -Case 'oversized_receipt' -Reason 'RECEIPT_BYTE_LIMIT' -Action {Read-TestResult -Directory $oversizedDir}
  } finally {[IO.Directory]::Delete($temp,$true)}
- Write-Output '{"source_only":"PASS_PROTECTED_OUTPUT_NAMESPACE_AND_EXACT_REJECTIONS","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
+ Write-Output '{"source_only":"PASS_E7_ISOLATED_ANCHOR_PROVISION_AND_PROTECTED_OUTPUT_FIXTURES","Native_Provision":"NOT_RUN","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
  exit 0
 }
 
-# Native mode is a separately grant-bound NEW attempt, NEVER a PR77 rerun.
+# Provision and Native are separate grant-bound effects. No automatic transition or replay.
 if($PSVersionTable.PSVersion.Major -lt 7 -or -not $IsWindows) {throw 'PWSH7_WINDOWS_REQUIRED'}
 if($env:COMPUTERNAME -ne 'DESKTOP-DJLBEQH') {throw 'WRONG_HOST'}
-if($ExpectedRunnerSha256 -notmatch '^[a-fA-F0-9]{64}$') {throw 'MISSING_CALLER_HASH'}
+if($ExpectedRunnerSha256 -notmatch '\A[a-fA-F0-9]{64}\z') {throw 'MISSING_CALLER_HASH'}
 $actual=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if($actual -ne $ExpectedRunnerSha256.ToLowerInvariant()) {throw 'SOURCE_HASH_MISMATCH'}
+Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
+if($Mode -eq 'Provision'){
+ if($ExpectedProvisionAttempt -cne $ProvisionAttempt -or $ExpectedOrcaRuntimeId -or $ExpectedOrcaHandle -or
+    $ExpectedOrcaIncarnationId -or $ExpectedOrcaHostId -or $ExpectedStationAclSha256){throw 'PROVISION_GRANT_BINDING'}
+ $created=$false
+ try{
+  [TSEEBounded]::ReserveTrusted($WorkRoot,(Get-CurrentSid))
+  $created=$true
+  $pin=Assert-EmptyProtectedRoot -Path $WorkRoot
+  Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
+  [Console]::WriteLine((@{schema='ts-ee/e7-station-provision/v1';attempt=$ProvisionAttempt;root=$WorkRoot;status='PROVISIONED_NOT_ADMITTED';effect='CONFIRMED';root_acl_sha256=$pin;drive_acl_sha256=$ExpectedDriveAclSha256;source_sha256=$actual;Native_WSL='NOT_RUN';Orca='NOT_RUN';Product_effect='NONE'}|ConvertTo-Json -Compress))
+  exit 0
+ }catch{
+  [Console]::WriteLine((@{schema='ts-ee/e7-station-provision/v1';attempt=$ProvisionAttempt;root=$WorkRoot;status='PROVISION_BLOCKED';effect=$(if($created){'UNKNOWN'}else{'NONE'});reason=$_.Exception.Message;Product_effect='NONE'}|ConvertTo-Json -Compress))
+  exit 2
+ }
+}
+if($ExpectedProvisionAttempt){throw 'NATIVE_PROVISION_ID_CONFLICT'}
 $uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
 if($ExpectedOrcaRuntimeId -cnotmatch ('^'+$uuid+'$') -or
    $ExpectedOrcaHandle -cnotmatch ('^term_'+$uuid+'$') -or
    $ExpectedOrcaIncarnationId -cnotmatch ('^'+$uuid+'$') -or
    $ExpectedOrcaHostId -ne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
 if(-not [IO.Directory]::Exists($WorkRoot)) {throw 'MISSING_WORKROOT'}
-Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
 Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
 $wsl=Join-Path $env:WINDIR 'System32\wsl.exe'
 if(-not [IO.File]::Exists($wsl)) {throw 'WSL_BINARY_MISSING'}
@@ -472,8 +532,8 @@ $linux=@'
 import json,os,sys,time
 p=os.getpid()
 v={"schema":"ts-ee/wsl-child-marker/v0.2",
-   "request_id":"TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001",
-   "attempt":"TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001-A001",
+   "request_id":"TS-EE-004-ORCA-WSL-E7-ISOLATED-STATION-20261124-001",
+   "attempt":"TS-EE-004-ORCA-WSL-E7-ISOLATED-STATION-20261124-001-A001",
    "pid":p,"ppid":os.getppid(),"uid":os.getuid(),
    "pid_namespace":os.readlink("/proc/%d/ns/pid"%p),"intended_exit":7}
 print("TS_EE004_CHILD_JSON="+json.dumps(v,sort_keys=True,separators=(',',':')),flush=True)
@@ -514,7 +574,7 @@ try {
  $stdout=[Text.UTF8Encoding]::new($false,$true).GetString($outBytes)
  # Stderr is opaque bounded bytes; no lossy or unnecessary text decode.
  $child=Assert-ChildOutput -Stdout $stdout -ExitCode $process.ExitCode
- Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+ Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
  Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
  $null=Assert-OutputDirectory -Path $OutputDir -Expected $outputAclPin
  $receipt=[ordered]@{
@@ -557,7 +617,7 @@ try {
  # If child started, UNKNOWN is preserved even when a failure receipt exists.
  if($owned -and $safeOutput) {
   try {
-   Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+   Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
    Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
     $null=Assert-OutputDirectory -Path $OutputDir -Expected $outputAclPin
    $failure=@{schema='ts-ee/wsl-failure/v0.2';request_id=$RequestId;attempt=$AttemptId
