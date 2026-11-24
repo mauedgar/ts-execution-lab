@@ -1,14 +1,63 @@
-name: RS011 A01 N08 disposable PG16 actual crash recovery CI002
+name: RS011 N08 CI003 externally admitted disposable crash recovery
 on:
   push:
     branches:
-      - rs011/a01-n08-pg16-crash-recovery-20261124-001
-    paths:
-      - .github/workflows/rs011-a01-n08-pg16-crash-recovery-20261124-001.yml
+      - rs011/execute/n08-ci003-20261124-001
 permissions:
   contents: read
+  actions: read
 jobs:
+  admission:
+    if: ${{ github.event.created == true && github.run_attempt == '1' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify independent Git admission and single native run before any service
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git show refs/remotes/origin/rs011/admissions/n08-ci003-20261124-001:admissions/RS011-N08-CI003-20261124-001.json > "$RUNNER_TEMP/admission.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&event=push&per_page=100" > "$RUNNER_TEMP/runs.json"
+          python3 - "$RUNNER_TEMP/admission.json" "$RUNNER_TEMP/runs.json" <<'PY'
+          import json, os, subprocess, sys
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          def require(x, why):
+              if not x:
+                  raise SystemExit(why)
+          a=json.load(open(sys.argv[1]))
+          e=json.load(open(os.environ["GITHUB_EVENT_PATH"]))
+          r=json.load(open(sys.argv[2]))
+          path=".github/workflows/rs011-a01-n08-pg16-crash-recovery-20261124-001.yml"
+          source="experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001/probe.py"
+          require(a["attempt"]=="TS-RS011-N08-PG16-CI003-A001", "ATTEMPT_ID")
+          require(a["ref"]==os.environ["GITHUB_REF"]=="refs/heads/rs011/execute/n08-ci003-20261124-001","REF")
+          require(e["created"] is True and e["before"]=="0"*40 and e["after"]==a["head"],"NOT_CREATE_ONLY")
+          require(os.environ["GITHUB_RUN_ATTEMPT"]=="1" and os.environ["GITHUB_EVENT_NAME"]=="push","RUN_ATTEMPT")
+          require(a["head"]==os.environ["GITHUB_SHA"]==git("rev-parse","HEAD"),"HEAD")
+          require(a["tree"]==git("rev-parse","HEAD^{tree}"),"TREE")
+          require(a["parent"]==git("rev-parse","HEAD^"),"PARENT")
+          require(a["workflow_blob"]==git("rev-parse","HEAD:"+path),"WORKFLOW")
+          require(a["probe_blob"]==git("rev-parse","HEAD:"+source),"PROBE")
+          require(a["schema_blob"]=="1a5027709214092a4cabb21c63a53ca4f262c09c","SCHEMA")
+          require(a["base"]=="700f0c68e0ce09baa3dc84f3ae245734ddd702bf","BASE")
+          actual=git("diff","--name-status",a["base"],"HEAD").splitlines()
+          require(sorted(actual)==sorted(["A\t"+source,"A\t"+path]),"WRITESET")
+          require(r["total_count"]==len(r["workflow_runs"]) and r["total_count"]<=100,"RUN_INVENTORY")
+          matches=[x for x in r["workflow_runs"] if x["head_branch"]=="rs011/execute/n08-ci003-20261124-001"]
+          require(len(matches)==1 and str(matches[0]["id"])==os.environ["GITHUB_RUN_ID"] and matches[0]["run_attempt"]==1,"DUPLICATE_OR_UNKNOWN_RUN")
+          print("N08_CI003_ADMISSION_CONFIRMED_BEFORE_SERVICE")
+          PY
   n08-crash-recovery:
+    needs: admission
+    if: ${{ needs.admission.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -31,35 +80,21 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Freeze exactly two additive files and existing experimental schema
+      - name: Verify exact source and inherited immutable schema
         shell: bash
         run: |
           set -euo pipefail
-          base=700f0c68e0ce09baa3dc84f3ae245734ddd702bf
-          parent=3dbca14360efe9c9271a7123f5998dcfdb138eea
-          root=experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001/probe.py)" = 416d39ad3b280300b9a1abe207ef98efe8b4f782
           schema_commit=e805c0bba7e32a6092a4d5155a95d664f8ee37ed
           schema_path=experiments/TS-RS011-A01-OPTION-A-PG16-20261124-001/schema.sql
-          test "$GITHUB_EVENT_NAME" = push || { echo EVENT_MISMATCH; exit 1; }
-          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo ATTEMPT_MISMATCH; exit 1; }
-          test "$GITHUB_REF" = refs/heads/rs011/a01-n08-pg16-crash-recovery-20261124-001 || { echo BRANCH_MISMATCH; exit 1; }
-          test "$(git rev-parse HEAD^)" = "$parent" || { echo PARENT_MISMATCH; exit 1; }
-          git merge-base --is-ancestor "$base" HEAD
-          test "$(git rev-parse "HEAD:$root/probe.py")" = ed8a9095039d5c4b5ecb9474f1bde73039b9ce50 || { echo PROBE_MISMATCH; exit 1; }
-          test "$(git diff --name-only "$base" HEAD | wc -l)" -eq 2 || { echo WRITESET_COUNT; exit 1; }
-          while IFS= read -r f; do
-            case "$f" in
-              "$root/probe.py"|.github/workflows/rs011-a01-n08-pg16-crash-recovery-20261124-001.yml) ;;
-              *) echo UNEXPECTED_WRITESET; exit 1 ;;
-            esac
-          done < <(git diff --name-only "$base" HEAD)
-          test "$(git rev-parse "$schema_commit:$schema_path")" = 1a5027709214092a4cabb21c63a53ca4f262c09c || { echo SCHEMA_MISMATCH; exit 1; }
+          test "$(git rev-parse "$schema_commit:$schema_path")" = 1a5027709214092a4cabb21c63a53ca4f262c09c
           mkdir -m 700 "$RUNNER_TEMP/rs011-n08"
           git show "$schema_commit:$schema_path" > "$RUNNER_TEMP/rs011-n08/schema.sql"
           test "$(git hash-object "$RUNNER_TEMP/rs011-n08/schema.sql")" = 1a5027709214092a4cabb21c63a53ca4f262c09c
-          echo N08_FROZEN_NONPRODUCT_NO_HOST_OR_NEON
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           version: '0.13.7'
@@ -71,11 +106,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql-client-16
           /usr/bin/psql --version
           uv python install 3.15.2
-      - name: Execute single fresh N08 crash on this exact disposable service
+      - name: Execute admitted fresh disposable fixture once
         env:
           TS_RS011_N08_SERVICE_ID: ${{ job.services.pg16.id }}
         shell: bash
         run: |
           set -euo pipefail
           uv run --no-project --python 3.15.2 python -B experiments/TS-RS011-A01-N08-PG16-CRASH-20261124-001/probe.py "$RUNNER_TEMP/rs011-n08/schema.sql"
-          echo N08_CI002_CRASH_RECOVERY_PASS_LIMITED
+          echo N08_CI003_CRASH_RECOVERY_PASS_LIMITED
