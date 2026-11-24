@@ -13,8 +13,8 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$RequestId = 'TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001'
-$AttemptId = 'TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001-A001'
+$RequestId = 'TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001'
+$AttemptId = 'TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001-A001'
 $Marker = 'TS_EE004_CHILD_JSON='
 $MarkerSchema = 'ts-ee/wsl-child-marker/v0.2'
 $MaxStdoutBytes = 4096
@@ -22,7 +22,7 @@ $MaxStderrBytes = 2048
 $ExpectedLinuxExit = 7
 $ExpectedUid = 1000
 $WorkRoot = 'C:\TS\station'
-$OutputDir = 'C:\TS\station\ts-ee004-wsl-leaf-e5-20261123-001'
+$OutputDir = 'C:\TS\station\ts-ee004-wsl-leaf-e6-20261124-001'
 
 
 # Windows-only atomic create-only namespace reservation and bounded async reads.
@@ -37,6 +37,27 @@ public static class TSEEBounded {
  [DllImport("kernel32.dll",EntryPoint="CreateDirectoryW",CharSet=CharSet.Unicode,SetLastError=true)]
  [return: MarshalAs(UnmanagedType.Bool)]
  public static extern bool ReserveDirectory(string path,IntPtr security);
+ [StructLayout(LayoutKind.Sequential)]
+ private struct SecurityAttributes { public int Length; public IntPtr Descriptor; public int InheritHandle; }
+ [DllImport("kernel32.dll",EntryPoint="CreateDirectoryW",CharSet=CharSet.Unicode,SetLastError=true)]
+ [return: MarshalAs(UnmanagedType.Bool)]
+ private static extern bool CreateWithSecurity(string path,ref SecurityAttributes attributes);
+ [DllImport("advapi32.dll",EntryPoint="ConvertStringSecurityDescriptorToSecurityDescriptorW",CharSet=CharSet.Unicode,SetLastError=true)]
+ [return: MarshalAs(UnmanagedType.Bool)]
+ private static extern bool ParseSecurity(string sddl,uint revision,out IntPtr descriptor,out uint size);
+ [DllImport("kernel32.dll")]
+ private static extern IntPtr LocalFree(IntPtr memory);
+ public static void ReserveTrusted(string path,string sid) {
+  string sddl="D:P(A;OICI;FA;;;"+sid+")(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
+  IntPtr descriptor; uint size;
+  if(!ParseSecurity(sddl,1,out descriptor,out size))
+   throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),"OUTPUT_DESCRIPTOR_PARSE_FAILED");
+  try {
+   var a=new SecurityAttributes {Length=Marshal.SizeOf<SecurityAttributes>(),Descriptor=descriptor,InheritHandle=0};
+   if(!CreateWithSecurity(path,ref a))
+    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),"OUTPUT_RESERVATION_FAILED");
+  } finally {LocalFree(descriptor);}
+ }
  public static async Task<byte[]> Capture(Stream stream,int limit,CancellationToken token) {
   using (var output=new MemoryStream()) {
    byte[] buffer=new byte[2048];
@@ -131,14 +152,23 @@ function Write-ExclusiveUtf8 {
  try {$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)} finally {$stream.Dispose()}
 }
 function Read-QualifiedResult {
- param([string]$Directory)
- # Check failure *first*, including a contradictory FAILURE+RESULT after emit error.
- if([IO.File]::Exists((Join-Path $Directory 'FAILURE.json'))) {throw 'FAILURE_RECEIPT_DOMINATES'}
- if([IO.File]::Exists((Join-Path $Directory 'INCOMPLETE.txt'))) {throw 'INCOMPLETE_MARKER_DOMINATES'}
- if([IO.File]::Exists((Join-Path $Directory 'RESULT.tmp'))) {throw 'PARTIAL_STAGING_PRESENT'}
+ param([string]$Directory,[string]$OutputAclPin)
+ $null=Assert-OutputDirectory -Path $Directory -Expected $OutputAclPin
+ # Enumeration errors propagate, never interpreted as absence.
+ $names=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+ $enum=[IO.EnumerationOptions]::new()
+ $enum.IgnoreInaccessible=$false;$enum.RecurseSubdirectories=$false;$enum.AttributesToSkip=[IO.FileAttributes]0
+ foreach($entry in [IO.Directory]::EnumerateFileSystemEntries($Directory,'*',$enum)) {
+  if($names.Count -ge 16) {throw 'RECEIPT_NAMESPACE_LIMIT'}
+  if(-not $names.Add([IO.Path]::GetFileName($entry))) {throw 'RECEIPT_NAMESPACE_AMBIGUOUS'}
+ }
+ if($names.Contains('FAILURE.json')) {throw 'FAILURE_RECEIPT_DOMINATES'}
+ if($names.Contains('INCOMPLETE.txt')) {throw 'INCOMPLETE_MARKER_DOMINATES'}
+ if($names.Contains('RESULT.tmp')) {throw 'PARTIAL_STAGING_PRESENT'}
+ if(-not $names.Contains('RESULT.json')) {throw 'MISSING_TERMINAL_RECEIPT'}
+ if($names.Count -ne 1) {throw 'UNEXPECTED_RECEIPT_OCCUPANT'}
  $path=Join-Path $Directory 'RESULT.json'
- if(-not [IO.File]::Exists($path)) {throw 'MISSING_TERMINAL_RECEIPT'}
- if(([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'RECEIPT_REPARSE'}
+ Assert-TrustedFileAcl -Path $path
  $stream=[IO.FileStream]::new($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
  try {
   if($stream.Length -gt 16384) {throw 'RECEIPT_BYTE_LIMIT'}
@@ -177,6 +207,7 @@ function Read-QualifiedResult {
     [int]$r.linux_child_ppid -ne [int]$child.ppid -or
     [int]$r.linux_child_uid -ne [int]$child.uid -or
     $r.linux_pid_namespace -cne $child.pid_namespace) {throw 'ORIGINAL_CHILD_BINDING_MISMATCH'}
+ $null=Assert-OutputDirectory -Path $Directory -Expected $OutputAclPin
  return $r
 }
 function Get-AclFingerprint {
@@ -186,7 +217,9 @@ function Get-AclFingerprint {
  return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sddl))).ToLowerInvariant()
 }
 function Assert-AclObject {
- param([Security.AccessControl.DirectorySecurity]$Acl,[string]$SelfSid)
+ param([Security.AccessControl.FileSystemSecurity]$Acl,[string]$SelfSid)
+ $raw=[Security.AccessControl.RawSecurityDescriptor]::new($Acl.GetSecurityDescriptorBinaryForm(),0)
+ if($null -eq $raw.DiscretionaryAcl) {throw 'NULL_DACL_NOT_ADMITTED'}
  $ownerSid=$Acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
  $trusted=@($SelfSid,'S-1-5-18','S-1-5-32-544')
  if($ownerSid -notin $trusted) {throw 'UNTRUSTED_DIRECTORY_OWNER'}
@@ -212,6 +245,45 @@ function Assert-TrustedDirectoryAcl {
  Assert-AclObject -Acl $acl -SelfSid $selfSid
  if((Get-AclFingerprint -Acl $acl) -cne $Expected) {throw 'EXTERNAL_ACL_PIN_MISMATCH'}
 }
+function Get-CurrentSid {
+ return [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+}
+function Assert-OutputDirectory {
+ param([string]$Path,[string]$Expected,[switch]$Initial)
+ $attrs=[IO.File]::GetAttributes($Path)
+ if(($attrs -band [IO.FileAttributes]::Directory) -eq 0 -or ($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'UNSAFE_OUTPUT_DIRECTORY'}
+ $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
+ if(-not $acl.AreAccessRulesProtected) {throw 'OUTPUT_DACL_NOT_PROTECTED'}
+ Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid)
+ $pin=Get-AclFingerprint -Acl $acl
+ if(-not $Initial -and ($Expected -cnotmatch '^[a-f0-9]{64}$' -or $pin -cne $Expected)) {throw 'OUTPUT_ACL_PIN_MISMATCH'}
+ return $pin
+}
+function Assert-TrustedFileAcl {
+ param([string]$Path)
+ $attrs=[IO.File]::GetAttributes($Path)
+ if(($attrs -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory)) -ne 0) {throw 'UNSAFE_RECEIPT_FILE'}
+ $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
+ Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid)
+}
+function New-TestDirectory {
+ param([string]$Path)
+ [TSEEBounded]::ReserveTrusted($Path,(Get-CurrentSid))
+ $testPins.Add($Path,(Assert-OutputDirectory -Path $Path -Initial))
+}
+function Read-TestResult {
+ param([string]$Directory)
+ return (Read-QualifiedResult -Directory $Directory -OutputAclPin $testPins[$Directory])
+}
+function Assert-Rejection {
+ param([scriptblock]$Action,[string]$Reason,[string]$Case)
+ try {$null=& $Action} catch {
+  $actual=$_.Exception.GetBaseException().Message
+  if($actual -cne $Reason) {throw ('WRONG_REJECTION_'+$Case+': '+$actual+' expected '+$Reason)}
+  return
+ }
+ throw ('NEGATIVE_NOT_DENIED_'+$Case)
+}
 function Wait-LeafTasks {
  param([Threading.Tasks.Task[]]$Tasks,[int]$Milliseconds)
  $all=[Threading.Tasks.Task]::WhenAll($Tasks)
@@ -234,7 +306,7 @@ if ($Mode -eq 'SelfTest') {
  $text=$Marker+(ConvertTo-Json $good -Compress)+[string][char]10
  if((Assert-ChildOutput -Stdout $text -ExitCode 7).pid -ne 101) {throw 'POSITIVE_CASE_FAILED'}
  $cases=@('exit','request','attempt','schema','uid','duplicate','namespace','pid','ppid',
-          'intended','missing','extra','json','extra_key','uid_string','uid_fraction',
+          'intended','missing','extra','json','extra_key','uid_string','uid_fraction','uid_exponent',
           'wrong_case','duplicate_key','empty_line')
  foreach($c in $cases) {
   $copy=$good.Clone();$str=$text;$code=7
@@ -254,7 +326,8 @@ if ($Mode -eq 'SelfTest') {
    'json' {$str=$Marker+'{'+[string][char]10}
    'extra_key' {$copy.other='UNTRUSTED'}
    'uid_string' {$copy.uid='1000'}
-   'uid_fraction' {$str=$Marker+('{"uid":1000.5,'+((ConvertTo-Json $good -Compress).Substring(1)))+[string][char]10}
+   'uid_fraction' {$str=$text.Replace('"uid":1000','"uid":1000.5')}
+   'uid_exponent' {$str=$text.Replace('"uid":1000','"uid":1e3')}
    'wrong_case' {$copy.request_id=$RequestId.ToLowerInvariant()}
    'duplicate_key' {$str=$Marker+('{"uid":1000,'+((ConvertTo-Json $good -Compress).Substring(1)))+[string][char]10}
    'empty_line' {$str=$text+[string][char]10}
@@ -263,23 +336,39 @@ if ($Mode -eq 'SelfTest') {
               'extra_key','uid_string','wrong_case')) {
    $str=$Marker+(ConvertTo-Json $copy -Compress)+[string][char]10
   }
-  Assert-Negative -Case $c -Action {Assert-ChildOutput -Stdout $str -ExitCode $code}
+  $expected=@{
+   exit='WSL_EXIT_MISMATCH';request='MARKER_IDENTITY_MISMATCH';attempt='MARKER_IDENTITY_MISMATCH';schema='MARKER_IDENTITY_MISMATCH'
+   uid='MARKER_VALUE_MISMATCH';duplicate='CHILD_MARKER_FRAMING_INVALID';namespace='MARKER_VALUE_MISMATCH'
+   pid='MARKER_VALUE_MISMATCH';ppid='MARKER_VALUE_MISMATCH';intended='MARKER_VALUE_MISMATCH';missing='CHILD_MARKER_FRAMING_INVALID'
+   extra='CHILD_MARKER_FRAMING_INVALID';extra_key='UNEXPECTED_OR_DUPLICATE_PROPERTY';uid_string='NON_INTEGER_JSON_TOKEN'
+   uid_fraction='NON_INTEGER_JSON_TOKEN';uid_exponent='NON_INTEGER_JSON_TOKEN';wrong_case='MARKER_IDENTITY_MISMATCH'
+   duplicate_key='UNEXPECTED_OR_DUPLICATE_PROPERTY';empty_line='CHILD_MARKER_FRAMING_INVALID'
+  }
+  if($c -eq 'json') {Assert-Negative -Case $c -Action {Assert-ChildOutput -Stdout $str -ExitCode $code}}
+  else {Assert-Rejection -Case $c -Reason $expected[$c] -Action {Assert-ChildOutput -Stdout $str -ExitCode $code}}
  }
  $oversize=[Text.UTF8Encoding]::new($false).GetBytes('X'*17)
  $read=[TSEEBounded]::Capture([IO.MemoryStream]::new($oversize),16,[Threading.CancellationToken]::None)
- Assert-Negative -Case 'byte_limit' -Action {$null=$read.GetAwaiter().GetResult()}
+ Assert-Rejection -Case 'byte_limit' -Reason 'OUTPUT_BYTE_LIMIT_EXCEEDED' -Action {$null=$read.GetAwaiter().GetResult()}
  $temp=Join-Path ([IO.Path]::GetTempPath()) ('ts-ee-self-'+[guid]::NewGuid().ToString('N'))
- [IO.Directory]::CreateDirectory($temp)|Out-Null
+ $testPins=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+ New-TestDirectory -Path $temp
  try {
   $reserved=Join-Path $temp 'reservation'
-  if(-not [TSEEBounded]::ReserveDirectory($reserved,[IntPtr]::Zero)) {throw 'ATOMIC_RESERVE_SELFTEST_FAILED'}
-  if([TSEEBounded]::ReserveDirectory($reserved,[IntPtr]::Zero)) {throw 'ATOMIC_COLLISION_NOT_BLOCKED'}
-  Assert-Negative -Case 'no_receipt' -Action {Read-QualifiedResult -Directory $temp}
-  Write-ExclusiveUtf8 -Path (Join-Path $temp 'INCOMPLETE.txt') -Text 'UNTRUSTED'
-  Assert-Negative -Case 'marker' -Action {Read-QualifiedResult -Directory $temp}
-  Write-ExclusiveUtf8 -Path (Join-Path $temp 'RESULT.json') -Text '{"spoofed":true}'
-  Assert-Negative -Case 'marker_dominates_result' -Action {Read-QualifiedResult -Directory $temp}
-  Assert-Negative -Case 'leaf_collision' -Action {Write-ExclusiveUtf8 -Path (Join-Path $temp 'RESULT.json') -Text 'REPLACE'}
+  New-TestDirectory -Path $reserved
+  $collision=$false
+  try {[TSEEBounded]::ReserveTrusted($reserved,(Get-CurrentSid))} catch {
+   $ex=$_.Exception.GetBaseException()
+   if($ex -isnot [ComponentModel.Win32Exception] -or $ex.NativeErrorCode -ne 183) {throw}
+   $collision=$true
+  }
+  if(-not $collision) {throw 'ATOMIC_COLLISION_NOT_BLOCKED'}
+  Assert-Rejection -Case 'no_receipt' -Reason 'MISSING_TERMINAL_RECEIPT' -Action {Read-TestResult -Directory $reserved}
+  Write-ExclusiveUtf8 -Path (Join-Path $reserved 'INCOMPLETE.txt') -Text 'UNTRUSTED'
+  Assert-Rejection -Case 'marker' -Reason 'INCOMPLETE_MARKER_DOMINATES' -Action {Read-TestResult -Directory $reserved}
+  Write-ExclusiveUtf8 -Path (Join-Path $reserved 'RESULT.json') -Text '{"spoofed":true}'
+  Assert-Rejection -Case 'marker_dominates_result' -Reason 'INCOMPLETE_MARKER_DOMINATES' -Action {Read-TestResult -Directory $reserved}
+  Assert-Negative -Case 'leaf_collision' -Action {Write-ExclusiveUtf8 -Path (Join-Path $reserved 'RESULT.json') -Text 'REPLACE'}
   # Positive complete original result test; the entire bounded stdout is
   # embedded and its hash checked by the consumer, not reconstructed from fields.
   $ExpectedRunnerSha256=('a'*64)
@@ -307,20 +396,42 @@ if ($Mode -eq 'SelfTest') {
     source_sha256=$ExpectedRunnerSha256;Product_effect='NONE';acceptance='NOT_AUTHORIZED'
   }
   $okdir=Join-Path $temp 'valid'
-  [IO.Directory]::CreateDirectory($okdir)|Out-Null
+  New-TestDirectory -Path $okdir
   Write-ExclusiveUtf8 -Path (Join-Path $okdir 'RESULT.json') -Text ((ConvertTo-Json $fixture -Compress -Depth 6)+[Environment]::NewLine)
-  if((Read-QualifiedResult -Directory $okdir).request_id -cne $RequestId) {throw 'POSITIVE_RECEIPT_REJECTED'}
+  if((Read-TestResult -Directory $okdir).request_id -cne $RequestId) {throw 'POSITIVE_RECEIPT_REJECTED'}
   Write-ExclusiveUtf8 -Path (Join-Path $okdir 'FAILURE.json') -Text '{"effect_state":"UNKNOWN"}'
-  Assert-Negative -Case 'failure_dominates_success' -Action {Read-QualifiedResult -Directory $okdir}
-  $bad=(ConvertFrom-Json -InputObject (ConvertTo-Json $fixture -Depth 6 -Compress) -AsHashtable);$bad.original_stdout_base64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('TAMPERED'))
-  $tamper=Join-Path $temp 'tampered';[IO.Directory]::CreateDirectory($tamper)|Out-Null
+  Assert-Rejection -Case 'failure_dominates_success' -Reason 'FAILURE_RECEIPT_DOMINATES' -Action {Read-TestResult -Directory $okdir}
+  [IO.File]::Delete((Join-Path $okdir 'FAILURE.json'))
+  $markerReasons=@{'FAILURE.json'='FAILURE_RECEIPT_DOMINATES';'INCOMPLETE.txt'='INCOMPLETE_MARKER_DOMINATES';'RESULT.tmp'='PARTIAL_STAGING_PRESENT'}
+  foreach($name in $markerReasons.Keys) {
+   $occupant=Join-Path $okdir $name
+   [IO.Directory]::CreateDirectory($occupant)|Out-Null
+   try {Assert-Rejection -Case ('directory_occupant_'+$name) -Reason $markerReasons[$name] -Action {Read-TestResult -Directory $okdir}}
+   finally {[IO.Directory]::Delete($occupant)}
+  }
+  Assert-Rejection -Case 'wrong_output_pin' -Reason 'OUTPUT_ACL_PIN_MISMATCH' -Action {Read-QualifiedResult -Directory $okdir -OutputAclPin ('0'*64)}
+  $altered=Join-Path $temp 'altered';New-TestDirectory -Path $altered
+  $acl=Get-Acl -LiteralPath $altered
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-1-0'),[Security.AccessControl.FileSystemRights]::WriteData,[Security.AccessControl.AccessControlType]::Allow))
+  Set-Acl -LiteralPath $altered -AclObject $acl
+  Assert-Rejection -Case 'untrusted_child_acl' -Reason 'UNTRUSTED_DIRECTORY_WRITE_ACL' -Action {Assert-OutputDirectory -Path $altered -Expected $testPins[$altered]}
+  $bad=(ConvertFrom-Json -InputObject (ConvertTo-Json $fixture -Depth 6 -Compress) -AsHashtable)
+  $tampered=[byte[]]$outRaw.Clone();$tampered[0]=$tampered[0] -bxor 1
+  $bad.original_stdout_base64=[Convert]::ToBase64String($tampered)
+  $tamper=Join-Path $temp 'tampered';New-TestDirectory -Path $tamper
   Write-ExclusiveUtf8 -Path (Join-Path $tamper 'RESULT.json') -Text ((ConvertTo-Json $bad -Compress -Depth 6)+[Environment]::NewLine)
-  Assert-Negative -Case 'original_bytes_tampered' -Action {Read-QualifiedResult -Directory $tamper}
-  $tiny=Join-Path $temp 'tiny';[IO.Directory]::CreateDirectory($tiny)|Out-Null
+  Assert-Rejection -Case 'original_bytes_tampered' -Reason 'ORIGINAL_BYTE_HASH_MISMATCH' -Action {Read-TestResult -Directory $tamper}
+  $bad=(ConvertFrom-Json -InputObject (ConvertTo-Json $fixture -Depth 6 -Compress) -AsHashtable)
+  $errTampered=[byte[]]$errRaw.Clone();$errTampered[0]=1
+  $bad.original_stderr_base64=[Convert]::ToBase64String($errTampered)
+  $errdir=Join-Path $temp 'tampered_stderr';New-TestDirectory -Path $errdir
+  Write-ExclusiveUtf8 -Path (Join-Path $errdir 'RESULT.json') -Text (ConvertTo-Json $bad -Compress)
+  Assert-Rejection -Case 'stderr_tampered' -Reason 'ORIGINAL_BYTE_HASH_MISMATCH' -Action {Read-TestResult -Directory $errdir}
+  $tiny=Join-Path $temp 'tiny';New-TestDirectory -Path $tiny
   Write-ExclusiveUtf8 -Path (Join-Path $tiny 'RESULT.json') -Text '{"schema":"ts-ee/wsl-child-relay/v0.3","effect_state":"OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN","Product_effect":"NONE","windows_wsl_exit":7}'
-  Assert-Negative -Case 'partial_receipt' -Action {Read-QualifiedResult -Directory $tiny}
+  Assert-Rejection -Case 'partial_receipt' -Reason 'INCOMPLETE_JSON_SCHEMA' -Action {Read-TestResult -Directory $tiny}
   $never=[Threading.Tasks.TaskCompletionSource[bool]]::new()
-  Assert-Negative -Case 'independent_deadline' -Action {Wait-LeafTasks -Tasks @($never.Task) -Milliseconds 20}
+  Assert-Rejection -Case 'independent_deadline' -Reason 'WSL_DEADLINE_EFFECT_UNKNOWN' -Action {Wait-LeafTasks -Tasks @($never.Task) -Milliseconds 20}
   $identity=[Security.Principal.WindowsIdentity]::GetCurrent().User
   $goodAcl=[Security.AccessControl.DirectorySecurity]::new()
   $goodAcl.SetOwner($identity)
@@ -331,12 +442,12 @@ if ($Mode -eq 'SelfTest') {
   if((Get-AclFingerprint -Acl $goodAcl) -cnotmatch '^[a-f0-9]{64}$') {throw 'ACL_FINGERPRINT_FAILED'}
   $write=[Security.AccessControl.FileSystemAccessRule]::new($readSid,[Security.AccessControl.FileSystemRights]::WriteData,[Security.AccessControl.AccessControlType]::Allow)
   $goodAcl.AddAccessRule($write)
-  Assert-Negative -Case 'untrusted_write_acl' -Action {Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value}
-  $oversizedDir=Join-Path $temp 'oversized';[IO.Directory]::CreateDirectory($oversizedDir)|Out-Null
+  Assert-Rejection -Case 'untrusted_write_acl' -Reason 'UNTRUSTED_DIRECTORY_WRITE_ACL' -Action {Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value}
+  $oversizedDir=Join-Path $temp 'oversized';New-TestDirectory -Path $oversizedDir
   Write-ExclusiveUtf8 -Path (Join-Path $oversizedDir 'RESULT.json') -Text ('x'*16385)
-  Assert-Negative -Case 'oversized_receipt' -Action {Read-QualifiedResult -Directory $oversizedDir}
+  Assert-Rejection -Case 'oversized_receipt' -Reason 'RECEIPT_BYTE_LIMIT' -Action {Read-TestResult -Directory $oversizedDir}
  } finally {[IO.Directory]::Delete($temp,$true)}
- Write-Output '{"source_only":"PASS_STRICT_RECEIPT_ACL_DEADLINE_AND_ORIGINAL_BYTES","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
+ Write-Output '{"source_only":"PASS_PROTECTED_OUTPUT_NAMESPACE_AND_EXACT_REJECTIONS","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
  exit 0
 }
 
@@ -346,9 +457,10 @@ if($env:COMPUTERNAME -ne 'DESKTOP-DJLBEQH') {throw 'WRONG_HOST'}
 if($ExpectedRunnerSha256 -notmatch '^[a-fA-F0-9]{64}$') {throw 'MISSING_CALLER_HASH'}
 $actual=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if($actual -ne $ExpectedRunnerSha256.ToLowerInvariant()) {throw 'SOURCE_HASH_MISMATCH'}
-if($ExpectedOrcaRuntimeId -notmatch '^[a-f0-9-]{36}$' -or
-   $ExpectedOrcaHandle -notmatch '^term_[a-f0-9-]{36}$' -or
-   $ExpectedOrcaIncarnationId -notmatch '^[a-f0-9-]{36}$' -or
+$uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
+if($ExpectedOrcaRuntimeId -cnotmatch ('^'+$uuid+'$') -or
+   $ExpectedOrcaHandle -cnotmatch ('^term_'+$uuid+'$') -or
+   $ExpectedOrcaIncarnationId -cnotmatch ('^'+$uuid+'$') -or
    $ExpectedOrcaHostId -ne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
 if(-not [IO.Directory]::Exists($WorkRoot)) {throw 'MISSING_WORKROOT'}
 Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
@@ -360,26 +472,25 @@ $linux=@'
 import json,os,sys,time
 p=os.getpid()
 v={"schema":"ts-ee/wsl-child-marker/v0.2",
-   "request_id":"TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001",
-   "attempt":"TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001-A001",
+   "request_id":"TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001",
+   "attempt":"TS-EE-004-ORCA-WSL-E6-OUTPUT-CUSTODY-20261124-001-A001",
    "pid":p,"ppid":os.getppid(),"uid":os.getuid(),
    "pid_namespace":os.readlink("/proc/%d/ns/pid"%p),"intended_exit":7}
 print("TS_EE004_CHILD_JSON="+json.dumps(v,sort_keys=True,separators=(',',':')),flush=True)
 time.sleep(2)
 sys.exit(7)
 '@
-$owned=$false;$safeOutput=$false;$started=$false;$settled=$false;$process=$null;$cts=$null
+$owned=$false;$safeOutput=$false;$outputAclPin='';$started=$false;$settled=$false;$process=$null;$cts=$null
 $cim='NOT_ATTESTED';$cimParent=0
 try {
  # Atomic Win32 fail-on-existing reservation; a checked Directory.CreateDirectory
  # would silently reuse an occupied path. Exclusive leaf writes also fail closed.
- if(-not [TSEEBounded]::ReserveDirectory($OutputDir,[IntPtr]::Zero)) {
-  throw ('ATOMIC_OUTPUT_COLLISION_'+[Runtime.InteropServices.Marshal]::GetLastWin32Error())
- }
+ [TSEEBounded]::ReserveTrusted($OutputDir,(Get-CurrentSid))
  $owned=$true
- if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'UNSAFE_OUTPUT_REPARSE'}
+ $outputAclPin=Assert-OutputDirectory -Path $OutputDir -Initial
  $safeOutput=$true
  Write-ExclusiveUtf8 -Path (Join-Path $OutputDir 'INCOMPLETE.txt') -Text 'UNTRUSTED_UNSETTLED'
+ Assert-TrustedFileAcl -Path (Join-Path $OutputDir 'INCOMPLETE.txt')
  $psi=[Diagnostics.ProcessStartInfo]::new()
  $psi.FileName=$wsl
  foreach($arg in @('-d','Ubuntu-24.04','--exec','/usr/bin/python3','-I','-c',$linux)) {[void]$psi.ArgumentList.Add($arg)}
@@ -405,7 +516,7 @@ try {
  $child=Assert-ChildOutput -Stdout $stdout -ExitCode $process.ExitCode
  Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
  Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
- if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'OUTPUT_REPARSE_AFTER_CAPTURE'}
+ $null=Assert-OutputDirectory -Path $OutputDir -Expected $outputAclPin
  $receipt=[ordered]@{
   schema='ts-ee/wsl-child-relay/v0.3';request_id=$RequestId;attempt=$AttemptId
   effect_state='OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN';windows_runner_pid=$PID;windows_wsl_pid=$wslPid
@@ -426,9 +537,12 @@ try {
  # The authoritative INCOMPLETE marker takes precedence over all result files.
  # Flush a create-only temporary; remove marker before atomic same-volume rename.
  Write-ExclusiveUtf8 -Path (Join-Path $OutputDir 'RESULT.tmp') -Text ((ConvertTo-Json $receipt -Depth 6 -Compress)+[Environment]::NewLine)
+ Assert-TrustedFileAcl -Path (Join-Path $OutputDir 'RESULT.tmp')
+ $null=Assert-OutputDirectory -Path $OutputDir -Expected $outputAclPin
  [IO.File]::Delete((Join-Path $OutputDir 'INCOMPLETE.txt'))
  [IO.File]::Move((Join-Path $OutputDir 'RESULT.tmp'),(Join-Path $OutputDir 'RESULT.json'))
- $final=Read-QualifiedResult -Directory $OutputDir
+ $final=Read-QualifiedResult -Directory $OutputDir -OutputAclPin $outputAclPin
+ Write-Output ('TS_EE004_OUTPUT_ACL_PIN='+$outputAclPin)
  Write-Output ('TS_EE004_WSL_RELAY_RESULT='+(ConvertTo-Json $final -Compress))
  exit 0
 } catch {
@@ -445,7 +559,7 @@ try {
   try {
    Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
    Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
-   if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'OUTPUT_REPARSE_AFTER_FAILURE'}
+    $null=Assert-OutputDirectory -Path $OutputDir -Expected $outputAclPin
    $failure=@{schema='ts-ee/wsl-failure/v0.2';request_id=$RequestId;attempt=$AttemptId
       effect_state=$(if($started){'UNKNOWN'}else{'NONE'});reason=$reason;Product_effect='NONE'}
    Write-ExclusiveUtf8 -Path (Join-Path $OutputDir 'FAILURE.json') -Text ((ConvertTo-Json $failure -Compress)+[Environment]::NewLine)
