@@ -21,7 +21,7 @@ function Test-Denial([string]$Label,[string[]]$ExtraFiles,[string[]]$ExtraDirs,[
  try{
   foreach($p in $paths){
    Add-Entry $archive ('install/'+$p) $bytes
-   $encoded=[Text.Json.JsonSerializer]::Serialize([string]$p)
+   $encoded=ConvertTo-Json -InputObject ([string]$p) -Compress
    $entries.Add(('{"bytes":'+$bytes.Length+',"path":'+$encoded+',"sha256":"'+$digest+'"}'))
   }
   foreach($d in $ExtraDirs){Add-Entry $archive ('install/'+$d+'/') ([byte[]]::new(0))}
