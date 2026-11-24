@@ -181,19 +181,19 @@ function Read-QualifiedResult {
  } finally {$stream.Dispose()}
  [TSEEStrict]::Receipt($raw)
  $r=ConvertFrom-Json -InputObject $raw -AsHashtable -ErrorAction Stop
- if($r.schema -cne 'ts-ee/wsl-child-relay/v0.3' -or
-    $r.request_id -cne $RequestId -or $r.attempt -cne $AttemptId -or
-    $r.effect_state -cne 'OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN' -or
-    $r.Product_effect -cne 'NONE' -or $r.acceptance -cne 'NOT_AUTHORIZED' -or
-    $r.source_sha256 -cne $ExpectedRunnerSha256.ToLowerInvariant() -or
-    $r.supplied_orca_runtime_id -cne $ExpectedOrcaRuntimeId -or
-    $r.supplied_orca_handle -cne $ExpectedOrcaHandle -or
-    $r.supplied_orca_incarnation_id -cne $ExpectedOrcaIncarnationId -or
-    $r.supplied_orca_host_id -cne $ExpectedOrcaHostId -or
+ if(-not [string]::Equals($r.schema,'ts-ee/wsl-child-relay/v0.3',[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.request_id,$RequestId,[StringComparison]::Ordinal) -or -not [string]::Equals($r.attempt,$AttemptId,[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.effect_state,'OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN',[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.Product_effect,'NONE',[StringComparison]::Ordinal) -or -not [string]::Equals($r.acceptance,'NOT_AUTHORIZED',[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.source_sha256,$ExpectedRunnerSha256.ToLowerInvariant(),[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.supplied_orca_runtime_id,$ExpectedOrcaRuntimeId,[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.supplied_orca_handle,$ExpectedOrcaHandle,[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.supplied_orca_incarnation_id,$ExpectedOrcaIncarnationId,[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.supplied_orca_host_id,$ExpectedOrcaHostId,[StringComparison]::Ordinal) -or
     [int]$r.windows_runner_pid -le 0 -or [int]$r.windows_wsl_pid -le 0 -or
-    $r.windows_cim_parent_status -cne 'NOT_ATTESTED_BY_RUNNER_SEPARATE_PROVIDER_JOIN' -or [int]$r.windows_cim_parent_pid -ne 0 -or
-    $r.native_orca_join -cne 'REQUIRES_EXTERNAL_PROVIDER_READBACK' -or
-    $r.linux_stdout_identity -cne 'SELF_REPORTED_BOUNDED_NOT_KERNEL_ATTESTED' -or
+    -not [string]::Equals($r.windows_cim_parent_status,'NOT_ATTESTED_BY_RUNNER_SEPARATE_PROVIDER_JOIN',[StringComparison]::Ordinal) -or [int]$r.windows_cim_parent_pid -ne 0 -or
+    -not [string]::Equals($r.native_orca_join,'REQUIRES_EXTERNAL_PROVIDER_READBACK',[StringComparison]::Ordinal) -or
+    -not [string]::Equals($r.linux_stdout_identity,'SELF_REPORTED_BOUNDED_NOT_KERNEL_ATTESTED',[StringComparison]::Ordinal) -or
     [int]$r.windows_wsl_exit -ne $ExpectedLinuxExit) {throw 'TERMINAL_RECEIPT_BINDING_INVALID'}
  $out=[Convert]::FromBase64String($r.original_stdout_base64)
  $err=[Convert]::FromBase64String($r.original_stderr_base64)
@@ -202,13 +202,13 @@ function Read-QualifiedResult {
     $out.Length -gt $MaxStdoutBytes -or $err.Length -gt $MaxStderrBytes) {throw 'ORIGINAL_BYTE_LENGTH_INVALID'}
  $outSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($out)).ToLowerInvariant()
  $errSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($err)).ToLowerInvariant()
- if($outSha -cne $r.original_stdout_sha256 -or $errSha -cne $r.original_stderr_sha256) {throw 'ORIGINAL_BYTE_HASH_MISMATCH'}
+ if(-not [string]::Equals($outSha,$r.original_stdout_sha256,[StringComparison]::Ordinal) -or -not [string]::Equals($errSha,$r.original_stderr_sha256,[StringComparison]::Ordinal)) {throw 'ORIGINAL_BYTE_HASH_MISMATCH'}
  $decoded=[Text.UTF8Encoding]::new($false,$true).GetString($out)
  $child=Assert-ChildOutput -Stdout $decoded -ExitCode ([int]$r.windows_wsl_exit)
  if([int]$r.linux_child_pid -ne [int]$child.pid -or
     [int]$r.linux_child_ppid -ne [int]$child.ppid -or
     [int]$r.linux_child_uid -ne [int]$child.uid -or
-    $r.linux_pid_namespace -cne $child.pid_namespace) {throw 'ORIGINAL_CHILD_BINDING_MISMATCH'}
+    -not [string]::Equals($r.linux_pid_namespace,$child.pid_namespace,[StringComparison]::Ordinal)) {throw 'ORIGINAL_CHILD_BINDING_MISMATCH'}
  $null=Assert-OutputDirectory -Path $Directory -Expected $OutputAclPin
  return $r
 }
@@ -253,7 +253,7 @@ function Assert-TrustedDirectoryAcl {
  $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
  if(-not $acl.AreAccessRulesProtected){throw 'ANCESTOR_DACL_NOT_PROTECTED'}
  Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid) -DriveAnchor:$DriveAnchor
- if((Get-AclFingerprint -Acl $acl) -cne $Expected) {throw 'EXTERNAL_ACL_PIN_MISMATCH'}
+ if(-not [string]::Equals((Get-AclFingerprint -Acl $acl),$Expected,[StringComparison]::Ordinal)) {throw 'EXTERNAL_ACL_PIN_MISMATCH'}
 }
 function Assert-DriveAnchor {
  param([string]$Expected)
@@ -272,7 +272,7 @@ function Assert-OutputDirectory {
  if(-not $acl.AreAccessRulesProtected) {throw 'OUTPUT_DACL_NOT_PROTECTED'}
  Assert-AclObject -Acl $acl -SelfSid (Get-CurrentSid)
  $pin=Get-AclFingerprint -Acl $acl
- if(-not $Initial -and ($Expected -cnotmatch '^[a-f0-9]{64}$' -or $pin -cne $Expected)) {throw 'OUTPUT_ACL_PIN_MISMATCH'}
+ if(-not $Initial -and ($Expected -cnotmatch '\A[a-f0-9]{64}\z' -or -not [string]::Equals($pin,$Expected,[StringComparison]::Ordinal))) {throw 'OUTPUT_ACL_PIN_MISMATCH'}
  return $pin
 }
 function Assert-EmptyProtectedRoot {
@@ -323,7 +323,7 @@ function Assert-OrcaBinding {
  if($Runtime -cnotmatch ('\A'+$uuid+'\z') -or
     $Handle -cnotmatch ('\Aterm_'+$uuid+'\z') -or
     $Incarnation -cnotmatch ('\A'+$uuid+'\z') -or
-    $HostId -cne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
+    -not [string]::Equals($HostId,'local',[StringComparison]::Ordinal)) {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
 }
 function Assert-Negative {
  param([scriptblock]$Action,[string]$Case)
@@ -389,6 +389,12 @@ if ($Mode -eq 'SelfTest') {
  Assert-Rejection -Case 'lease_handle_lf' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle ($leaseHandle+$lf) -Incarnation $leaseId -HostId 'local'}
  Assert-Rejection -Case 'lease_incarnation_lf' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation ($leaseId+$lf) -HostId 'local'}
  Assert-Rejection -Case 'lease_host_case' -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation $leaseId -HostId 'LOCAL'}
+ # Verify the original cultural-comparison premise on the actual Windows runtime.
+ foreach($ch in @([char]0,[char]0x00ad,[char]0x200b)){
+  $malformed='lo'+$ch+'cal'
+  Write-Output ('HOST_COMPARISON codepoint='+[int]$ch+' legacy_case_equal='+[bool]($malformed -ceq 'local')+' ordinal_equal='+[string]::Equals($malformed,'local',[StringComparison]::Ordinal))
+  Assert-Rejection -Case ('lease_host_ignorable_'+[int]$ch) -Reason 'EXTERNAL_ORCA_BINDING_REQUIRED' -Action {Assert-OrcaBinding -Runtime $leaseId -Handle $leaseHandle -Incarnation $leaseId -HostId $malformed}
+ }
  $oversize=[Text.UTF8Encoding]::new($false).GetBytes('X'*17)
  $read=[TSEEBounded]::Capture([IO.MemoryStream]::new($oversize),16,[Threading.CancellationToken]::None)
  Assert-Rejection -Case 'byte_limit' -Reason 'OUTPUT_BYTE_LIMIT_EXCEEDED' -Action {$null=$read.GetAwaiter().GetResult()}
@@ -443,6 +449,17 @@ if ($Mode -eq 'SelfTest') {
   New-TestDirectory -Path $okdir
   Write-ExclusiveUtf8 -Path (Join-Path $okdir 'RESULT.json') -Text ((ConvertTo-Json $fixture -Compress -Depth 6)+[Environment]::NewLine)
   if((Read-TestResult -Directory $okdir).request_id -cne $RequestId) {throw 'POSITIVE_RECEIPT_REJECTED'}
+  # All exact receipt string identities, hashes and namespace must deny inserted NUL.
+  $identityFields=@('schema','request_id','attempt','effect_state','Product_effect','acceptance','source_sha256','supplied_orca_runtime_id','supplied_orca_handle','supplied_orca_incarnation_id','supplied_orca_host_id','windows_cim_parent_status','native_orca_join','linux_stdout_identity','original_stdout_sha256','original_stderr_sha256','linux_pid_namespace')
+  foreach($field in $identityFields){
+   $bad=(ConvertFrom-Json -InputObject (ConvertTo-Json $fixture -Depth 6 -Compress) -AsHashtable)
+   $value=[string]$bad[$field];$bad[$field]=$value.Insert(1,[string][char]0)
+   $badDir=Join-Path $temp ('ordinal-'+$field);New-TestDirectory -Path $badDir
+   Write-ExclusiveUtf8 -Path (Join-Path $badDir 'RESULT.json') -Text (ConvertTo-Json $bad -Compress -Depth 6)
+   $reason=if($field -in @('original_stdout_sha256','original_stderr_sha256')){'ORIGINAL_BYTE_HASH_MISMATCH'}elseif($field -eq 'linux_pid_namespace'){'ORIGINAL_CHILD_BINDING_MISMATCH'}else{'TERMINAL_RECEIPT_BINDING_INVALID'}
+   Assert-Rejection -Case ('ordinal_'+$field) -Reason $reason -Action {Read-TestResult -Directory $badDir}
+  }
+  Write-Output 'PASS_ORDINAL_RECEIPT_FIELDS_17'
   Write-ExclusiveUtf8 -Path (Join-Path $okdir 'FAILURE.json') -Text '{"effect_state":"UNKNOWN"}'
   Assert-Rejection -Case 'failure_dominates_success' -Reason 'FAILURE_RECEIPT_DOMINATES' -Action {Read-TestResult -Directory $okdir}
   [IO.File]::Delete((Join-Path $okdir 'FAILURE.json'))
@@ -512,13 +529,13 @@ if ($Mode -eq 'SelfTest') {
 
 # Provision and Native are separate grant-bound effects. No automatic transition or replay.
 if($PSVersionTable.PSVersion.Major -lt 7 -or -not $IsWindows) {throw 'PWSH7_WINDOWS_REQUIRED'}
-if($env:COMPUTERNAME -ne 'DESKTOP-DJLBEQH') {throw 'WRONG_HOST'}
+if(-not [string]::Equals($env:COMPUTERNAME,'DESKTOP-DJLBEQH',[StringComparison]::OrdinalIgnoreCase)) {throw 'WRONG_HOST'}
 if($ExpectedRunnerSha256 -notmatch '\A[a-fA-F0-9]{64}\z') {throw 'MISSING_CALLER_HASH'}
 $actual=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
-if($actual -ne $ExpectedRunnerSha256.ToLowerInvariant()) {throw 'SOURCE_HASH_MISMATCH'}
+if(-not [string]::Equals($actual,$ExpectedRunnerSha256.ToLowerInvariant(),[StringComparison]::Ordinal)) {throw 'SOURCE_HASH_MISMATCH'}
 Assert-DriveAnchor -Expected $ExpectedDriveAclSha256
 if($Mode -eq 'Provision'){
- if($ExpectedProvisionAttempt -cne $ProvisionAttempt -or $ExpectedOrcaRuntimeId -or $ExpectedOrcaHandle -or
+ if(-not [string]::Equals($ExpectedProvisionAttempt,$ProvisionAttempt,[StringComparison]::Ordinal) -or $ExpectedOrcaRuntimeId -or $ExpectedOrcaHandle -or
     $ExpectedOrcaIncarnationId -or $ExpectedOrcaHostId -or $ExpectedStationAclSha256){throw 'PROVISION_GRANT_BINDING'}
  $created=$false
  try{

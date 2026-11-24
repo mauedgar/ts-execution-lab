@@ -23,7 +23,7 @@ jobs:
           if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'SOURCE_HEAD_MISMATCH' }
           $src='experiments/TS-EE-ORCA-WSL-CHILD-BINDING-20261123-001/Invoke-OrcaWslReadOnlyLeaf.ps1'
           $blob=(git rev-parse "HEAD:$src").Trim()
-          if ($blob -ne '30705cafd4610725040d3ec79dd5aaafa8dd92f8') { throw "SOURCE_BLOB_MISMATCH_$blob" }
+          if ($blob -ne 'd91acc2cbf5e5aba55c2ef3463f96b24a1722c9d') { throw "SOURCE_BLOB_MISMATCH_$blob" }
           if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw 'MISSING_SOURCE' }
           Write-Output "GIT_BLOB=$blob"
       - name: SelfTest isolated anchor/protected reservation and strict receipt, source only
@@ -42,10 +42,10 @@ jobs:
           $hash=(Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash.ToLowerInvariant()
           $result=@{schema='ts-ee/orca-wsl-e7-source-only/v0.1';head=$env:GITHUB_SHA
             tree=(git rev-parse 'HEAD^{tree}').Trim()
-            source_blob='30705cafd4610725040d3ec79dd5aaafa8dd92f8'
+            source_blob='d91acc2cbf5e5aba55c2ef3463f96b24a1722c9d'
             runner_windows_sha256=$hash;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT
-            findings_targeted=@('IR006-F01','IR006-F02','E6-G1-UNTRUSTED-ANCESTOR-ACL','IR007-A02','IR008-F01')
-            tests='SOURCE_ONLY_E7_ISOLATED_ANCHOR_PROTECTED_OUTPUT_AND_EXACT_IDENTITY';Native_Provision='NOT_RUN';Native_WSL='NOT_RUN';Orca='NOT_RUN'
+            findings_targeted=@('IR006-F01','IR006-F02','E6-G1-UNTRUSTED-ANCESTOR-ACL','IR007-A02','IR008-F01','IR009-F01')
+            tests='SOURCE_ONLY_E7_ISOLATED_ANCHOR_PROTECTED_OUTPUT_AND_ORDINAL_IDENTITY';Native_Provision='NOT_RUN';Native_WSL='NOT_RUN';Orca='NOT_RUN'
             Product_effect='NONE';method_accepted=$false;source_review='PENDING'}
           $json=ConvertTo-Json -InputObject $result -Compress -Depth 5
           [IO.File]::WriteAllText('source-evidence/SOURCE_ONLY.json',$json,[Text.UTF8Encoding]::new($false))
