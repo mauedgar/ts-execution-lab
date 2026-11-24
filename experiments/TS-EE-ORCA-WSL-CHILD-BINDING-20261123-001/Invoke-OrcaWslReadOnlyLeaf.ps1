@@ -7,12 +7,14 @@ param(
     [string]$ExpectedOrcaRuntimeId = '',
     [string]$ExpectedOrcaHandle = '',
     [string]$ExpectedOrcaIncarnationId = '',
-    [string]$ExpectedOrcaHostId = ''
+    [string]$ExpectedOrcaHostId = '',
+    [string]$ExpectedTsAclSha256 = '',
+    [string]$ExpectedStationAclSha256 = ''
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$RequestId = 'TS-EE-004-ORCA-WSL-E4-ATOMIC-RECEIPT-20261123-001'
-$AttemptId = 'TS-EE-004-ORCA-WSL-E4-ATOMIC-RECEIPT-20261123-001-A001'
+$RequestId = 'TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001'
+$AttemptId = 'TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001-A001'
 $Marker = 'TS_EE004_CHILD_JSON='
 $MarkerSchema = 'ts-ee/wsl-child-marker/v0.2'
 $MaxStdoutBytes = 4096
@@ -20,7 +22,7 @@ $MaxStderrBytes = 2048
 $ExpectedLinuxExit = 7
 $ExpectedUid = 1000
 $WorkRoot = 'C:\TS\station'
-$OutputDir = 'C:\TS\station\ts-ee004-wsl-leaf-e4-20261123-001'
+$OutputDir = 'C:\TS\station\ts-ee004-wsl-leaf-e5-20261123-001'
 
 
 # Windows-only atomic create-only namespace reservation and bounded async reads.
@@ -136,18 +138,30 @@ function Read-QualifiedResult {
  if([IO.File]::Exists((Join-Path $Directory 'RESULT.tmp'))) {throw 'PARTIAL_STAGING_PRESENT'}
  $path=Join-Path $Directory 'RESULT.json'
  if(-not [IO.File]::Exists($path)) {throw 'MISSING_TERMINAL_RECEIPT'}
- $raw=[IO.File]::ReadAllText($path,[Text.UTF8Encoding]::new($false,$true))
+ if(([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'RECEIPT_REPARSE'}
+ $stream=[IO.FileStream]::new($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+ try {
+  if($stream.Length -gt 16384) {throw 'RECEIPT_BYTE_LIMIT'}
+  $data=[byte[]]::new([int]$stream.Length)
+  $stream.ReadExactly($data)
+  if($stream.ReadByte() -ne -1) {throw 'RECEIPT_GREW'}
+  $raw=[Text.UTF8Encoding]::new($false,$true).GetString($data)
+ } finally {$stream.Dispose()}
  [TSEEStrict]::Receipt($raw)
  $r=ConvertFrom-Json -InputObject $raw -AsHashtable -ErrorAction Stop
  if($r.schema -cne 'ts-ee/wsl-child-relay/v0.3' -or
     $r.request_id -cne $RequestId -or $r.attempt -cne $AttemptId -or
-    $r.effect_state -cne 'CONFIRMED_BOUNDED' -or
+    $r.effect_state -cne 'OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN' -or
     $r.Product_effect -cne 'NONE' -or $r.acceptance -cne 'NOT_AUTHORIZED' -or
     $r.source_sha256 -cne $ExpectedRunnerSha256.ToLowerInvariant() -or
     $r.supplied_orca_runtime_id -cne $ExpectedOrcaRuntimeId -or
     $r.supplied_orca_handle -cne $ExpectedOrcaHandle -or
     $r.supplied_orca_incarnation_id -cne $ExpectedOrcaIncarnationId -or
     $r.supplied_orca_host_id -cne $ExpectedOrcaHostId -or
+    [int]$r.windows_runner_pid -le 0 -or [int]$r.windows_wsl_pid -le 0 -or
+    $r.windows_cim_parent_status -cne 'NOT_ATTESTED_BY_RUNNER_SEPARATE_PROVIDER_JOIN' -or [int]$r.windows_cim_parent_pid -ne 0 -or
+    $r.native_orca_join -cne 'REQUIRES_EXTERNAL_PROVIDER_READBACK' -or
+    $r.linux_stdout_identity -cne 'SELF_REPORTED_BOUNDED_NOT_KERNEL_ATTESTED' -or
     [int]$r.windows_wsl_exit -ne $ExpectedLinuxExit) {throw 'TERMINAL_RECEIPT_BINDING_INVALID'}
  $out=[Convert]::FromBase64String($r.original_stdout_base64)
  $err=[Convert]::FromBase64String($r.original_stderr_base64)
@@ -165,24 +179,46 @@ function Read-QualifiedResult {
     $r.linux_pid_namespace -cne $child.pid_namespace) {throw 'ORIGINAL_CHILD_BINDING_MISMATCH'}
  return $r
 }
-function Assert-TrustedDirectoryAcl {
- param([string]$Path)
- $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
- $ownerSid=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
- $selfSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
- $trusted=@($selfSid,'S-1-5-18','S-1-5-32-544','S-1-3-0')
+function Get-AclFingerprint {
+ param([Security.AccessControl.DirectorySecurity]$Acl)
+ $sections=[Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group
+ $sddl=$Acl.GetSecurityDescriptorSddlForm($sections)
+ return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($sddl))).ToLowerInvariant()
+}
+function Assert-AclObject {
+ param([Security.AccessControl.DirectorySecurity]$Acl,[string]$SelfSid)
+ $ownerSid=$Acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+ $trusted=@($SelfSid,'S-1-5-18','S-1-5-32-544')
  if($ownerSid -notin $trusted) {throw 'UNTRUSTED_DIRECTORY_OWNER'}
- $rights=[IO.FileSystemRights]::Write -bor [IO.FileSystemRights]::Modify -bor
-         [IO.FileSystemRights]::Delete -bor [IO.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
-         [IO.FileSystemRights]::ChangePermissions -bor [IO.FileSystemRights]::TakeOwnership
- foreach($ace in $acl.Access) {
+ # Use exact mutation bits, not Modify (which includes read).
+ $rights=[Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor
+         [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+         [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
+ foreach($ace in $Acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
   if($ace.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) {continue}
-  try {$trustee=$ace.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}
-  catch {throw 'UNRESOLVED_ACL_TRUSTEE'}
-  if($trustee -notin $trusted -and (($ace.FileSystemRights -band $rights) -ne 0)) {
-   throw 'UNTRUSTED_DIRECTORY_WRITE_ACL'
-  }
+  # Generic write/all are also rejected when represented as generic bits.
+  $mutates=(([int]$ace.FileSystemRights -band [int]$rights) -ne 0 -or
+            ([int]$ace.FileSystemRights -band 0x50000000) -ne 0)
+  if($ace.IdentityReference.Value -notin $trusted -and $mutates) {throw 'UNTRUSTED_DIRECTORY_WRITE_ACL'}
  }
+}
+function Assert-TrustedDirectoryAcl {
+ param([string]$Path,[string]$Expected)
+ if($Expected -cnotmatch '^[a-f0-9]{64}$') {throw 'EXTERNAL_ACL_PIN_REQUIRED'}
+ if(([IO.File]::GetAttributes($Path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'UNSAFE_ANCESTOR_REPARSE'}
+ $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
+ $selfSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+ Assert-AclObject -Acl $acl -SelfSid $selfSid
+ if((Get-AclFingerprint -Acl $acl) -cne $Expected) {throw 'EXTERNAL_ACL_PIN_MISMATCH'}
+}
+function Wait-LeafTasks {
+ param([Threading.Tasks.Task[]]$Tasks,[int]$Milliseconds)
+ $all=[Threading.Tasks.Task]::WhenAll($Tasks)
+ $deadline=[Threading.Tasks.Task]::Delay($Milliseconds)
+ $winner=[Threading.Tasks.Task]::WhenAny([Threading.Tasks.Task[]]@($all,$deadline)).GetAwaiter().GetResult()
+ if(-not [Object]::ReferenceEquals($winner,$all)) {throw 'WSL_DEADLINE_EFFECT_UNKNOWN'}
+ $all.GetAwaiter().GetResult()
 }
 function Assert-Negative {
  param([scriptblock]$Action,[string]$Case)
@@ -252,12 +288,12 @@ if ($Mode -eq 'SelfTest') {
   $ExpectedOrcaIncarnationId='12345678-1234-1234-1234-123456789abc'
   $ExpectedOrcaHostId='local'
   $outRaw=[Text.UTF8Encoding]::new($false).GetBytes($text)
-  $errRaw=[byte[]]@()
+  $errRaw=[byte[]]@(0,255,128,10)
   $outHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($outRaw)).ToLowerInvariant()
   $errHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($errRaw)).ToLowerInvariant()
   $fixture=[ordered]@{
     schema='ts-ee/wsl-child-relay/v0.3';request_id=$RequestId;attempt=$AttemptId
-    effect_state='CONFIRMED_BOUNDED';windows_runner_pid=101;windows_wsl_pid=102
+    effect_state='OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN';windows_runner_pid=101;windows_wsl_pid=102
     windows_wsl_exit=7;windows_cim_parent_status='NOT_ATTESTED_BY_RUNNER_SEPARATE_PROVIDER_JOIN';windows_cim_parent_pid=0
     linux_child_pid=101;linux_child_ppid=1;linux_child_uid=1000;linux_pid_namespace='pid:[4026532211]'
     original_stdout_sha256=$outHash;original_stderr_sha256=$errHash
@@ -281,10 +317,20 @@ if ($Mode -eq 'SelfTest') {
   Write-ExclusiveUtf8 -Path (Join-Path $tamper 'RESULT.json') -Text ((ConvertTo-Json $bad -Compress -Depth 6)+[Environment]::NewLine)
   Assert-Negative -Case 'original_bytes_tampered' -Action {Read-QualifiedResult -Directory $tamper}
   $tiny=Join-Path $temp 'tiny';[IO.Directory]::CreateDirectory($tiny)|Out-Null
-  Write-ExclusiveUtf8 -Path (Join-Path $tiny 'RESULT.json') -Text '{"schema":"ts-ee/wsl-child-relay/v0.3","effect_state":"CONFIRMED_BOUNDED","Product_effect":"NONE","windows_wsl_exit":7}'
+  Write-ExclusiveUtf8 -Path (Join-Path $tiny 'RESULT.json') -Text '{"schema":"ts-ee/wsl-child-relay/v0.3","effect_state":"OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN","Product_effect":"NONE","windows_wsl_exit":7}'
   Assert-Negative -Case 'partial_receipt' -Action {Read-QualifiedResult -Directory $tiny}
+  $never=[Threading.Tasks.TaskCompletionSource[bool]]::new()
+  Assert-Negative -Case 'independent_deadline' -Action {Wait-LeafTasks -Tasks @($never.Task) -Milliseconds 20}
+  $identity=[Security.Principal.WindowsIdentity]::GetCurrent().User
+  $goodAcl=[Security.AccessControl.DirectorySecurity]::new()
+  $goodAcl.SetOwner($identity)
+  $readSid=[Security.Principal.SecurityIdentifier]::new('S-1-1-0')
+  $read=[Security.AccessControl.FileSystemAccessRule]::new($readSid,[Security.AccessControl.FileSystemRights]::ReadAndExecute,[Security.AccessControl.AccessControlType]::Allow)
+  $goodAcl.AddAccessRule($read)
+  Assert-AclObject -Acl $goodAcl -SelfSid $identity.Value
+  if((Get-AclFingerprint -Acl $goodAcl) -cnotmatch '^[a-f0-9]{64}
  } finally {[IO.Directory]::Delete($temp,$true)}
- Write-Output '{"source_only":"PASS_STRICT_TYPED_MARKER_AND_COMPLETE_ORIGINAL_RECEIPT_NEGATIVES","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
+ Write-Output '{"source_only":"PASS_STRICT_RECEIPT_ACL_DEADLINE_AND_ORIGINAL_BYTES","Native_WSL":"NOT_RUN","Orca":"NOT_RUN","Product_effect":"NONE"}'
  exit 0
 }
 
@@ -299,12 +345,8 @@ if($ExpectedOrcaRuntimeId -notmatch '^[a-f0-9-]{36}$' -or
    $ExpectedOrcaIncarnationId -notmatch '^[a-f0-9-]{36}$' -or
    $ExpectedOrcaHostId -ne 'local') {throw 'EXTERNAL_ORCA_BINDING_REQUIRED'}
 if(-not [IO.Directory]::Exists($WorkRoot)) {throw 'MISSING_WORKROOT'}
-foreach($ancestor in @('C:\TS',$WorkRoot)) {
- if(([IO.File]::GetAttributes($ancestor) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-  throw 'UNSAFE_ANCESTOR_REPARSE'
- }
- Assert-TrustedDirectoryAcl -Path $ancestor
-}
+Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
 $wsl=Join-Path $env:WINDIR 'System32\wsl.exe'
 if(-not [IO.File]::Exists($wsl)) {throw 'WSL_BINARY_MISSING'}
 if((Get-AuthenticodeSignature -LiteralPath $wsl).Status.ToString() -ne 'Valid') {throw 'WSL_BINARY_SIGNATURE_UNVERIFIED'}
@@ -312,15 +354,15 @@ $linux=@'
 import json,os,sys,time
 p=os.getpid()
 v={"schema":"ts-ee/wsl-child-marker/v0.2",
-   "request_id":"TS-EE-004-ORCA-WSL-E4-ATOMIC-RECEIPT-20261123-001",
-   "attempt":"TS-EE-004-ORCA-WSL-E4-ATOMIC-RECEIPT-20261123-001-A001",
+   "request_id":"TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001",
+   "attempt":"TS-EE-004-ORCA-WSL-E5-ATOMIC-RECEIPT-20261123-001-A001",
    "pid":p,"ppid":os.getppid(),"uid":os.getuid(),
    "pid_namespace":os.readlink("/proc/%d/ns/pid"%p),"intended_exit":7}
 print("TS_EE004_CHILD_JSON="+json.dumps(v,sort_keys=True,separators=(',',':')),flush=True)
 time.sleep(2)
 sys.exit(7)
 '@
-$owned=$false;$started=$false;$settled=$false;$process=$null;$cts=$null
+$owned=$false;$safeOutput=$false;$started=$false;$settled=$false;$process=$null;$cts=$null
 $cim='NOT_ATTESTED';$cimParent=0
 try {
  # Atomic Win32 fail-on-existing reservation; a checked Directory.CreateDirectory
@@ -330,6 +372,7 @@ try {
  }
  $owned=$true
  if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'UNSAFE_OUTPUT_REPARSE'}
+ $safeOutput=$true
  Write-ExclusiveUtf8 -Path (Join-Path $OutputDir 'INCOMPLETE.txt') -Text 'UNTRUSTED_UNSETTLED'
  $psi=[Diagnostics.ProcessStartInfo]::new()
  $psi.FileName=$wsl
@@ -347,16 +390,19 @@ try {
  # no unbounded synchronous provider call occurs before the stream/exit join.
  $cim='NOT_ATTESTED_BY_RUNNER_SEPARATE_PROVIDER_JOIN'
  $cimParent=0
- [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($outTask,$errTask,$exitTask)).GetAwaiter().GetResult()
+ Wait-LeafTasks -Tasks @($outTask,$errTask,$exitTask) -Milliseconds 16000
  $settled=$true
  $outBytes=$outTask.GetAwaiter().GetResult()
  $errBytes=$errTask.GetAwaiter().GetResult()
  $stdout=[Text.UTF8Encoding]::new($false,$true).GetString($outBytes)
- $stderr=[Text.UTF8Encoding]::new($false,$true).GetString($errBytes)
+ # Stderr is opaque bounded bytes; no lossy or unnecessary text decode.
  $child=Assert-ChildOutput -Stdout $stdout -ExitCode $process.ExitCode
+ Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+ Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
+ if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'OUTPUT_REPARSE_AFTER_CAPTURE'}
  $receipt=[ordered]@{
   schema='ts-ee/wsl-child-relay/v0.3';request_id=$RequestId;attempt=$AttemptId
-  effect_state='CONFIRMED_BOUNDED';windows_runner_pid=$PID;windows_wsl_pid=$wslPid
+  effect_state='OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN';windows_runner_pid=$PID;windows_wsl_pid=$wslPid
   windows_wsl_exit=$process.ExitCode;windows_cim_parent_status=$cim;windows_cim_parent_pid=$cimParent
   linux_child_pid=[int]$child.pid;linux_child_ppid=[int]$child.ppid
   linux_child_uid=[int]$child.uid;linux_pid_namespace=[string]$child.pid_namespace
@@ -389,8 +435,11 @@ try {
   } catch {$reason+='|CHILD_SETTLEMENT_UNKNOWN'}
  }
  # If child started, UNKNOWN is preserved even when a failure receipt exists.
- if($owned) {
+ if($owned -and $safeOutput) {
   try {
+   Assert-TrustedDirectoryAcl -Path 'C:\TS' -Expected $ExpectedTsAclSha256
+   Assert-TrustedDirectoryAcl -Path $WorkRoot -Expected $ExpectedStationAclSha256
+   if(([IO.File]::GetAttributes($OutputDir) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {throw 'OUTPUT_REPARSE_AFTER_FAILURE'}
    $failure=@{schema='ts-ee/wsl-failure/v0.2';request_id=$RequestId;attempt=$AttemptId
       effect_state=$(if($started){'UNKNOWN'}else{'NONE'});reason=$reason;Product_effect='NONE'}
    Write-ExclusiveUtf8 -Path (Join-Path $OutputDir 'FAILURE.json') -Text ((ConvertTo-Json $failure -Compress)+[Environment]::NewLine)

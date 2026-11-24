@@ -1,0 +1,8 @@
+# TS EE 004 E5 prevalidation repair, NONPRODUCT
+status: SOURCE_ONLY_UNADMITTED
+base: 92d7a6fef58023ae767ee909e65fe92414426e85
+prior_IR002: mauedgar/ts-execution-transport@01f9db835ff242709a3540e432107b23584afb28:results/TS-EE-004-ORCA-WSL-PR78-WEBINLINE-IR002-20261123-001/ORIGINAL.md
+E4 source CI: 45302871017 attempt1 SUCCESS; original artifact 14879656827 retained.
+E5 is new distinct source candidate, not E4 replay. Control prevalidation found E4 ACL enum type invalid and no independent deadline if redirected reads ignore cancellation. E5 corrects actual Security.AccessControl.FileSystemRights type, checks mutating rights rather than Read/Modify overlap, tests typed ACL objects and untrusted write ACE, and requires externally approved exact parent ACL fingerprints. Assumes no concurrent privileged/same-principal writers; external admission must inspect root/ancestor effective rights and exclude hostile writers. No ACL modifications.
+Strict consumer rejects incomplete/temp/failure; bounds receipt bytes and validates all declared fields, original byte lengths/hashes, marker and external identity. Local result is OBSERVED_LOCAL_REQUIRES_PROVIDER_JOIN, not accepted. Preserves opaque non-UTF8 stderr bytes. Explicit WhenAny deadline independent of cancellation success; OS start, filesystem and kill/cleanup not guaranteed real-time. Timeout UNKNOWN, no replay; no claim of descendants killed. Source-only selftest covers deterministic cases, not real WSL.
+Native delivery requires independently approved exact LF byte hash, qualified existing ingress and trust preconditions, then one new Orca-owned native attempt and external original provider reconciliation. No Product effect, no Kernel/SQL/Beta Run. Do not deliver a partial handoff.
