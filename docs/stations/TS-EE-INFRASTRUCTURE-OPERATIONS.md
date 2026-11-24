@@ -1,0 +1,75 @@
+# TS EE — Infraestructura y operación reutilizable
+Owner: TS Execution Engineering. Status: ACTIVE_NAVIGATION_AND_OBSERVED_BINDINGS, NONPRODUCT. Product_authority NONE; Product_effect NONE.
+Cutoff: 2026-11-24. This is a derived operational entrypoint, not another policy SOT, capability catalog, execution grant or claim of universal qualification. Read the applicable source contract; use this page to avoid rediscovery. Update only on material drift, exact new receipt or competent policy disposition. Never replay old qualifications to refresh documentation.
+
+## 1. Topology and responsibility
+| Surface | Role / selection | What it does not authorize |
+|---|---|---|
+| ChatGPT Web Control | Semantics, authority, freeze, dispatch, deferred join and disposition | Product acceptance outside competent owner |
+| GitHub Product repos | Product SOT, candidate identity, CI, lifecycle | Cross-product writes |
+| ts-execution-lab | EE method, qualified sources and navigational docs | Product SOT |
+| Private ts-execution-transport | Immutable requests, handoffs, originals and receipts | Queue lock, execution authority |
+| SharePoint / educational OneDrive | Exact isolated cloud slot and sync to notebook | General upload, arbitrary school/personal data, autoexec |
+| Tailscale | Private connectivity; Taildrop data transport; scoped Serve only when owner authorizes | Public Funnel, subnet routing, global firewall changes |
+| Notebook DESKTOP-DJLBEQH | Primary persistent station, Windows + Ubuntu-24.04 WSL, Orca; device 40cc0b10-fa7b-4a6a-98cf-1c94f93791b2 | Substitute Trading execution host |
+| Desktop DESKTOP-3LJ0E54 | Visual/auxiliary workstation; exact Trading-authorized host; device 777b57a0-70df-4bd6-b9ed-f6a4998e6022 | Blanket fallback for other Products |
+| Android | Auxiliary Control/visual access, no native execution qualification claimed | New host binding |
+| Commander | Exact bounded mechanical execution/transport/results, no semantic work | Repo discovery, source review, edits, arbitrary creation, extraction, polling |
+| Orca | Native terminal lease, host/worktree binding and exact closure | Semantic authority |
+| OpenCode | Optional local semantic executor from visible Orca terminal, command opencode | opencode2 alias, automatic provider fallback |
+| TS IR | Qualified serial WEB_INLINE behavior and artifact custody | Physical memory isolation, concurrent dispatch or automatic Product adoption |
+
+Historical/current station maps: [Notebook station profile](TS-DEV-UX-NOTEBOOK-PROVISIONAL-20261015.md), [Orca + OpenCode unified station](../execution-engineering/TS-EE-ORCA-OPENCODE-V2-UNIFIED-STATION-v1.md). Earlier disabled-desktop routing was specific to that workstream; Trading has its own explicit authority. Do not silently switch hosts.
+
+## 2. Read these contracts, not a new investigation
+| Need | Competent reference |
+|---|---|
+| Overall execution, authority, no-replay | [Autonomous Operating Contract v1](../execution-engineering/TS-EXECUTION-ENGINEERING-AUTONOMOUS-OPERATING-CONTRACT-v1.md) §§6/8/9/11 |
+| SharePoint/OneDrive + Taildrop transport | [Canonical restricted method](../execution-engineering/TS-EXECUTION-TRANSPORT-ONEDRIVE-TAILDROP-v1.md) |
+| Exact Microsoft operations, errors and schemas | [SharePoint recipe](../execution-engineering/TS-SP-ONEDRIVE-OPERATIONS-RECIPE-v1.md), especially §7 single-account schema |
+| MAT-XFORM contract and implementation | [Request](../../schemas/mat-xform-request.schema.json), [result](../../schemas/mat-xform-result.schema.json), [receipt](../../schemas/mat-xform-receipt.schema.json), [CLI](../../src/mat-xform/cli.ts), [qualification](../../experiments/TS-DEVLAB-MAT-XFORM-V1-001/QUALIFICATION.json), [adoption](../../experiments/TS-DEVLAB-MAT-XFORM-V1-001/ADOPTION-RECEIPT.json) |
+| Orca terminal lifecycle | [Lease lifecycle v1](../execution-engineering/ORCA-VISIBLE-TERMINAL-LEASE-LIFECYCLE-v1.md), [Orca Developer UX](../execution-engineering/ORCA-DEVELOPER-UX-v1.md) |
+| Node22/npm10 selector | [Existing read-only selector](../../scripts/station/Assert-Node22Npm10.ps1) |
+| WEB_INLINE IR | [Binding v0](../execution-engineering/TS-WEB-INLINE-INDEPENDENT-REVIEW-BINDING-v0.md), [Library template v1](../execution-engineering/TS-WEB-INLINE-SCHEDULED-IR-LIBRARY-HANDOFF-TEMPLATE-v1.md), [qualified serial TS IR disposition](https://github.com/mauedgar/ts-execution-transport/blob/b35f958acab01d91b4b7b8ac752afccb2c29b739/results/TS-EE-WEBINLINE-TSIR-SERIAL-METHOD-QUALIFICATION-20261124-001/TECHNICAL_RETURN.md) |
+| Intake/dependency discovery | [Issue #75](https://github.com/mauedgar/ts-execution-lab/issues/75), existing Tecnotron Capability Map, not a second queue/catalog |
+
+Immutable current native observations: [TS-EE-004-INFRASTRUCTURE-CURRENT-BINDING-20261124-001](https://github.com/mauedgar/ts-execution-transport/blob/64f49ba30a41f31ce97e04b353075d80c7689837/results/TS-EE-004-INFRASTRUCTURE-CURRENT-BINDING-20261124-001/TECHNICAL_RETURN.md). Exact host/path IDs, process IDs, raw Git hashes and scope in private receipt. Do not publish tokens, educational account IDs, personal filenames or credentials in general docs.
+
+## 3. Route selection: prepare once, use the narrow qualified path
+1. For source/evidence available in GitHub, prefer exact immutable Git subject and connector; a native Git delivery into a new isolated target is separate owner-authorized operation. No reset of an existing checkout. For a reviewer, inline exact prepared context and Library original; no host transport required.
+2. If cloud bytes must reach notebook, choose educational OneDrive exact slot according to recipe. For desktop delivery, a separate Taildrop hop may be appropriate. Each hop has own identity, expected type/size/hash, ownership, receiver readback. Use exact source file, never reconstruct or auto-execute from receipt.
+3. If a bounded UTF-8 batch needs materialization, choose MAT-XFORM v1 only with actual target installed binding and external guard. TXT envelope is data. ZIP or binary transfer != extraction qualification. No generic encoding conversion implied.
+4. For private service connectivity, Tailscale Serve is only a service-specific authorized binding, not an alternative filesystem transport. No Funnel. Current A02-LAN forward belongs to Remote State and must not be changed by other Controls.
+5. If transport cannot meet authorized envelope, stop and select a competent alternative only after reconciling earlier effects. No route around a denied operation.
+
+### Qualified evidence ceilings
+- Cloud exact-slot TXT 183 B and synthetic binary 32,768 B, receiver SHA-256 matched (recipe and evidence).
+- Taildrop both directions single 1,535 B TXT; [forward original](https://github.com/mauedgar/ts-execution-transport/blob/ff9eee804bc7a738adc243d1a54c230a61343a2e/handoffs/TF-EVAL-006-EXTERNAL-NOTEBOOK-TRANSPORT-20261101-001/TF-EVAL-TAILDROP-PROOF-20261101-001.json), [reverse original](../execution-engineering/evidence/TS-TAILDROP-REVERSE-20261102-001.json).
+- Additional case-specific binary evidence: RepoPackager ZIP 44,424 B from notebook OneDrive to desktop Downloads, same SHA256 a2e971a062f663e467528c3f3192dd71db7deaf46115fdf45d096f85cbd41ac0, private transport results/TECNOTRON-REPOPACKAGER-TAILDROP-TRANSPORT-20261105-001/RESULT.md blob d1e4c0239bad02c107ad014d8d95e16d110fa5dc. Prior narrower general policy remains; no arbitrary ZIP/batch, simultaneous transfer, extraction or executable admission.
+- MAT-XFORM v1 qualified commit c36e5e8adb45274c9f0bbc33fe7af6adcab0285e, adopted f6248df12a8a2844cefc7a3fe7a8caddafec101d, Node22.23.3, 17/17 + 30/30. No need to repeat.
+- Private TCP forward previously verified desktop->notebook, not PostgreSQL protocol/ACK/CAS. Current original mapping observed unchanged, no new network effect.
+
+## 4. Operational recipes (only exact permitted operations)
+### SharePoint
+Before each effectful session verify selected live schema, educational profile and exact drive/site/item from private binding handoffs/TS-EE-ONEDRIVE-EDUCATIONAL-BINDING-20261102-001/BINDING.md. Current single connection get_profile({}) matches; omit link_id when absent in schema, otherwise use verified educational selector. Reserve unique isolated empty slot only through separately authorized owner procedure; get_drive_item/readback checks exact item and zero bytes. One update_file_exact with target drive_item or item_url accepted by actual schema, actual file_uri and MIME. Verify cloud receipt and receiver local size/hash. Do not use default account, generic upload, old slots, nonempty files, personal tenant, bulk/share/delete. HTTP400 ObjectHandle is Invalid: diagnose binding read-only, never blindly repeat. If sync pending/ambiguous, retain original identity and verify exact item; no new upload.
+
+### Taildrop / Tailscale
+Current native device IP observations and previous receipts in private current-binding record. Commands already established: tailscale ip -4, tailscale serve status --json (read-only); tailscale file cp <exact prepared file> <approved peer>: only after preflight and explicit permitted effect. Check source actual size/SHA256 and destination no collision; validate destination exact received filename/size/hash. Native sender success not receiver success. No move/extract/delete/execute by implication. Source and destination verified independent. Never use global tailscale serve reset, Funnel or broad tailnet policy changes to repair one service. For scoped private TCP cleanup consult original owner and exact service mapping; do not change live Remote State forward while unresolved.
+
+### MAT-XFORM / TS-EXB
+Use qualified CLI validate/materialize only after exact installed source/runtime/dependency/guard verified and authority; canonical shape from schema is contract_version, request_id, batch_id, artifacts with artifact_id, relative_path, utf8_text. Request canonical identity distinct from raw carrier SHA256. Fixed external output/result/receipt paths, exact allowlist and size/count limits. CLI alone is not an external digest/ACL/reparse/confinement guard. TS-EXB only permits exact prebuilt create-only TXT envelope deposition and invocation of pre-existing verified extractor; no creation of missing runner in Commander. Do not write payload source via ad-hoc shell, use arbitrary extraction, generate scripts in Commander or nest PowerShell -Command. Prefer exact pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <verified runner> (placeholder never sent literally). Parser/integrity -> preconditions -> conditioned effect -> postconditions -> terminal receipt. Skip transport if carrier verified already. No retry/cleanup on UNKNOWN.
+
+### Orca and independent review
+Use station method, explicit --agent opencode for new semantic work, native WSL UNC without forced shell. Bind original host/runtime/worktree/terminal handle/incarnation; exact close after settled effects and verify scoped absence. No bulk close; no alias deletion until actual default migrated. Commander never launches semantic OpenCode. For review use private [IndependentReview](https://chatgpt.com/plugins/plugins_6b05b30ce02c8191ba5a07a23dae15ff) or exact qualified contract. TS EE owns one serial channel until explicit exclusive transfer; other Controls prepare in parallel. No simulated lock, run_now, extra provider or auto acceptance.
+
+## 5. Current debt and admission order
+Notebook: source recovery PASS for three known MAT-XFORM source files at C:\TS\repos\ts-execution-lab (actual CRLF matches exact qualified LF after deterministic conversion), lockfile raw bytes match current main b451fe41b789a02e56cb5896b9db669467c52bfa (different original qualification lock, Zod 4.1.11). Source presence != installed isolated binding. Existing version selector exact raw blob verified; original PID16020 pending, reconcile that process rather than relaunch. Need installed Node/runtime and dependency closure/hash, external guard, trusted output root/exclusive rights and exact source ingress. Desktop: previously verified PS7.6.6 x64 and Python3.13.6 x64 base runtime, not isolated environment; extractor/guard not recovered. Do not assume notebook's local path on desktop.
+Next target gate: establish exact approved isolated installation destination and owner via source/owner records; if missing, arrange one-time owner-controlled Git delivery of pinned source + lock/runtime into new path, not new global service, no Commander source creation. Freeze/verify installed version/dependency/guard and hashes; separate controlled native fixtures on each host only for missing behavior (not generic 17/30 replay). Check exact approved namespace/ancestors, owner/ACL, reparse/links and no concurrent writers; only then admit materialization. If target guard unavailable, BLOCKED_PRECONDITION, no substitution.
+- Orca/WSL E6 PR81 CI PASS, IR007 0F4A but strict independence held. Do not retroactively change review policy. Complete native source/lease/custody and independently authenticated terminal join before integral Remote State return; no partial final handoff.
+- Trading EXP002-A native readiness: distinct target scope and current Trading PR5 IR004 under Trading owner. Win32/CRT fixtures and isolated Python required; no market/OOS, observation ID or experiment here.
+- ChromeDriver PR82 source verdict 0F5A, fresh generic conformance adapter gate: [owner disposition](https://github.com/mauedgar/ts-execution-transport/blob/32172c5e5f14a3685bba9a9b41d176b49ffdcc4e/results/TS-EE-004-PR82-IR001-OWNER-DISPOSITION-20261124-001/TECHNICAL_RETURN.md). No historical replay. 
+- IndependentReview created and method published, activation in a distinct consumer chat still unverified. Not a blocker for existing qualified serial contract.
+- Existing [two-host admission disposition](https://github.com/mauedgar/ts-execution-transport/blob/9653b2db0da4e59dc2adeec62c7e672bee66efd7/results/TS-EE-004-WINDOWS-TARGET-ADMISSION-RECONCILIATION-20261124-001/TECHNICAL_RETURN.md) preserved.
+
+## 6. Maintenance / no rediscovery
+Read only relevant contract and exact current native state. Each material change record owner, scope, source commit/tree/blob, installed actual bytes and runtime, target device, attempt/receipt, cutoff and qualified bounds. Refresh live identity/tool schema only when next effect or observed drift requires it; do not probe all tools each turn. Keep historical evidence immutable, link new receipts, mark superseded operational locators rather than rewriting original evidence. GitHub issues track technical debt, not Product transitions. No paid spend, new service or auth scope without authority. ChatGPT ordinary quota not measured. STOP on mismatch/uncertain effect, preserve original; transfer findings via exact handoff without invoking consumers. Product effect NONE.
