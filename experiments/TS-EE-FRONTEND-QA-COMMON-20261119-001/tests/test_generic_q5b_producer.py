@@ -93,6 +93,9 @@ class Projection(unittest.TestCase):
     def test_toolchain_tamper(self):
         self.mutate(self.raw/"TOOLCHAIN.json",lambda r:r["chrome"].update(version="changed"))
         self.rejected("Q5B_TOOLCHAIN_JOIN")
+    def test_runner_version_alias_mismatch(self):
+        self.mutate(self.common/p.RECEIPT,lambda r:r["runner"].update(version="contradictory driver alias"))
+        self.rejected("Q5B_RUNNER_VERSION_ALIAS_JOIN")
     def test_incomplete_common(self):
         (self.common/"INCOMPLETE_Q5B").write_text("synthetic");self.rejected("Q5B_COMMON_REJECT")
     def test_network_claim_not_joined_to_raw(self):

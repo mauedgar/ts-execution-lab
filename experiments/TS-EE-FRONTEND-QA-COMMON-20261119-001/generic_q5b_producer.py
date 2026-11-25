@@ -65,6 +65,7 @@ def project(raw_root,common_root,output_root,contract_raw,pin):
         for k,dest in (("version","version"),("sha256","binary_sha256"),("bytes","binary_bytes")):
             g.require(entry[k]==runner[mapped+"_"+dest] and type(entry[k]) is type(runner[mapped+"_"+dest]),
                       "Q5B_TOOLCHAIN_JOIN_"+original+"_"+k)
+    g.require(runner.get("version")==tool["driver"]["version"],"Q5B_RUNNER_VERSION_ALIAS_JOIN")
     sources={}
     for width in q.WIDTHS:
         r,raw,png=q.local_source(raw_root,width)
