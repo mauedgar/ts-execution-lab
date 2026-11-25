@@ -41,6 +41,7 @@ deny('untrusted-acl',q,'UNTRUSTED_WRITE_ACL');
 deny('external-runtime',prepare('external-runtime'), 'RUNTIME_PATH_BINDING',process.execPath,digest(process.execPath));
 deny('bad-runtime-pin',prepare('bad-runtime-pin',(r,g)=>g.node_sha256='0'.repeat(64)),'NODE_HASH',node,'0'.repeat(64));
 deny('acl-pin',prepare('acl-pin',(r,g)=>g.root_acl_sha256='0'.repeat(64)),'GRANT_BINDING');
+for(const field of ['attempt','station_root','node_sha256','root_acl_sha256']){const n='grant-ordinal-'+field.replaceAll('_','-');deny(n,prepare(n,(r,g)=>g[field]+=String.fromCharCode(0x00ad)),'GRANT_BINDING')}
 deny('reserved-device',prepare('reserved-device',(r,g)=>{r.artifacts[0].relative_path='CON.txt';g.artifacts[0].relative_path='CON.txt'}),'PATH_DENIED');
 deny('unpaired-surrogate',prepare('unpaired-surrogate',(r,g)=>r.artifacts[0].utf8_text='\ud800'),'INVALID_UNICODE');
 deny('escaped-duplicate',prepare('escaped-duplicate',undefined,s=>s.replace('"batch_id":','"\\u0062atch_id":"duplicate","batch_id":')),'NONCANONICAL_JSON');
@@ -58,4 +59,8 @@ syntheticFailure('guard-malformed',"console.log('not-json');\n",null);
 syntheticFailure('guard-stderr',"console.error('synthetic');\n",'GUARD_STDERR_PRESENT');
 syntheticFailure('guard-contradictory',"console.log(JSON.stringify({schema:'ts-ee/mat-xform-station-terminal/v1',attempt:process.argv[3],status:'BLOCKED_PRECONDITION',effect:'NONE',reason:'synthetic',Product_effect:'NONE'}));\n",'GUARD_FAILURE_CONTRADICTION');
 syntheticFailure('guard-overflow',"process.stdout.write('x'.repeat(16385));\n",null);
+for(const [field,reason] of [['schema','GUARD_TERMINAL_IDENTITY'],['attempt','GUARD_TERMINAL_IDENTITY'],['Product_effect','GUARD_TERMINAL_IDENTITY'],['status','GUARD_FAILURE_CONTRADICTION'],['effect','GUARD_FAILURE_CONTRADICTION']]){
+ const source="const t={schema:'ts-ee/mat-xform-station-terminal/v1',attempt:process.argv[3],status:'BLOCKED_PRECONDITION',effect:'NONE',reason:'synthetic',Product_effect:'NONE'};t["+JSON.stringify(field)+"]+=String.fromCharCode(0x00ad);console.log(JSON.stringify(t));process.exit(1);";
+ syntheticFailure('guard-ordinal-'+field.toLowerCase().replaceAll('_','-'),source,reason)
+}
 console.log('STATION_NATIVE_FIXTURES_PASS');

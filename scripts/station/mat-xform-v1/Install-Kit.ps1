@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $created=$false
 function Digest([byte[]]$b){[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($b)).ToLowerInvariant()}
 function Absolute([string]$p){
- if($p -cnotmatch '^[A-Za-z]:\\' -or [IO.Path]::GetFullPath($p) -cne $p){throw 'NONCANONICAL_LOCAL_PATH'}
+ if($p -cnotmatch '^[A-Za-z]:\\' -or (-not [string]::Equals([IO.Path]::GetFullPath($p),$p,[StringComparison]::Ordinal))){throw 'NONCANONICAL_LOCAL_PATH'}
 }
 function Read-Exact([IO.Stream]$Stream,[int64]$Length,[int64]$Limit){
  if($Length -lt 0 -or $Length -gt $Limit){throw 'INPUT_BYTE_LIMIT'}
@@ -36,7 +36,7 @@ function Add-Namespace([Collections.Generic.Dictionary[string,string]]$Index,[st
   $type=if($j -lt $parts.Length-1 -or $Directory){'D:'}else{'F:'}
   $entry=$type+$prefix
   if($Index.ContainsKey($prefix)){
-   if($Index[$prefix] -cne $entry){throw 'ARCHIVE_NAMESPACE_CONFLICT'}
+   if((-not [string]::Equals($Index[$prefix],$entry,[StringComparison]::Ordinal))){throw 'ARCHIVE_NAMESPACE_CONFLICT'}
   }else{$Index.Add($prefix,$entry)}
  }
 }
@@ -61,7 +61,7 @@ function Assert-Acl([string]$p){
 function Write-Exclusive([string]$p,[byte[]]$b){
  $f=[IO.FileStream]::new($p,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
  try{$f.Write($b,0,$b.Length);$f.Flush($true)}finally{$f.Dispose()}
- if((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -cne (Digest $b)){throw 'INSTALLED_BYTES_MISMATCH'}
+ if((-not [string]::Equals((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant(),(Digest $b),[StringComparison]::Ordinal))){throw 'INSTALLED_BYTES_MISMATCH'}
 }
 try{
  if(-not $IsWindows){throw 'WINDOWS_ONLY'}
@@ -77,9 +77,9 @@ try{
  }
  $null=Assert-Acl $parent
  $zipBytes=Read-File $KitZip (2*1024*1024)
- if((Digest $zipBytes) -cne $ZipSha256){throw 'ZIP_HASH'}
+ if((-not [string]::Equals((Digest $zipBytes),$ZipSha256,[StringComparison]::Ordinal))){throw 'ZIP_HASH'}
  $nodeBytes=Read-File $SourceNode (128*1024*1024)
- if((Digest $nodeBytes) -cne $NodeSha256){throw 'NODE_SOURCE_HASH'}
+ if((-not [string]::Equals((Digest $nodeBytes),$NodeSha256,[StringComparison]::Ordinal))){throw 'NODE_SOURCE_HASH'}
  $mem=[IO.MemoryStream]::new($zipBytes,$false);$zip=[IO.Compression.ZipArchive]::new($mem,[IO.Compression.ZipArchiveMode]::Read,$false)
  $payload=[Collections.Generic.Dictionary[string,byte[]]]::new([StringComparer]::Ordinal)
  $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -105,13 +105,13 @@ try{
    }
    Safe-Relative $rel
    Add-Namespace $namespace $rel $false
-   if($rel -cne 'manifest.json' -and -not $rel.StartsWith('install/',[StringComparison]::Ordinal)){throw 'ARCHIVE_EXTRA_FILE'}
+   if((-not [string]::Equals($rel,'manifest.json',[StringComparison]::Ordinal)) -and -not $rel.StartsWith('install/',[StringComparison]::Ordinal)){throw 'ARCHIVE_EXTRA_FILE'}
    $total+=$e.Length;if($total -gt 64*1024*1024){throw 'ARCHIVE_TOTAL_LIMIT'}
    $stream=$e.Open()
    try{$payload.Add($rel,(Read-Exact $stream $e.Length (4*1024*1024)))}finally{$stream.Dispose()}
   }
  }finally{$zip.Dispose();$mem.Dispose()}
- if(-not $payload.ContainsKey('manifest.json') -or (Digest $payload['manifest.json']) -cne $ManifestSha256){throw 'MANIFEST_HASH'}
+ if(-not $payload.ContainsKey('manifest.json') -or (-not [string]::Equals((Digest $payload['manifest.json']),$ManifestSha256,[StringComparison]::Ordinal))){throw 'MANIFEST_HASH'}
  if($payload['manifest.json'].Length -gt 2*1024*1024){throw 'MANIFEST_LIMIT'}
  $manifestText=[Text.UTF8Encoding]::new($false,$true).GetString($payload['manifest.json'])
  $manifestDoc=[Text.Json.JsonDocument]::Parse($manifestText)
@@ -120,7 +120,7 @@ try{
  try{
   $element=$manifestDoc.RootElement
   Assert-ManifestKeys $element @('schema','files')
-  if($element.GetProperty('schema').GetString() -cne 'ts-ee/mat-xform-install/v1'){throw 'MANIFEST_SCHEMA'}
+  if((-not [string]::Equals($element.GetProperty('schema').GetString(),'ts-ee/mat-xform-install/v1',[StringComparison]::Ordinal))){throw 'MANIFEST_SCHEMA'}
   $items=$element.GetProperty('files')
   if($items.ValueKind -ne [Text.Json.JsonValueKind]::Array -or $items.GetArrayLength() -lt 1 -or $items.GetArrayLength()+1 -ne $payload.Count){throw 'MANIFEST_INVENTORY'}
   foreach($item in $items.EnumerateArray()){
@@ -136,14 +136,14 @@ try{
   }
  }finally{$manifestDoc.Dispose()}
  $canonicalManifest='{"files":['+($canonicalEntries -join ',')+'],"schema":"ts-ee/mat-xform-install/v1"}'
- if($manifestText -cne $canonicalManifest){throw 'MANIFEST_NONCANONICAL'}
+ if((-not [string]::Equals($manifestText,$canonicalManifest,[StringComparison]::Ordinal))){throw 'MANIFEST_NONCANONICAL'}
  $expected=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
  $allowedDirs=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
  foreach($d in @('install','runtime','inbox','runs')){$null=$allowedDirs.Add($d)}
  foreach($f in $manifestFiles){
   Safe-Relative $f.path
   $name='install/'+$f.path
-  if(-not $expected.Add($name) -or -not $payload.ContainsKey($name) -or $payload[$name].Length -ne $f.bytes -or (Digest $payload[$name]) -cne $f.sha256){throw 'MANIFEST_FILE_MISMATCH'}
+  if(-not $expected.Add($name) -or -not $payload.ContainsKey($name) -or $payload[$name].Length -ne $f.bytes -or (-not [string]::Equals((Digest $payload[$name]),$f.sha256,[StringComparison]::Ordinal))){throw 'MANIFEST_FILE_MISMATCH'}
   $segments=$name.Split('/')
   for($i=1;$i -lt $segments.Length;$i++){$null=$allowedDirs.Add(($segments[0..($i-1)] -join '/'))}
  }

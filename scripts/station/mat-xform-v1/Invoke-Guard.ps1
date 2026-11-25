@@ -45,25 +45,25 @@ function Resolve-Terminal([byte[]]$Out,[byte[]]$Err,[int]$Code) {
   $keys=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
   foreach($prop in $r.EnumerateObject()){if(-not $keys.Add($prop.Name)){throw 'GUARD_TERMINAL_DUPLICATE'}}
   $status=$r.GetProperty('status').GetString();$effect=$r.GetProperty('effect').GetString()
-  if($r.GetProperty('schema').GetString() -cne 'ts-ee/mat-xform-station-terminal/v1' -or $r.GetProperty('attempt').GetString() -cne $Attempt -or $r.GetProperty('Product_effect').GetString() -cne 'NONE'){throw 'GUARD_TERMINAL_IDENTITY'}
-  if($status -ceq 'PASS'){
+  if((-not [string]::Equals($r.GetProperty('schema').GetString(),'ts-ee/mat-xform-station-terminal/v1',[StringComparison]::Ordinal)) -or (-not [string]::Equals($r.GetProperty('attempt').GetString(),$Attempt,[StringComparison]::Ordinal)) -or (-not [string]::Equals($r.GetProperty('Product_effect').GetString(),'NONE',[StringComparison]::Ordinal))){throw 'GUARD_TERMINAL_IDENTITY'}
+  if([string]::Equals($status,'PASS',[StringComparison]::Ordinal)){
    $expected=@('schema','attempt','status','effect','grant_sha256','carrier_sha256','request_identity','result_sha256','receipt_sha256','artifact_count','Product_effect')
-   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 0 -or $effect -cne 'CONFIRMED' -or $r.GetProperty('grant_sha256').GetString() -cne $GrantSha256 -or $r.GetProperty('carrier_sha256').GetString() -cne $g.carrier_sha256 -or $r.GetProperty('request_identity').GetString() -cne ('sha256:'+$g.carrier_sha256) -or $r.GetProperty('artifact_count').GetInt32() -ne $g.artifacts.Count){throw 'GUARD_PASS_CONTRADICTION'}
+   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 0 -or (-not [string]::Equals($effect,'CONFIRMED',[StringComparison]::Ordinal)) -or (-not [string]::Equals($r.GetProperty('grant_sha256').GetString(),$GrantSha256,[StringComparison]::Ordinal)) -or (-not [string]::Equals($r.GetProperty('carrier_sha256').GetString(),$g.carrier_sha256,[StringComparison]::Ordinal)) -or (-not [string]::Equals($r.GetProperty('request_identity').GetString(),('sha256:'+$g.carrier_sha256),[StringComparison]::Ordinal)) -or $r.GetProperty('artifact_count').GetInt32() -ne $g.artifacts.Count){throw 'GUARD_PASS_CONTRADICTION'}
    foreach($kind in @('result','receipt')){
     $p=Join-Path $runs ($Attempt+'.'+$kind+'.json')
     Assert-Path $p $false;$null=Assert-Acl $p
-    if((Hash $p) -cne $r.GetProperty($kind+'_sha256').GetString()){throw 'GUARD_PUBLICATION_HASH'}
+    if((-not [string]::Equals((Hash $p),$r.GetProperty($kind+'_sha256').GetString(),[StringComparison]::Ordinal))){throw 'GUARD_PUBLICATION_HASH'}
    }
   }else{
    $expected=@('schema','attempt','status','effect','reason','Product_effect')
-   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 1 -or -not (($status -ceq 'BLOCKED_PRECONDITION' -and $effect -ceq 'NONE') -or ($status -ceq 'UNAVAILABLE' -and $effect -ceq 'UNKNOWN'))){throw 'GUARD_FAILURE_CONTRADICTION'}
+   if(-not $keys.SetEquals([string[]]$expected) -or $Code -ne 1 -or -not (([string]::Equals($status,'BLOCKED_PRECONDITION',[StringComparison]::Ordinal) -and [string]::Equals($effect,'NONE',[StringComparison]::Ordinal)) -or ([string]::Equals($status,'UNAVAILABLE',[StringComparison]::Ordinal) -and [string]::Equals($effect,'UNKNOWN',[StringComparison]::Ordinal)))){throw 'GUARD_FAILURE_CONTRADICTION'}
    $reason=$r.GetProperty('reason').GetString();if([string]::IsNullOrEmpty($reason) -or $reason.Length -gt 240){throw 'GUARD_REASON'}
   }
   return $line
  }finally{$doc.Dispose()}
 }
 try{
- if(-not $IsWindows -or $Attempt -cnotmatch '\A[A-Za-z0-9_-]{1,96}\z' -or $Root -cnotmatch '^[A-Za-z]:\\' -or [IO.Path]::GetFullPath($Root) -cne $Root){throw 'ARGUMENTS'}
+ if(-not $IsWindows -or $Attempt -cnotmatch '\A[A-Za-z0-9_-]{1,96}\z' -or $Root -cnotmatch '^[A-Za-z]:\\' -or (-not [string]::Equals([IO.Path]::GetFullPath($Root),$Root,[StringComparison]::Ordinal))){throw 'ARGUMENTS'}
  foreach($h in @($GrantSha256,$NodeSha256,$GuardSha256)){if($h -cnotmatch '\A[a-f0-9]{64}\z'){throw 'HASH_ARGUMENT'}}
  # The stable, exclusively owned parent chain is an externally admitted precondition.
  # Check every ancestor for reparse points; do not change ACLs.
@@ -75,18 +75,18 @@ try{
  foreach($p in @($inbox,$runs)){Assert-Path $p $true;$null=Assert-Acl $p}
  $grant=Join-Path $inbox ($Attempt+'.grant.json');$carrier=Join-Path $inbox ($Attempt+'.txt');$manifest=Join-Path $Root 'manifest.json';$guard=Join-Path $Root 'install\guard.mjs'
  foreach($p in @($grant,$carrier,$manifest)){Assert-Path $p $false;$null=Assert-Acl $p}
- if(([IO.FileInfo]::new($grant)).Length -gt 32768 -or (Hash $grant) -cne $GrantSha256){throw 'GRANT_HASH_OR_SIZE'}
+ if(([IO.FileInfo]::new($grant)).Length -gt 32768 -or (-not [string]::Equals((Hash $grant),$GrantSha256,[StringComparison]::Ordinal))){throw 'GRANT_HASH_OR_SIZE'}
  $g=Get-Content -LiteralPath $grant -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
- if($g.root_acl_sha256 -cne $aclHash -or $g.node_sha256 -cne $NodeSha256 -or $g.station_root -cne $Root -or $g.attempt -cne $Attempt){throw 'GRANT_BINDING'}
+ if((-not [string]::Equals($g.root_acl_sha256,$aclHash,[StringComparison]::Ordinal)) -or (-not [string]::Equals($g.node_sha256,$NodeSha256,[StringComparison]::Ordinal)) -or (-not [string]::Equals($g.station_root,$Root,[StringComparison]::Ordinal)) -or (-not [string]::Equals($g.attempt,$Attempt,[StringComparison]::Ordinal))){throw 'GRANT_BINDING'}
  Assert-Tree (Join-Path $Root 'install')
  Assert-Path $guard $false
- if((Hash $guard) -cne $GuardSha256){throw 'GUARD_HASH'}
+ if((-not [string]::Equals((Hash $guard),$GuardSha256,[StringComparison]::Ordinal))){throw 'GUARD_HASH'}
  $runtime=Join-Path $Root 'runtime';$expectedNode=Join-Path $runtime 'node.exe'
- if([IO.Path]::GetFullPath($Node) -cne $Node -or $Node -cne $expectedNode){throw 'RUNTIME_PATH_BINDING'}
+ if((-not [string]::Equals([IO.Path]::GetFullPath($Node),$Node,[StringComparison]::Ordinal)) -or (-not [string]::Equals($Node,$expectedNode,[StringComparison]::Ordinal))){throw 'RUNTIME_PATH_BINDING'}
  Assert-Tree $runtime
  $runtimeEntries=@([IO.Directory]::EnumerateFileSystemEntries($runtime))
- if($runtimeEntries.Count -ne 1 -or $runtimeEntries[0] -cne $expectedNode){throw 'RUNTIME_INVENTORY'}
- Assert-Path $Node $false;if((Hash $Node) -cne $NodeSha256){throw 'NODE_HASH'}
+ if($runtimeEntries.Count -ne 1 -or (-not [string]::Equals($runtimeEntries[0],$expectedNode,[StringComparison]::Ordinal))){throw 'RUNTIME_INVENTORY'}
+ Assert-Path $Node $false;if((-not [string]::Equals((Hash $Node),$NodeSha256,[StringComparison]::Ordinal))){throw 'NODE_HASH'}
  # Bound both native streams before interpreting a terminal. No unbounded ReadToEnd.
  Add-Type -TypeDefinition @'
 using System;

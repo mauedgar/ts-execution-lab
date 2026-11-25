@@ -29,6 +29,13 @@ function Test-Denial([string]$Label,[string[]]$ExtraFiles,[string[]]$ExtraDirs,[
   if($Mode -eq 'duplicate'){$manifest=$manifest.Replace('"schema":','"schema":"duplicate","schema":')}
   if($Mode -eq 'wrong-type'){$manifest=$manifest.Replace('"bytes":'+$bytes.Length,'"bytes":"'+$bytes.Length+'"')}
   if($Mode -eq 'noncanonical'){$manifest=' '+$manifest}
+  if($Mode -eq 'schema-ignorable'){
+   $schema='ts-ee/mat-xform-install/v1'
+   $mutated=$schema.Insert(2,[string][char]0x00ad)
+   Write-Output ('ORDINAL_SCHEMA_PROBE old_schema_equal='+[bool]($mutated -ceq $schema)+' old_manifest_equal='+[bool]($manifest.Replace($schema,$mutated) -ceq $manifest)+' ordinal_equal='+[string]::Equals($mutated,$schema,[StringComparison]::Ordinal))
+   $manifest=$manifest.Replace($schema,$mutated)
+  }
+  if($Mode -eq 'schema-escaped'){$manifest=$manifest.Replace('ts-ee/mat-xform-install/v1','\u0074s-ee/mat-xform-install/v1')}
   $manifestBytes=$utf8.GetBytes($manifest)
   Add-Entry $archive 'manifest.json' $manifestBytes
  }finally{$archive.Dispose();$file.Dispose()}
@@ -47,3 +54,5 @@ Test-Denial 'linefeed' @("x`n") @() '' 'ARCHIVE_PATH_DENIED'
 Test-Denial 'manifest-duplicate' @() @() 'duplicate' 'MANIFEST_DUPLICATE_KEY'
 Test-Denial 'manifest-type' @() @() 'wrong-type' ''
 Test-Denial 'manifest-noncanonical' @() @() 'noncanonical' 'MANIFEST_NONCANONICAL'
+Test-Denial 'manifest-schema-ignorable' @() @() 'schema-ignorable' 'MANIFEST_SCHEMA'
+Test-Denial 'manifest-schema-escaped' @() @() 'schema-escaped' 'MANIFEST_NONCANONICAL'
