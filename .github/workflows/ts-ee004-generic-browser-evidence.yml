@@ -27,8 +27,8 @@ jobs:
           test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/receipt_validator_v01.py)" = "1f9d2303409e40b5f9e3b961d94dfb0cbaea1f09"
           test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/generic_browser_consumer.py)" = "b528a501aa771bf87900c2f6ec9226e9f417bc7a"
           test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_generic_browser_consumer.py)" = "b11ae4c7ecc8c0776aae348a7069fff9faeb6727"
-          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/generic_q5b_producer.py)" = "1c5b34f8af707397abdbb572ffdd19bc446c0f19"
-          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_generic_q5b_producer.py)" = "482b35b76890175b959e35300b3ec6ec37a5f680"
+          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/generic_q5b_producer.py)" = "e4c1a03f2ea5f52c1a732252ac36a05663e8cd21"
+          test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/tests/test_generic_q5b_producer.py)" = "05ebad59e681e814c3822630c9828abf9447c3bf"
           test "$(git hash-object experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/adapters/q5b_to_common_v01.py)" = "f13d76cdf3b1434d52d7be9894f721fa05619006"
           python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/generic_browser_consumer.py
           python -m py_compile experiments/TS-EE-FRONTEND-QA-COMMON-20261119-001/generic_q5b_producer.py
@@ -40,7 +40,7 @@ jobs:
           python - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          result={"schema":"ts-ee/generic-source-only/v1","head":os.environ["GITHUB_SHA"],"tree":subprocess.check_output(["git","rev-parse","HEAD^{tree}"],text=True).strip(),"run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"new_source_blob":"b528a501aa771bf87900c2f6ec9226e9f417bc7a","projection_blob":"1c5b34f8af707397abdbb572ffdd19bc446c0f19","source_tests":"PASS","native_browser":"NOT_RUN","provider_native_verified":False,"Product_accepted":False,"Product_effect":"NONE","method_accepted":False}
+          result={"schema":"ts-ee/generic-source-only/v1","head":os.environ["GITHUB_SHA"],"tree":subprocess.check_output(["git","rev-parse","HEAD^{tree}"],text=True).strip(),"run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"new_source_blob":"b528a501aa771bf87900c2f6ec9226e9f417bc7a","projection_blob":"e4c1a03f2ea5f52c1a732252ac36a05663e8cd21","source_tests":"PASS","native_browser":"NOT_RUN","provider_native_verified":False,"Product_accepted":False,"Product_effect":"NONE","method_accepted":False}
           Path("generic-source-evidence/SOURCE_ONLY.json").write_text(json.dumps(result,sort_keys=True)+"\n")
           PY
       - name: Preserve source-only evidence

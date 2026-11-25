@@ -95,6 +95,20 @@ class Projection(unittest.TestCase):
         self.rejected("Q5B_TOOLCHAIN_JOIN")
     def test_incomplete_common(self):
         (self.common/"INCOMPLETE_Q5B").write_text("synthetic");self.rejected("Q5B_COMMON_REJECT")
+    def test_network_claim_not_joined_to_raw(self):
+        def change(r):
+            r["network"].update(measurement_scope="BROWSER_CONTEXT_OBSERVED_REQUESTS_ONLY",
+                                outbound_attempted=7,outbound_blocked=0,outbound_escaped=7)
+        self.mutate(self.common/p.RECEIPT,change)
+        self.rejected("Q5B_EXACT_NETWORK_JOIN")
+    def test_screenshot_inventory_alternate(self):
+        png=bytes.fromhex("89504e470d0a1a0a")+b"alternate synthetic bytes"
+        (self.common/"alternate-320.png").write_bytes(png)
+        def change(r):
+            a=next(a for a in r["artifacts"] if a.get("width")==320)
+            a.update(name="alternate-320.png",bytes=len(png),sha256=p.g.digest(png))
+        self.mutate(self.common/p.RECEIPT,change)
+        self.rejected("Q5B_SCREENSHOT_INVENTORY_JOIN")
     def test_source_duplicate(self):
         path=self.raw/"320"/"Q5B_REPORT.json"
         raw=path.read_bytes();path.write_bytes(raw.replace(b'{',b'{"engine":"CHROMEDRIVER_NODE",',1))

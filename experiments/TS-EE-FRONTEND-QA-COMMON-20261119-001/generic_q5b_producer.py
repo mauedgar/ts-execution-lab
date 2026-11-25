@@ -14,6 +14,9 @@ MAPPING={s:{str(w):list(checks) for w in q.WIDTHS}
          for s,checks in q.SCENARIO_CHECKS.items()}
 LOG="generic-evidence.json"
 RECEIPT="COMMON_RECEIPT_V01.json"
+Q5B_NETWORK={"enforcement":"OBSERVE_ONLY","service_workers":"NOT_VERIFIED",
+             "outbound_attempted":None,"outbound_blocked":None,"outbound_escaped":None,
+             "measurement_scope":"LOCAL_FIXTURE_SERVER_ONLY","os_egress_attested":False}
 
 def encode(value):
     return (json.dumps(value,sort_keys=True,indent=2)+"\n").encode("utf-8")
@@ -50,6 +53,7 @@ def project(raw_root,common_root,output_root,contract_raw,pin):
     g.require(v.get("functional_browser_status")=="PASS" and
               v.get("network_assurance_status")=="OBSERVE_ONLY_UNATTESTED" and
               v.get("terminal_result")=="PASS_FUNCTIONAL_ONLY","Q5B_NETWORK_POLICY")
+    g.require(report["network"]==Q5B_NETWORK,"Q5B_EXACT_NETWORK_JOIN")
     tool_raw=q.read_file(raw_root/"TOOLCHAIN.json")
     tool=g.strict_json(tool_raw)
     g.require(tool.get("schema")=="ts-ee/q5b/toolchain-local/v0" and
@@ -67,6 +71,11 @@ def project(raw_root,common_root,output_root,contract_raw,pin):
         g.require(g.strict_json(raw)==r and r.get("engine")==c["engine"],"Q5B_RAW_ENGINE_OR_JSON")
         name="shot-"+str(width)+".png"
         g.require(q.read_file(common_root/name)==png,"Q5B_SCREENSHOT_JOIN")
+        matching=[a for a in report["artifacts"] if a.get("kind")=="SCREENSHOT"
+                  and a.get("width")==width]
+        expected={"name":name,"kind":"SCREENSHOT","width":width,
+                  "bytes":len(png),"sha256":g.digest(png)}
+        g.require(matching==[expected],"Q5B_SCREENSHOT_INVENTORY_JOIN")
         sources[str(width)]=(r,raw,png)
     joined=b"\n--Q5B-BOUNDARY--\n".join([tool_raw]+[sources[str(w)][1] for w in q.WIDTHS])
     g.require(report["original"]=={"custody":"LOCAL_UNVERIFIED","sha256":g.digest(joined),
