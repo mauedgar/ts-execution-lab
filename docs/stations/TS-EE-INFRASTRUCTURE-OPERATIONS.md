@@ -1,6 +1,21 @@
 # TS EE — Infraestructura y operación reutilizable
 Owner: TS Execution Engineering. Status: ACTIVE_NAVIGATION_AND_OBSERVED_BINDINGS, NONPRODUCT. Product_authority NONE; Product_effect NONE.
-Cutoff: 2026-11-24. This is a derived operational entrypoint, not another policy SOT, capability catalog, execution grant or claim of universal qualification. Read the applicable source contract; use this page to avoid rediscovery. Update only on material drift, exact new receipt or competent policy disposition. Never replay old qualifications to refresh documentation.
+Current operative cutoff: 2026-11-26; initial observations 2026-11-24. This is a derived operational entrypoint, not another policy SOT, capability catalog, execution grant or claim of universal qualification. Read the applicable source contract; use this page to avoid rediscovery. Update only on material drift, exact new receipt or competent policy disposition. Never replay old qualifications to refresh documentation.
+
+## Current operative checkpoint — 2026-11-26
+
+This table supersedes historical pending/draft statements below, which remain chronological evidence rather than current blockers. No Product authority.
+
+| Responsibility | Current disposition / exact evidence |
+| --- | --- |
+| Notebook MAT-XFORM | ADMITTED_BOUNDED, canonical PR84 merged 63300269fc0912300f226dd6c9dfdd0ca7798165; [13/13 integrated blob receipt](https://github.com/mauedgar/ts-execution-transport/blob/d75ce22b2601e3f008d3888811425a0a2a0e2722/results/TS-EE-004-PR84-NOTEBOOK-INTEGRATION-20261125-001/MERGE_RECEIPT.md), [physical binding and limits](https://github.com/mauedgar/ts-execution-transport/blob/468083bb99c8d250a17f887cd0f659e2aa88908d/results/TS-EE-004-MAT-XFORM-NOTEBOOK-ADMISSION-20261125-001/TECHNICAL_RETURN.md). Reuse exact installed station, do not reinstall or repeat fixture. |
+| Orca/WSL E7 | Physical PASS bounded, canonical selective integration c9149ccf829cdc490fc4843ba09605078754cacd; [integration receipt](https://github.com/mauedgar/ts-execution-transport/blob/dc5fe134b2ac0a9c2d137081c056ab57a048694d/results/TS-EE-004-E7-SELECTIVE-INTEGRATION-20261126-001/INTEGRATION_RECEIPT.md). PR81 closed superseded, no historical workflows imported, no original attempt replay. RS002 retains kernel adjudication. |
+| Independent Review | Compact and Library custody available within exact scope; [Aware distinct owner-channel recommendation](https://github.com/mauedgar/ts-execution-transport/blob/4dc889bf3230ee6ea59baa786d907dede7e8b827/results/TS-EE-004-AWARE-PR54-ROUTING-RECONCILIATION-20261126-001/TECHNICAL_RETURN.md), no strict context attestation or shared channel release. Owner must admit own route. |
+| ChromeDriver PR82 | Source repair A01 130/130 and compact delta 0F0A new; [disposition](https://github.com/mauedgar/ts-execution-transport/blob/4303b03aa22ec8a7d2cedf5f2ff8f78ffaefcbc8/results/TS-EE-004-PR82-A01-DELTA-COMPACT-IR-20261126-001/CONTROL_DISPOSITION.md). Four earlier advisories retained. Fresh real conformance [one-shot dispatch](https://github.com/mauedgar/ts-execution-transport/blob/24d413b55ea964fc145e75c4264f5ada85bdb37b/results/TS-EE-004-PR82-FRESH-NATIVE-CONFORMANCE-20261126-001/DISPATCH.md) exact 013498f; no adoption before terminal and independent readback. |
+| Desktop MAT-XFORM | [Readiness](https://github.com/mauedgar/ts-execution-transport/blob/35cb371912279c77f065877c63f765068c533402/results/TS-EE-004-MAT-XFORM-DESKTOP-PREFLIGHT-20261126-001/TECHNICAL_RETURN.md): fixed NTFS, proposed root absent, Node24.19.0 differs from admitted Node22.23.3, Orca1.4.258 ready but separate native owner binding needed. No install/provision. |
+| Trading | [Residual return](https://github.com/mauedgar/ts-execution-transport/blob/fa3c8fd04bb0fd9a28afb2d6e582cc97cde99771/results/TS-TRADING-C001-EXP002-A-NATIVE-READINESS-001/RESIDUAL_OWNER_SURFACE_20261126.md). Preserve parser denials and both never-dispatched fixture attempts. Owner native parser/exclusive window required. No notebook substitution. |
+| Transport | Exact SharePoint + guarded create-only copy proven. Direct write_file not atomic create-only; do not use as equivalent. No generalized 4MB/ZIP claim. |
+| Rotation | HOLD until current fresh conformance, desktop and remaining debt disposition. |
 
 ## 1. Topology and responsibility
 | Surface | Role / selection | What it does not authorize |
